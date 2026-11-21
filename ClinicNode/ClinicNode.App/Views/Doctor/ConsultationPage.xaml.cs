@@ -1452,7 +1452,7 @@ public partial class ConsultationPage : ContentPage
                 StrokeThickness = 0,
                 Padding = new Thickness(12, 8),
                 Margin = new Thickness(0, 0, 0, 8),
-                Content = ClinicTheme.Text("Your License No. and/or PTR No. is missing, so the printed certificate will show a blank. Add them under Profile before issuing.", "MutedSm"),
+                Content = ClinicTheme.Text("Your License No. and/or PTR No. is missing, so the printed certificate will show a blank. Enter them under Profile before issuing.", "MutedSm"),
             });
         SectionHost.Children.Add(new Border
         {

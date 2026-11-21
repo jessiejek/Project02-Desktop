@@ -53,7 +53,8 @@ public sealed record RxPatientSafety(IReadOnlyList<string> Allergies, bool IsPre
 // ── profile self-edit: bio only (PUT /api/doctors/me {bio}) ────────────────
 public interface IDoctorBioService
 {
-    Task<DoctorResult> SaveBioAsync(Guid doctorId, string? bio, CancellationToken ct = default);
+    //JJQR - AI (Nov 22, 2026) - License / PTR / S2 are the doctor's own (null = unchanged) //JJQR - END
+    Task<DoctorResult> SaveBioAsync(Guid doctorId, string? bio, string? licenseNumber = null, string? ptrNumber = null, string? s2Number = null, CancellationToken ct = default);
 }
 
 // ── printouts ──────────────────────────────────────────────────────────────
@@ -141,14 +142,28 @@ public sealed class DoctorPrescriptionsService(IDbContextFactory<ClinicAppDbCont
 /// stored, so the self-edit service sees no change in them and queues nothing else.</summary>
 public sealed class DoctorBioService(IDbContextFactory<ClinicAppDbContext> factory, IDoctorSelfEditService selfEdit) : IDoctorBioService
 {
-    public async Task<DoctorResult> SaveBioAsync(Guid doctorId, string? bio, CancellationToken ct = default)
+    public async Task<DoctorResult> SaveBioAsync(Guid doctorId, string? bio, string? licenseNumber = null, string? ptrNumber = null, string? s2Number = null, CancellationToken ct = default)
     {
         if ((bio ?? "").Trim().Length > 2000) return DoctorResult.Fail("Bio must be 2,000 characters or fewer.");
         await using var db = await factory.CreateDbContextAsync(ct);
         var d = await db.Doctors.AsNoTracking().Include(x => x.StaffAccount).SingleOrDefaultAsync(x => x.DoctorId == doctorId, ct);
         if (d is null) return DoctorResult.Fail("Doctor profile not found.");
         var r = await selfEdit.SaveProfileAsync(doctorId, new DoctorSelfProfileEdit(d.StaffAccount?.FullName, d.Specialization, bio, d.StaffAccount?.ContactNumber), ct);
-        return r.Ok ? DoctorResult.Ok(doctorId) : DoctorResult.Fail(r.Error ?? "Profile was not saved.");
+        if (!r.Ok) return DoctorResult.Fail(r.Error ?? "Profile was not saved.");
+        if (licenseNumber is not null || ptrNumber is not null || s2Number is not null)
+        {
+            await using var w = await factory.CreateDbContextAsync(ct);
+            var row = await w.Doctors.SingleOrDefaultAsync(x => x.DoctorId == doctorId, ct);
+            if (row is not null)
+            {
+                static string? B(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+                if (licenseNumber is not null) row.LicenseNumber = B(licenseNumber);
+                if (ptrNumber is not null) row.PtrNumber = B(ptrNumber);
+                if (s2Number is not null) row.S2Number = B(s2Number);
+                await w.SaveChangesAsync(ct);
+            }
+        }
+        return DoctorResult.Ok(doctorId);
     }
 }
 

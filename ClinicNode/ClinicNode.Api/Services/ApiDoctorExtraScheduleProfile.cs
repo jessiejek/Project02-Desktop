@@ -95,7 +95,7 @@ public sealed class ApiDoctorProfileService(IApiClient api) : IDoctorProfileServ
     }
 
     /// <summary>The doctor may change the bio only: PUT /api/doctors/me { bio }. Every other field of <paramref name="edit"/> is ignored.</summary>
-    public Task<DoctorResult> SaveAsync(DoctorProfileEdit edit, CancellationToken ct = default) => ApiDoctorBioService.PutBioAsync(api, edit.Bio, null, ct);
+    public Task<DoctorResult> SaveAsync(DoctorProfileEdit edit, CancellationToken ct = default) => ApiDoctorBioService.PutBioAsync(api, edit.Bio, null, ct, edit.LicenseNumber, edit.PtrNumber, edit.S2Number);
 
     public Task<DoctorResult> ChangePasswordAsync(string? current, string? newPassword, string? confirm, CancellationToken ct = default) =>
         throw new ApiNotSupportedException("Password change runs through the staff profile service.");
@@ -105,13 +105,13 @@ public sealed class ApiDoctorBioService(IApiClient api) : IDoctorBioService
 {
     internal const string SaveFailed = "Some profile changes could not be saved. Please review your details and try again.";
 
-    internal static Task<DoctorResult> PutBioAsync(IApiClient api, string? bio, Guid? doctorId, CancellationToken ct)
+    internal static Task<DoctorResult> PutBioAsync(IApiClient api, string? bio, Guid? doctorId, CancellationToken ct, string? license = null, string? ptr = null, string? s2 = null)
     {
         var clean = string.IsNullOrWhiteSpace(bio) ? null : bio.Trim();
         if (clean?.Length > 2000) return Task.FromResult(DoctorResult.Fail("Bio must be 2,000 characters or fewer."));
-        return Write(() => api.SendAsync(HttpMethod.Put, "/api/doctors/me", new { bio = clean }, null, ct), doctorId, SaveFailed);
+        return Write(() => api.SendAsync(HttpMethod.Put, "/api/doctors/me", new { bio = clean, licenseNumber = license, ptrNumber = ptr, s2Number = s2 }, null, ct), doctorId, SaveFailed);
     }
 
-    public Task<DoctorResult> SaveBioAsync(Guid doctorId, string? bio, CancellationToken ct = default) => PutBioAsync(api, bio, doctorId, ct);
+    public Task<DoctorResult> SaveBioAsync(Guid doctorId, string? bio, string? licenseNumber = null, string? ptrNumber = null, string? s2Number = null, CancellationToken ct = default) => PutBioAsync(api, bio, doctorId, ct, licenseNumber, ptrNumber, s2Number);
 }
 //JJQR - END

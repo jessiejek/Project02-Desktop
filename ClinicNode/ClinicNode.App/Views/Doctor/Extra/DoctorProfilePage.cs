@@ -51,6 +51,22 @@ public sealed class DoctorProfilePage : StaffLivePage
         if (_updatePw is not null) _updatePw.IsEnabled = CanUpdate;
     }
 
+    private async Task CopyIdsToLocalAsync(Guid doctorId)
+    {
+        try
+        {
+            var factory = Sp.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>();
+            if (factory is null) return;
+            await using var db = await factory.CreateDbContextAsync();
+            var row = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleOrDefaultAsync(db.Doctors, d => d.DoctorId == doctorId);
+            if (row is null) return;
+            static string? B(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+            row.LicenseNumber = B(_license.Text); row.PtrNumber = B(_ptr.Text); row.S2Number = B(_s2.Text);
+            await db.SaveChangesAsync();
+        }
+        catch { /* the server copy is saved; the next sync brings the local one */ }
+    }
+
     private static View Divider() => new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant") };
 
     protected override async Task LoadAsync()
@@ -65,9 +81,9 @@ public sealed class DoctorProfilePage : StaffLivePage
         _fee.Text = p.ConsultationFee.ToString("0.##", CultureInfo.InvariantCulture);
         _license.Text = p.LicenseNumber; _ptr.Text = p.PtrNumber; _s2.Text = p.S2Number;
         // Admin-only fields: read-only here (deliberate web diff until Jessie decides)
-        foreach (var e in new[] { _name, _spec, _fee, _license, _ptr, _s2 }) e.IsReadOnly = true;
+        foreach (var e in new[] { _name, _spec, _fee }) e.IsReadOnly = true; //JJQR - AI (Nov 22, 2026) - License / PTR / S2 are the doctor's own to enter //JJQR - END
         //JJQR - AI (21 Nov 2026) - Jessie (6:30 PM): the 6 Admin-only fields LOOK read-only (muted background + text); Bio stays editable
-        foreach (var e in new[] { _name, _spec, _fee, _license, _ptr, _s2 })
+        foreach (var e in new[] { _name, _spec, _fee })
         {
             e.BackgroundColor = ClinicTheme.Color("SurfaceContainerLow");
             e.TextColor = ClinicTheme.Color("OnSurfaceVariant");
@@ -100,8 +116,10 @@ public sealed class DoctorProfilePage : StaffLivePage
             save!.Text = "Saving profile…";
             try
             {
-                var r = await Svc<IDoctorBioService>().SaveBioAsync(doctorId, _bio.Text);
+                var r = await Svc<IDoctorBioService>().SaveBioAsync(doctorId, _bio.Text, _license.Text ?? "", _ptr.Text ?? "", _s2.Text ?? "");
                 if (!r.Succeeded) { StaffUi.Show(_error, r.Error); return; }
+                //JJQR - AI (Nov 22, 2026) - printouts read this computer's own copy of the doctor row: keep it in step with what the server just stored //JJQR - END
+                await CopyIdsToLocalAsync(doctorId);
                 StaffUi.Show(_saved, $"Profile saved at {DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).ToString("h:mm:ss tt", CultureInfo.GetCultureInfo("en-PH"))}.");
             }
             finally { save!.Text = "Save profile"; }
@@ -166,22 +184,24 @@ public sealed class DoctorProfilePage : StaffLivePage
 
         var details = new Grid { ColumnSpacing = 24, RowSpacing = 18, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
         details.Add(Info("Consultation fee", "₱" + _fee.Text), 0, 0);
-        details.Add(Info("License no.", _license.Text), 1, 0);
-        details.Add(Info("PTR no.", _ptr.Text), 2, 0);
-        details.Add(Info("S2 no.", _s2.Text), 0, 1);
-        details.Add(Info("Specialization", _spec.Text), 1, 1);
+        details.Add(Info("Specialization", _spec.Text), 1, 0);
+        //JJQR - AI (Nov 22, 2026) - the doctor's own License / PTR / S2 numbers are editable (they print on prescriptions and certificates) //JJQR - END
+        var ids = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        ids.Add(StaffUi.Field("License no.", _license), 0, 0);
+        ids.Add(StaffUi.Field("PTR no.", _ptr), 1, 0);
+        ids.Add(StaffUi.Field("S2 no.", _s2), 2, 0);
 
         var lockNote = new Border
         {
             BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"), StrokeThickness = 0, Padding = new Thickness(12, 8),
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
-            Content = ClinicTheme.Text("🔒 Name, specialization, fee and licence numbers are set by the clinic admin. Contact the admin to change them.", "MutedSm"),
+            Content = ClinicTheme.Text("🔒 Name, specialization and fee are set by the clinic admin. Your License, PTR and S2 numbers are yours to enter; they print on prescriptions and certificates.", "MutedSm"),
         };
 
-        var bioBox = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Bio", "FieldLabel"), ClinicTheme.Text("Shown on your public profile. This is the one thing you can edit here.", "MutedSm"), _bio } };
+        var bioBox = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Bio", "FieldLabel"), ClinicTheme.Text("Shown on your public profile.", "MutedSm"), _bio } };
         _bio.HeightRequest = 120;
 
-        var left = StaffUi.Card(_saved, who, Divider(), details, lockNote, Divider(), _error, bioBox, save);
+        var left = StaffUi.Card(_saved, who, Divider(), details, lockNote, ids, Divider(), _error, bioBox, save);
         left.VerticalOptions = LayoutOptions.Start;
 
         var pwCard = StaffUi.Card(
