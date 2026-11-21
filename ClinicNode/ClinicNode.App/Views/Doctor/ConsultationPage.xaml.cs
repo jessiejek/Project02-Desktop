@@ -144,6 +144,8 @@ public partial class ConsultationPage : ContentPage
     {
         base.OnDisappearing();
         _autosave?.Stop();
+        //JJQR - AI (Nov 22, 2026) - leaving (Back / sidebar) with unsaved typing silently threw it away unless the 30 s autosave had fired: save the draft on the way out //JJQR - END
+        if (_mode == "complete" && !_busy && Dirty) _ = SaveAsync(goNext: false, silent: true);
         //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
         GapDisappearing();
         //JJQR - END

@@ -518,7 +518,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     /// <summary>Web "Print Preview" modal: the group's lines + file name, then Print.</summary>
     private async Task PrintPreviewAsync(string patientName, ChartRxGroup g)
     {
-        var lines = string.Join("\n", g.Lines.Select((l, i) => $"{i + 1}. {l.GenericName} #{l.Quantity}\nSig. {l.Dosage} {l.Instruction}"));
+        var lines = string.Join("\n", g.Lines.Select((l, i) => $"{i + 1}. {l.GenericName} {l.Dosage} #{l.Quantity}" + (string.IsNullOrWhiteSpace(l.Instruction) ? "" : $"\n    {l.Instruction}"))); //JJQR - AI (Nov 22, 2026) - the dose was printed as "Sig." //JJQR - END
         var message = $"{patientName}\n{g.CreatedAt.UtcDateTime:yyyy-MM-dd}\n\n{lines}\n\nFile name: {System.Text.RegularExpressions.Regex.Replace(patientName, @"\s+", "_")}_{g.BookingId}";
         var bookingId = g.BookingId;
         // print after the preview closes, so the print sheet opens over the chart and not over the modal
