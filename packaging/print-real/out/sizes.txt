@@ -1,0 +1,8 @@
+rx: 419.53 x 595.28 pt = 148 x 210 mm, 246729 bytes, paper 'A5'
+lab: 309.6 x 460.8 pt = 109.2 x 162.6 mm, 323305 bytes, paper 'Lab request'
+medcert: 419.53 x 595.28 pt = 148 x 210 mm, 170417 bytes, paper 'A5'
+slip-web: 595.28 x 841.89 pt = 210 x 297 mm, 15943 bytes, paper 'Printer default'
+slip-80: 226.77 x 215.01 pt = 80 x 75.9 mm, 43862 bytes, paper 'Thermal 80mm'
+slip-58: 164.41 x 188.76 pt = 58 x 66.6 mm, 43812 bytes, paper 'Thermal 58mm'
+receipt-pending: 595.28 x 841.89 pt = 210 x 297 mm, 17326 bytes, paper 'Printer default'
+receipt-synced: 595.28 x 841.89 pt = 210 x 297 mm, 15500 bytes, paper 'Printer default'

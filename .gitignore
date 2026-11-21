@@ -1,0 +1,14 @@
+# JJQR - AI (Nov 21, 2026) - keep secrets, build output and local data out of any future repo
+bin/
+obj/
+payload/
+packaging/out/
+*.db
+*.db-wal
+*.db-shm
+node-secret.key
+*.local.md
+*.log
+.DS_Store
+*.jjqr
+# JJQR - END

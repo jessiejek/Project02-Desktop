@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- JJQR - AI (Nov 21, 2026) - auto-update feed. Host this file and the .msix on an HTTPS URL or a UNC share the clinic PC can read,
+     replace HOST and VERSION, and install via the .appinstaller (not the .msix) once. Windows then checks on every launch and
+     every 8 h in the background; the clinic gets the new version on next start. Bump Version (4 parts) for every release. -->
+<AppInstaller xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+              Uri="https://HOST/clinicnode/ClinicNode.appinstaller" Version="0.1.0.0">
+  <MainPackage Name="ph.clinicnode.app" Publisher="CN=Grace Medical Clinic" Version="0.1.0.0"
+               ProcessorArchitecture="x64" Uri="https://HOST/clinicnode/ClinicNode.App_0.1.0.0_x64.msix" />
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false" />
+    <AutomaticBackgroundTask />
+  </UpdateSettings>
+</AppInstaller>
+<!-- JJQR - END -->

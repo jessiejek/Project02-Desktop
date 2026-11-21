@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (21 Nov 2026) - 1:1 with Project02-fe app/login/page.tsx + components/auth/AuthShell.tsx (light theme):
+     bg surface-container-low · max-w-auth 26rem (416) · brand link body-md semibold primary mb-md · card rounded-xl (24) border outline-variant p-xl ·
+     h1 headline-lg-mobile + body-md on-surface-variant (mb-lg) · form space-y-md: FormAlert (danger) → Email → remember email (desktop) → Password + "Forgot password?" + eye → full-width "Log in".
+     Desktop differences on purpose: no patient copy / "Create an account" (/register is not on the desktop). -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.LoginPage"
+             Title="Log in"
+             Shell.FlyoutBehavior="Disabled"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource SurfaceContainerLow}">
+    <ScrollView>
+        <VerticalStackLayout Padding="24,32"
+                             Spacing="0"
+                             WidthRequest="416"
+                             MaximumWidthRequest="416"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center">
+            <Label Text="Dr. Grace Gavino Medical Clinic"
+                   Style="{StaticResource BrandLink}"
+                   MinimumHeightRequest="44"
+                   VerticalTextAlignment="Center"
+                   HorizontalOptions="Start" />
+            <Border Style="{StaticResource AuthCard}" Padding="32">
+                <VerticalStackLayout Spacing="0">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,0,24">
+                        <Label Text="Log in to your account" Style="{StaticResource HeadlineLgMobile}" SemanticProperties.HeadingLevel="Level1" />
+                        <Label Text="Doctors, staff and administrators all sign in here." Style="{StaticResource MutedBody}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="16">
+                        <Label x:Name="DemoBanner" IsVisible="False" Style="{StaticResource MutedSm}" TextColor="{StaticResource StatusWarning}" />
+
+                        <!-- FormAlert tone="danger": rounded-lg border px-md py-sm, error icon + body-md -->
+                        <Border x:Name="ErrorBox"
+                                IsVisible="{Binding Source={x:Reference ErrorLabel}, Path=IsVisible}"
+                                StrokeThickness="1"
+                                Stroke="{StaticResource StatusDangerBorder}"
+                                BackgroundColor="{StaticResource StatusDangerSurface}"
+                                Padding="16,8"
+                                StrokeShape="RoundRectangle 16"
+                                SemanticProperties.Description="Error">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <Image x:Name="ErrorIcon" WidthRequest="16" HeightRequest="16" VerticalOptions="Start" Margin="0,2,0,0" />
+                                <Label x:Name="ErrorLabel" Grid.Column="1" IsVisible="False"
+                                       FontFamily="Inter" FontSize="14"
+                                       TextColor="{StaticResource StatusDanger}" LineBreakMode="WordWrap" />
+                            </Grid>
+                        </Border>
+
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Email" Style="{StaticResource FieldLabel}" />
+                            <Border Style="{StaticResource InputFrame}">
+                                <Entry x:Name="EmailEntry" Keyboard="Email" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
+                                       ReturnType="Next" Completed="OnEmailCompleted" SemanticProperties.Description="Email" />
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <!-- desktop only on the web too: remember the email (never the password) -->
+                        <VerticalStackLayout Spacing="4">
+                            <HorizontalStackLayout Spacing="8" MinimumHeightRequest="44">
+                                <CheckBox x:Name="RememberEmailCheck" IsChecked="True" VerticalOptions="Center" Color="{StaticResource Primary}" />
+                                <Label Text="Remember my email on this computer" Style="{StaticResource BodyMd}" VerticalOptions="Center">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnRememberLabelTapped" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </HorizontalStackLayout>
+                            <Label Text="For safety the password is never saved. You stay signed in on this computer for up to 7 days of use."
+                                   Style="{StaticResource LabelMd}" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <Label Text="Password" Style="{StaticResource FieldLabel}" VerticalOptions="End" />
+                                <Label Grid.Column="1"
+                                       Text="Forgot password?"
+                                       Style="{StaticResource LabelMd}"
+                                       TextColor="{StaticResource Primary}"
+                                       VerticalOptions="End"
+                                       SemanticProperties.Description="Forgot password?">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnForgotPassword" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </Grid>
+                            <Border Style="{StaticResource InputFrame}">
+                                <Grid ColumnDefinitions="*,44">
+                                    <Entry x:Name="PasswordEntry" IsPassword="True" ReturnType="Go" Completed="OnSignIn" SemanticProperties.Description="Password" />
+                                    <ImageButton x:Name="TogglePassword"
+                                                 Grid.Column="1"
+                                                 BackgroundColor="Transparent"
+                                                 Clicked="OnTogglePassword"
+                                                 WidthRequest="44"
+                                                 HeightRequest="44"
+                                                 Aspect="Center"
+                                                 SemanticProperties.Description="Show password" />
+                                </Grid>
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <Button x:Name="SignInButton" Text="Log in" Clicked="OnSignIn" HorizontalOptions="Fill" />
+                        <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" HeightRequest="20" Color="{StaticResource Primary}" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
+<!-- JJQR - END -->

@@ -1,0 +1,11 @@
+<Project>
+  <!-- JJQR - AI (21 Nov 2026) - allen0 I-3: pin patched versions of transitive packages flagged NU1902/NU1903
+       (they arrive via ClinicApp.Auth -> Microsoft.AspNetCore.Identity 2.3.x). Desktop projects only; the
+       backend projects (ClinicApp.Auth / ClinicApp.Infrastructure) still restore their own versions. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="2.3.14" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.15" />
+  </ItemGroup>
+  <!-- JJQR - END -->
+</Project>

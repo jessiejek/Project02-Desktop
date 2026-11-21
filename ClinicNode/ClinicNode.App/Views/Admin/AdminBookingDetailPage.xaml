@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (Nov 21, 2026) - A-BOOK-DETAIL. wired by allen0 21 Nov 2026 (MauiProgram.cs / AppShell.xaml.cs). -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.Admin.AdminBookingDetailPage"
+             Title="Booking"
+             BackgroundColor="{StaticResource Background}">
+    <!-- JJQR - AI (21 Nov 2026) - layout matched to web /admin/bookings/[id]: back link, "Booking for" header with status/payment pills,
+         progress timeline, Patient + Visit and payment cards (OR number when Paid/Waived), actions per status. -->
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16" MaximumWidthRequest="1100">
+            <!-- JJQR - AI (21 Nov 2026) - web ErrorState when the booking never loaded; the page body hides behind it -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding LoadFailed}" Padding="32">
+                <VerticalStackLayout Spacing="8" HorizontalOptions="Center">
+                    <Label Text="Booking unavailable" Style="{StaticResource HeadlineSm}" HorizontalTextAlignment="Center" />
+                    <Label Text="This booking could not be loaded. Nothing has changed; try again." Style="{StaticResource MutedBody}" HorizontalTextAlignment="Center" />
+                    <Button Text="Try again" Style="{StaticResource SecondaryButton}" Command="{Binding RetryLoadCommand}" HorizontalOptions="Center" Margin="0,8,0,0" />
+                </VerticalStackLayout>
+            </Border>
+            <VerticalStackLayout Spacing="16" IsVisible="{Binding ShowContent}">
+            <!-- JJQR - END -->
+            <Button Text="‹ All bookings" Style="{StaticResource GhostButton}" Command="{Binding BackToBookingsCommand}" HorizontalOptions="Start" />
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Booking for" Style="{StaticResource LabelMd}" TextColor="{StaticResource OnSurfaceVariant}" />
+                    <Label Text="{Binding PatientNameText}" Style="{StaticResource HeadlineLg}" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding DateDoctorLine}" Style="{StaticResource MutedBody}" />
+                </VerticalStackLayout>
+                <HorizontalStackLayout x:Name="PillRow" Grid.Column="1" Spacing="8" VerticalOptions="Start" />
+            </Grid>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Border Style="{StaticResource FormAlertError}" IsVisible="{Binding HasError}">
+                <Label Text="{Binding Error}" Style="{StaticResource FormAlertErrorText}" />
+            </Border>
+            <Border Style="{StaticResource FormAlertSuccess}" IsVisible="{Binding HasStatus}">
+                <Label Text="{Binding StatusMessage}" Style="{StaticResource FormAlertSuccessText}" />
+            </Border>
+
+            <Border x:Name="TimelineCard" Style="{StaticResource Card}" IsVisible="False">
+                <Grid x:Name="TimelineGrid" ColumnSpacing="8" />
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="Patient" Style="{StaticResource HeadlineSm}" />
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="12">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="Patient code" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding PatientCodeText}" Style="{StaticResource BodyMd}" FontFamily="Courier New" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label Text="Contact" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding PatientContactText}" Style="{StaticResource BodyMd}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="1" Grid.ColumnSpan="2" Spacing="2">
+                                <Label Text="Email" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding PatientEmailText}" Style="{StaticResource BodyMd}" LineBreakMode="CharacterWrap" />
+                            </VerticalStackLayout>
+                        </Grid>
+                        <Button Text="Open patient record" Style="{StaticResource GhostButton}" Command="{Binding OpenPatientCommand}" HorizontalOptions="Start" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="Visit and payment" Style="{StaticResource HeadlineSm}" />
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="12">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="Doctor" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding DoctorText}" Style="{StaticResource BodyMd}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label Text="Specialty" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding SpecialtyText}" Style="{StaticResource BodyMd}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="1" Spacing="2">
+                                <Label Text="Payment mode" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding PaymentModeText}" Style="{StaticResource BodyMd}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="2">
+                                <Label Text="Amount due" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding AmountDueText}" Style="{StaticResource BodyMd}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="2" Spacing="2" IsVisible="{Binding ShowOrNumber}">
+                                <Label Text="OR number" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding OrNumberText}" Style="{StaticResource BodyMd}" FontFamily="Courier New" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <Border Style="{StaticResource Card}" IsVisible="{Binding HasActions}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Actions" Style="{StaticResource HeadlineSm}" />
+                    <FlexLayout Wrap="Wrap" Direction="Row" AlignItems="Start" JustifyContent="Start">
+                        <Button Text="Confirm booking" Margin="0,0,8,8" Command="{Binding ConfirmCommand}" IsVisible="{Binding CanConfirm}" />
+                        <Button Text="Confirm payment" Margin="0,0,8,8" Command="{Binding ConfirmPaymentCommand}" IsVisible="{Binding CanConfirmPayment}" />
+                        <Button Text="Mark complete" Margin="0,0,8,8" Command="{Binding CompleteCommand}" IsVisible="{Binding CanComplete}" />
+                        <Button Text="Reject booking" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding RejectCommand}" IsVisible="{Binding CanConfirm}" />
+                        <Button Text="Reject proof" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding RejectCommand}" IsVisible="{Binding IsProofReject}" />
+                        <Button Text="Mark no-show" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding NoShowCommand}" IsVisible="{Binding CanNoShow}" />
+                        <Button Text="Reschedule" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding OpenRescheduleCommand}" IsVisible="{Binding CanReschedule}" />
+                        <Button Text="Cancel booking" Margin="0,0,8,8" Style="{StaticResource GhostButton}" TextColor="{StaticResource StatusDanger}" Command="{Binding CancelCommand}" IsVisible="{Binding CanCancel}" />
+                        <Button Text="Print receipt" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding PrintReceiptCommand}" IsVisible="{Binding CanPrint}" />
+                        <Button Text="Print summary" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding PrintSummaryCommand}" IsVisible="{Binding CanPrint}" />
+                        <Button Text="Waive payment" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding WaiveCommand}" IsVisible="{Binding CanWaive}" />
+                        <Button Text="Refund payment" Margin="0,0,8,8" Style="{StaticResource SecondaryButton}" Command="{Binding RefundCommand}" IsVisible="{Binding CanRefund}" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- JJQR - AI (21 Nov 2026) - inline reschedule panel replaced by the web "Reschedule Booking" modal (code-behind); body wrapper closes here -->
+            </VerticalStackLayout>
+            <!-- JJQR - END -->
+        </VerticalStackLayout>
+    </ScrollView>
+    <!-- JJQR - END -->
+</ContentPage>
+<!-- JJQR - END -->

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- JJQR - AI (Nov 21, 2026) - MSIX manifest for Clinic Node (used when WindowsPackageType=MSIX; see packaging/README.md).
+     Publisher MUST equal the Subject of the signing certificate exactly. Version is overwritten from ApplicationDisplayVersion/ApplicationVersion. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+
+  <Identity Name="ph.clinicnode.app" Publisher="CN=Grace Medical Clinic" Version="0.1.0.0" />
+
+  <Properties>
+    <DisplayName>Clinic Node</DisplayName>
+    <PublisherDisplayName>Grace Medical Clinic</PublisherDisplayName>
+    <Logo>$placeholder$.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
+      <uap:VisualElements
+        DisplayName="Clinic Node"
+        Description="Grace Medical Clinic — offline clinic node"
+        Square150x150Logo="$placeholder$.png"
+        Square44x44Logo="$placeholder$.png"
+        BackgroundColor="transparent">
+        <uap:DefaultTile Square71x71Logo="$placeholder$.png" Wide310x150Logo="$placeholder$.png" Square310x310Logo="$placeholder$.png" />
+        <uap:SplashScreen Image="$placeholder$.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Auto-start at sign-in. Disabled until the user (or WindowsStartup.EnableAsync) turns it on; Settings > Apps > Startup can toggle it. -->
+        <desktop:Extension Category="windows.startupTask">
+          <desktop:StartupTask TaskId="ClinicNodeStartup" Enabled="false" DisplayName="Clinic Node" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <Capability Name="internetClient" />
+    <Capability Name="privateNetworkClientServer" />
+  </Capabilities>
+</Package>
+<!-- JJQR - END -->

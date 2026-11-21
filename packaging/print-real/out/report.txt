@@ -1,0 +1,25 @@
+Run dir (copy of the copy): /tmp/cn-print-run-ec030384c423404d9c64cb009892bbfb
+TOTAL: 18 pass / 0 fail
+NOTE | model tables missing from the sandbox DB: sync_changes, sync_nodes, sync_operations
+NOTE | created on the /tmp copy only: sync_changes, sync_nodes, sync_operations
+PASS | schema drift check (model tables missing from the existing DB)
+PASS | LocalDatabase.InitializeAsync on the copy
+NOTE | bookings: P-01 f2111111-1111-4111-8111-111111111201 (doctor@clinic.test), P-02 f2111111-1111-4111-8111-111111111202 (doctor@clinic.test), P-03 f2111111-1111-4111-8111-111111111203 (doctor@clinic.test)
+PASS | read seeded bookings
+PASS | doctor completes consult with Rx/labs/med cert on P-01
+PASS | doctor completes consult on P-02
+PASS | staff records payment P-02
+PASS | ack all outbox rows (simulates a successful sync) so the first receipt is synced
+PASS | staff records payment P-01 (stays unsynced → PENDING SYNC)
+PASS | build rx
+PASS | build lab
+PASS | build medcert
+PASS | build slip-web
+PASS | build slip-80
+PASS | build slip-58
+PASS | build receipt-pending
+PASS | build receipt-synced
+NOTE | No medicines have been prescribed for this visit.
+PASS | Rx on a visit without medicines gives a clear message
+NOTE | No payment has been recorded for this visit yet.
+PASS | receipt before payment gives a clear message

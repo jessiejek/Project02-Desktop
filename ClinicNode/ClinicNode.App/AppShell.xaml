@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (Nov 21, 2026) -->
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:views="clr-namespace:ClinicNode.App.Views"
+       xmlns:doctor="clr-namespace:ClinicNode.App.Views.Doctor"
+       xmlns:staff="clr-namespace:ClinicNode.App.Views.Staff"
+       xmlns:admin="clr-namespace:ClinicNode.App.Views.Admin"
+       x:Class="ClinicNode.App.AppShell"
+       FlyoutBehavior="Disabled"
+       Title="Clinic Node">
+
+    <ShellContent Title="Sign in" ContentTemplate="{DataTemplate views:LoginPage}" Route="login" />
+
+    <!-- JJQR - AI (Nov 21, 2026) - sync lives once in TopBarView (compact online/offline + menu).
+         These ToolbarItems were a second banner in the title area ("Not registered…", "0 pending", "Sync now", "Con…"). -->
+</Shell>

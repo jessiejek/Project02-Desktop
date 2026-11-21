@@ -1,0 +1,428 @@
+{
+ "sigCases": [
+  {
+   "input": {
+    "instruction": "after meals"
+   },
+   "result": {
+    "meal": "after",
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "before meals"
+   },
+   "result": {
+    "meal": "before",
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "once daily"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "BID"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "TID with meals"
+   },
+   "result": {
+    "meal": "after",
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "1 tab q8h"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "every 6 hours"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER",
+     "BEDTIME"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "at bedtime"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BEDTIME"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "once daily at night"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BEDTIME"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "prn for fever"
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": true,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "for pain"
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": true,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "after each loose stool"
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": true,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "stat"
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": true,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "as directed"
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": false,
+    "asDirected": true
+   }
+  },
+  {
+   "input": {
+    "instruction": "morning and evening"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "1 hour before breakfast"
+   },
+   "result": {
+    "meal": "before",
+    "slots": [
+     "BREAKFAST"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "a.c."
+   },
+   "result": {
+    "meal": "before",
+    "slots": [],
+    "asNeeded": false,
+    "asDirected": true
+   }
+  },
+  {
+   "input": {
+    "instruction": "p.c. tid"
+   },
+   "result": {
+    "meal": "after",
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "twice a day with food"
+   },
+   "result": {
+    "meal": "after",
+    "slots": [
+     "BREAKFAST",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "umaga at tanghali"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST",
+     "LUNCH"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "8am"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "with food"
+   },
+   "result": {
+    "meal": "after",
+    "slots": [],
+    "asNeeded": false,
+    "asDirected": true
+   }
+  },
+  {
+   "input": {
+    "instruction": "empty stomach"
+   },
+   "result": {
+    "meal": "before",
+    "slots": [],
+    "asNeeded": false,
+    "asDirected": true
+   }
+  },
+  {
+   "input": {
+    "instruction": ""
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "take 2 puffs"
+   },
+   "result": {
+    "meal": null,
+    "slots": [],
+    "asNeeded": false,
+    "asDirected": true
+   }
+  },
+  {
+   "input": {
+    "instruction": "after meals",
+    "mealRelation": "Before"
+   },
+   "result": {
+    "meal": "before",
+    "slots": [
+     "BREAKFAST",
+     "LUNCH",
+     "DINNER"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "once daily",
+    "mealRelation": "AFTER"
+   },
+   "result": {
+    "meal": "after",
+    "slots": [
+     "BREAKFAST"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "tid",
+    "timing": "Lunch, Bedtime"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "LUNCH",
+     "BEDTIME"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  },
+  {
+   "input": {
+    "instruction": "",
+    "route": "PO",
+    "timing": "breakfast"
+   },
+   "result": {
+    "meal": null,
+    "slots": [
+     "BREAKFAST"
+    ],
+    "asNeeded": false,
+    "asDirected": false
+   }
+  }
+ ],
+ "nameCases": [
+  {
+   "generic": "Paracetamol",
+   "dosage": "500 mg",
+   "result": "Paracetamol 500 mg"
+  },
+  {
+   "generic": "Paracetamol 500mg tablet",
+   "dosage": "500 mg",
+   "result": "Paracetamol 500mg tablet"
+  },
+  {
+   "generic": "Amoxicillin 500MG",
+   "dosage": "500mg/5ml suspension",
+   "result": "Amoxicillin 500MG 500mg/5ml suspension"
+  },
+  {
+   "generic": "ORS SACHET",
+   "dosage": "1 sachet",
+   "result": "ORS SACHET"
+  },
+  {
+   "generic": "Cefalexin 250mg/5ml",
+   "dosage": "250 mg/5 ml",
+   "result": "Cefalexin 250mg/5ml"
+  },
+  {
+   "generic": "Losartan",
+   "dosage": "",
+   "result": "Losartan"
+  },
+  {
+   "generic": "Metformin 500MG TAB",
+   "dosage": "1 tab",
+   "result": "Metformin 500MG TAB"
+  },
+  {
+   "generic": "Salbutamol",
+   "dosage": "2 mg tablet",
+   "result": "Salbutamol 2 mg tablet"
+  }
+ ]
+}

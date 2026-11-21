@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (Nov 21, 2026) - clinical_precision tokens copied from Project02-fe/src/app/globals.css @theme.
+     Always used in Light; the web app has no dark-theme toggle. Alias keys (ClinicTeal, …) keep older pages compiling. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+    <!-- Surfaces -->
+    <Color x:Key="Background">#F3F5F7</Color>
+    <Color x:Key="OnBackground">#1B2733</Color>
+    <Color x:Key="Surface">#F3F5F7</Color>
+    <Color x:Key="SurfaceDim">#CBDBF5</Color>
+    <Color x:Key="SurfaceBright">#F3F5F7</Color>
+    <Color x:Key="SurfaceContainerLowest">#FFFFFF</Color>
+    <Color x:Key="SurfaceContainerLow">#F3F5F7</Color>
+    <Color x:Key="SurfaceContainer">#ECEFF2</Color>
+    <Color x:Key="SurfaceContainerHigh">#E4E8EC</Color>
+    <Color x:Key="SurfaceContainerHighest">#DADFE5</Color>
+    <Color x:Key="SurfaceVariant">#DADFE5</Color>
+    <Color x:Key="OnSurface">#1B2733</Color>
+    <Color x:Key="OnSurfaceVariant">#5B6672</Color>
+    <Color x:Key="InverseSurface">#0B3D38</Color>
+    <Color x:Key="InverseOnSurface">#EAF1FF</Color>
+    <Color x:Key="Outline">#8A94A0</Color>
+    <Color x:Key="OutlineVariant">#DDE2E8</Color>
+    <Color x:Key="SurfaceTint">#006A61</Color>
+
+    <!-- Brand -->
+    <Color x:Key="Primary">#00685F</Color>
+    <Color x:Key="OnPrimary">#FFFFFF</Color>
+    <Color x:Key="PrimaryContainer">#008378</Color>
+    <Color x:Key="OnPrimaryContainer">#F4FFFC</Color>
+    <Color x:Key="InversePrimary">#6BD8CB</Color>
+    <Color x:Key="PrimaryFixed">#89F5E7</Color>
+    <Color x:Key="PrimaryFixedDim">#6BD8CB</Color>
+    <Color x:Key="OnPrimaryFixed">#00201D</Color>
+    <Color x:Key="OnPrimaryFixedVariant">#005049</Color>
+    <Color x:Key="PrimarySubtle">#1A00685F</Color>
+
+    <Color x:Key="Secondary">#565E74</Color>
+    <Color x:Key="OnSecondary">#FFFFFF</Color>
+    <Color x:Key="SecondaryContainer">#DAE2FD</Color>
+    <Color x:Key="OnSecondaryContainer">#5C647A</Color>
+    <Color x:Key="SecondaryFixed">#DAE2FD</Color>
+    <Color x:Key="SecondaryFixedDim">#BEC6E0</Color>
+    <Color x:Key="OnSecondaryFixed">#131B2E</Color>
+    <Color x:Key="OnSecondaryFixedVariant">#3F465C</Color>
+
+    <Color x:Key="Tertiary">#924628</Color>
+    <Color x:Key="OnTertiary">#FFFFFF</Color>
+    <Color x:Key="TertiaryContainer">#B05E3D</Color>
+    <Color x:Key="OnTertiaryContainer">#FFFBFF</Color>
+    <Color x:Key="TertiaryFixed">#FFDBCE</Color>
+    <Color x:Key="TertiaryFixedDim">#FFB59A</Color>
+    <Color x:Key="OnTertiaryFixed">#370E00</Color>
+    <Color x:Key="OnTertiaryFixedVariant">#773215</Color>
+
+    <Color x:Key="Error">#BA1A1A</Color>
+    <Color x:Key="OnError">#FFFFFF</Color>
+    <Color x:Key="ErrorContainer">#FFDAD6</Color>
+    <Color x:Key="OnErrorContainer">#93000A</Color>
+
+    <!-- Status pills (shared vocabulary, separate from brand teal) -->
+    <Color x:Key="StatusSuccess">#166534</Color>
+    <Color x:Key="StatusSuccessSurface">#DCFCE7</Color>
+    <Color x:Key="StatusSuccessBorder">#BBF7D0</Color>
+    <Color x:Key="StatusWarning">#854D0E</Color>
+    <Color x:Key="StatusWarningSurface">#FEF3C7</Color>
+    <Color x:Key="StatusWarningBorder">#FDE68A</Color>
+    <Color x:Key="StatusDanger">#991B1B</Color>
+    <Color x:Key="StatusDangerSurface">#FEE2E2</Color>
+    <Color x:Key="StatusDangerBorder">#FECACA</Color>
+    <Color x:Key="StatusInfo">#1E40AF</Color>
+    <Color x:Key="StatusInfoSurface">#DBEAFE</Color>
+    <Color x:Key="StatusInfoBorder">#BFDBFE</Color>
+    <Color x:Key="StatusNeutral">#475569</Color>
+    <Color x:Key="StatusNeutralSurface">#F1F5F9</Color>
+    <Color x:Key="StatusNeutralBorder">#CBD5E1</Color>
+
+    <!-- Backward-compatible aliases used by earlier pages -->
+    <Color x:Key="ClinicTeal">#00685F</Color>
+    <Color x:Key="ClinicTealDark">#005049</Color>
+    <Color x:Key="ClinicSurface">#F3F5F7</Color>
+    <Color x:Key="ClinicOnSurface">#1B2733</Color>
+    <Color x:Key="ClinicMuted">#5B6672</Color>
+    <Color x:Key="ClinicWarning">#854D0E</Color>
+    <Color x:Key="White">#FFFFFF</Color>
+    <!-- JJQR - AI (Nov 21, 2026) - desktop sidebar -->
+    <Color x:Key="SidebarBg">#0B3D38</Color>
+    <Color x:Key="SidebarActive">#14564F</Color>
+    <Color x:Key="SidebarText">#CFE8E4</Color>
+    <Color x:Key="SidebarMuted">#8FC9C0</Color>
+    <Color x:Key="SidebarAccent">#5EEAD4</Color>
+    <!-- JJQR - END -->
+</ResourceDictionary>

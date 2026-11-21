@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (21 Nov 2026) - 1:1 with web /admin/patients: PageHeader "Patients" + "Add patient", "Search patients" box, table Name / Code /
+     Contact / Email / Account, "a–b of N" + Previous / Page x of y / Next, "Add a patient" modal. Built in code-behind with ClinicUi. -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.Admin.AdminPatientsPage"
+             Title="Patients"
+             BackgroundColor="{StaticResource Background}">
+    <ScrollView>
+        <VerticalStackLayout x:Name="Root" Padding="24" Spacing="24" MaximumWidthRequest="1200" />
+    </ScrollView>
+</ContentPage>
+<!-- JJQR - END -->

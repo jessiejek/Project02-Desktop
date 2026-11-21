@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (Nov 21, 2026) - MAUI styles mirroring Project02-fe (Tailwind clinical_precision):
+     Inter typography, 44px controls, rounded-lg buttons, rounded-xl cards, Light surfaces only. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                    xmlns:ctl="clr-namespace:ClinicNode.App.Controls">
+
+    <!-- Type scale (globals.css  — text-*). FontFamily aliases are registered in MauiProgram. -->
+    <Style x:Key="HeadlineLg" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="HeadlineLgMobile" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="HeadlineMd" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="HeadlineSm" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="BodyLg" TargetType="Label">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="BodyMd" TargetType="Label">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="BodySm" TargetType="Label">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style x:Key="MutedBody" TargetType="Label">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+    </Style>
+    <Style x:Key="MutedSm" TargetType="Label">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+    </Style>
+    <Style x:Key="LabelLg" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <!-- JJQR - AI (Nov 21, 2026) - web tokens: text-label-md, text-display-sm, FormAlert, segmented control -->
+    <Style x:Key="LabelMd" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="CharacterSpacing" Value="0.13" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+    </Style>
+    <Style x:Key="DisplaySm" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="CharacterSpacing" Value="-1" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+    </Style>
+    <Style x:Key="StatValue" TargetType="Label" BasedOn="{StaticResource DisplaySm}" />
+    <Style x:Key="FieldLabel" TargetType="Label">
+        <!-- JJQR - AI (Nov 21, 2026) - labels are small, semibold and muted so they never look like the content under them -->
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="CharacterSpacing" Value="0.2" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+    </Style>
+    <Style x:Key="LabelSm" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="CharacterSpacing" Value="0.3" />
+    </Style>
+    <Style x:Key="BrandLink" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="TextColor" Value="{StaticResource Primary}" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+    <Style x:Key="PageKicker" TargetType="Label">
+        <Setter Property="FontFamily" Value="InterSemiBold" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextColor" Value="{StaticResource Primary}" />
+        <Setter Property="CharacterSpacing" Value="0.6" />
+    </Style>
+
+    <Style TargetType="Label">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style TargetType="Page">
+        <Setter Property="BackgroundColor" Value="{StaticResource Background}" />
+    </Style>
+    <!-- JJQR - AI (Nov 21, 2026) - desktop: keep page content in a centred column (max 1240) instead of pinned to the left edge on wide screens -->
+    <ControlTemplate x:Key="DesktopPageTemplate">
+        <Grid BackgroundColor="{StaticResource Background}">
+            <ctl:MaxWidthLayout MaxContentWidth="1760"><ContentPresenter /></ctl:MaxWidthLayout>
+        </Grid>
+    </ControlTemplate>
+    <Style TargetType="ContentPage" ApplyToDerivedTypes="True">
+        <Setter Property="ControlTemplate" Value="{StaticResource DesktopPageTemplate}" />
+    </Style>
+    <!-- JJQR - END -->
+    <Style TargetType="NavigationPage">
+        <Setter Property="BarBackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="BarTextColor" Value="{StaticResource OnSurface}" />
+    </Style>
+    <Style TargetType="Shell">
+        <!-- Light chrome (top bar). Role flyout colors are applied in AppShell (doctor light / staff-admin inverse). -->
+        <Setter Property="Shell.ForegroundColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="Shell.BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="Shell.TitleColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="Shell.DisabledColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="Shell.UnselectedColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="FlyoutBackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="FlyoutWidth" Value="260" />
+    </Style>
+
+    <!-- Buttons: min-h-11, rounded-lg (1rem), text-label-md / medium, px-lg -->
+    <Style x:Key="PrimaryButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+        <Setter Property="TextColor" Value="{StaticResource OnPrimary}" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="MinimumWidthRequest" Value="36" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+    </Style>
+    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}" />
+    <Style x:Key="SecondaryButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="BorderColor" Value="{StaticResource OutlineVariant}" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+    </Style>
+    <Style x:Key="GhostButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+    </Style>
+    <Style x:Key="DangerButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource Error}" />
+        <Setter Property="TextColor" Value="{StaticResource OnError}" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+    </Style>
+    <Style x:Key="StepButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style x:Key="StepButtonActive" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- Inputs: 44px, rounded-lg, outline-variant border, white fill -->
+    <Style TargetType="Entry">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="MinimumHeightRequest" Value="38" />
+    </Style>
+    <Style TargetType="Editor">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="AutoSize" Value="TextChanges" />
+        <Setter Property="MinimumHeightRequest" Value="80" />
+    </Style>
+    <Style TargetType="Picker">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="TitleColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="MinimumHeightRequest" Value="38" />
+    </Style>
+    <Style TargetType="DatePicker">
+        <Setter Property="FontFamily" Value="Inter" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="MinimumHeightRequest" Value="38" />
+    </Style>
+    <Style TargetType="CheckBox">
+        <Setter Property="Color" Value="{StaticResource Primary}" />
+        <Setter Property="MinimumHeightRequest" Value="28" />
+        <Setter Property="MinimumWidthRequest" Value="28" />
+    </Style>
+    <Style TargetType="ActivityIndicator">
+        <Setter Property="Color" Value="{StaticResource Primary}" />
+    </Style>
+
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="Stroke" Value="{StaticResource OutlineVariant}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style x:Key="AuthCard" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Padding" Value="32" />
+    </Style>
+    <Style x:Key="ListCard" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+    </Style>
+
+    <Style x:Key="Pill" TargetType="Border">
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 20" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+    <Style x:Key="PillSuccess" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusSuccessSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusSuccessBorder}" />
+    </Style>
+    <Style x:Key="PillWarning" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusWarningSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusWarningBorder}" />
+    </Style>
+    <Style x:Key="PillDanger" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusDangerSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusDangerBorder}" />
+    </Style>
+    <Style x:Key="PillInfo" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusInfoSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusInfoBorder}" />
+    </Style>
+    <Style x:Key="PillNeutral" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusNeutralSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusNeutralBorder}" />
+    </Style>
+    <Style x:Key="LaneBadgeS" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource TertiaryFixed}" />
+        <Setter Property="Stroke" Value="{StaticResource Tertiary}" />
+        <Setter Property="Padding" Value="8,4" />
+    </Style>
+    <Style x:Key="LaneBadgeR" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusNeutralSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusNeutralBorder}" />
+        <Setter Property="Padding" Value="8,4" />
+    </Style>
+    <Style x:Key="PillLabelSuccess" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusSuccess}" />
+        <Setter Property="TextTransform" Value="Uppercase" />
+    </Style>
+    <Style x:Key="PillLabelWarning" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusWarning}" />
+        <Setter Property="TextTransform" Value="Uppercase" />
+    </Style>
+    <Style x:Key="PillLabelDanger" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusDanger}" />
+        <Setter Property="TextTransform" Value="Uppercase" />
+    </Style>
+    <Style x:Key="PillLabelInfo" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusInfo}" />
+        <Setter Property="TextTransform" Value="Uppercase" />
+    </Style>
+    <Style x:Key="PillLabelNeutral" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusNeutral}" />
+        <Setter Property="TextTransform" Value="Uppercase" />
+    </Style>
+    <Style x:Key="LaneLabelS" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource OnTertiaryFixed}" />
+    </Style>
+    <Style x:Key="LaneLabelR" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusNeutral}" />
+    </Style>
+    <Style x:Key="ErrorText" TargetType="Label" BasedOn="{StaticResource BodySm}">
+        <Setter Property="TextColor" Value="{StaticResource Error}" />
+    </Style>
+    <Style x:Key="FormAlertSuccess" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusSuccessSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusSuccessBorder}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+        <Setter Property="Padding" Value="12,10" />
+    </Style>
+    <Style x:Key="FormAlertError" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusDangerSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusDangerBorder}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+        <Setter Property="Padding" Value="12,10" />
+    </Style>
+    <Style x:Key="FormAlertSuccessText" TargetType="Label" BasedOn="{StaticResource BodySm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusSuccess}" />
+    </Style>
+    <Style x:Key="FormAlertErrorText" TargetType="Label" BasedOn="{StaticResource BodySm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusDanger}" />
+    </Style>
+    <Style x:Key="SegmentedControl" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLow}" />
+        <Setter Property="Stroke" Value="{StaticResource OutlineVariant}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+    <Style x:Key="SegmentedButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <Style x:Key="SegmentedButtonSelected" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="FontFamily" Value="InterMedium" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+        <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <!-- JJQR - AI (21 Nov 2026) - item 3: shared controls from Project02-fe components/ui (DataTable, Modal, Toast, FormAlert, inputs). Light theme only. -->
+    <Style x:Key="SuccessText" TargetType="Label" BasedOn="{StaticResource BodySm}">
+        <Setter Property="TextColor" Value="{StaticResource StatusSuccess}" />
+    </Style>
+    <Style x:Key="FieldHint" TargetType="Label" BasedOn="{StaticResource BodySm}">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+    </Style>
+    <Style x:Key="InputFrame" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="Stroke" Value="{StaticResource OutlineVariant}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <!-- JJQR - AI (21 Nov 2026) - web inputStyles: rounded-lg (16) px-md (16) -->
+        <Setter Property="StrokeShape" Value="RoundRectangle 6" />
+        <Setter Property="Padding" Value="10,0" />
+        <!-- JJQR - END -->
+        <Setter Property="MinimumHeightRequest" Value="38" />
+    </Style>
+    <Style x:Key="InputFrameError" TargetType="Border" BasedOn="{StaticResource InputFrame}">
+        <Setter Property="Stroke" Value="{StaticResource Error}" />
+    </Style>
+    <!-- DataTable: rounded-xl border, header bg-surface-container-low -->
+    <Style x:Key="TableFrame" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="Stroke" Value="{StaticResource OutlineVariant}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style x:Key="TableHeaderRow" TargetType="Grid">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLow}" />
+        <Setter Property="Padding" Value="16,9" />
+        <Setter Property="MinimumHeightRequest" Value="36" />
+    </Style>
+    <Style x:Key="TableRow" TargetType="Grid">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceContainerLowest}" />
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="MinimumHeightRequest" Value="42" />
+    </Style>
+    <Style x:Key="TableHeader" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="TextTransform" Value="Uppercase" />
+    </Style>
+    <Style x:Key="TableCell" TargetType="Label" BasedOn="{StaticResource BodyMd}">
+        <Setter Property="TextColor" Value="{StaticResource OnSurface}" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+    <Style x:Key="TableEmpty" TargetType="Label" BasedOn="{StaticResource BodyMd}">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="Padding" Value="24,32" />
+    </Style>
+    <!-- Modal: scrim bg-on-surface/40, rounded card, header/footer separated by outline-variant -->
+    <Style x:Key="DialogScrim" TargetType="Grid">
+        <Setter Property="BackgroundColor" Value="#B3102A28" />
+    </Style>
+    <Style x:Key="DialogCard" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MaximumWidthRequest" Value="560" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Margin" Value="16" />
+    </Style>
+    <!-- Toast: status surfaces, bottom-centre, 320–480 wide -->
+    <Style x:Key="ToastBase" TargetType="Border">
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="MinimumWidthRequest" Value="320" />
+        <Setter Property="MaximumWidthRequest" Value="480" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="VerticalOptions" Value="End" />
+        <Setter Property="Margin" Value="0,0,0,24" />
+    </Style>
+    <Style x:Key="ToastInfo" TargetType="Border" BasedOn="{StaticResource ToastBase}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusInfoSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusInfoBorder}" />
+    </Style>
+    <Style x:Key="ToastSuccess" TargetType="Border" BasedOn="{StaticResource ToastBase}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusSuccessSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusSuccessBorder}" />
+    </Style>
+    <Style x:Key="ToastWarning" TargetType="Border" BasedOn="{StaticResource ToastBase}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusWarningSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusWarningBorder}" />
+    </Style>
+    <Style x:Key="ToastError" TargetType="Border" BasedOn="{StaticResource ToastBase}">
+        <Setter Property="BackgroundColor" Value="{StaticResource StatusDangerSurface}" />
+        <Setter Property="Stroke" Value="{StaticResource StatusDangerBorder}" />
+    </Style>
+    <!-- Top bar connection line: Online, up to date / Syncing... / Offline, N changes waiting -->
+    <Style x:Key="ConnectionLabel" TargetType="Label" BasedOn="{StaticResource LabelSm}">
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceVariant}" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+    <!-- JJQR - END -->
+    <!-- JJQR - END -->
+</ResourceDictionary>

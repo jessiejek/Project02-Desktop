@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- JJQR - AI (Nov 21, 2026) - Mac Catalyst smoke tool: renders the four clinic print documents through the SAME
+       MacPrintRenderer the app uses and writes PDFs (optionally prints them). Not shipped. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-maccatalyst</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SupportedOSPlatformVersion>17.0</SupportedOSPlatformVersion>
+    <ApplicationId>ph.clinicnode.printsmoke</ApplicationId>
+    <ApplicationTitle>ClinicNode Print Smoke</ApplicationTitle>
+    <EnableCodeSigning>false</EnableCodeSigning>
+    <RootNamespace>PrintSmoke</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../ClinicNode/ClinicNode.Core/PrintSpec.cs" Link="Linked/PrintSpec.cs" />
+    <Compile Include="../../ClinicNode/ClinicNode.Core/Printing/*.cs" Exclude="../../ClinicNode/ClinicNode.Core/Printing/ClinicFormsPrintDocumentFactory.cs;../../ClinicNode/ClinicNode.Core/Printing/ReceiptDocument.Staff.cs" LinkBase="Linked/Printing" />
+    <Compile Include="../../ClinicNode/ClinicNode.Core/Printing/Generated/*.cs" LinkBase="Linked/Printing/Generated" />
+    <Compile Include="../../ClinicNode/ClinicNode.App/Services/Printing/MacPrintRenderer.cs" Link="Linked/MacPrintRenderer.cs" />
+  </ItemGroup>
+</Project>
+<!-- JJQR - END -->

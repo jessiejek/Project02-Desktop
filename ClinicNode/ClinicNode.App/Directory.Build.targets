@@ -1,0 +1,6 @@
+<!-- JJQR - AI (Nov 21, 2026) - the net10.0 test TFM must not run ResolveNativeReference (MSB4803 on .NET MSBuild). -->
+<Project>
+  <Target Name="ResolveNativeReferences" Condition="'$(TargetFramework)' == 'net10.0'">
+    <Message Importance="high" Text="Clinic Node: skipped ResolveNativeReferences for the net10.0 test TFM." />
+  </Target>
+</Project>

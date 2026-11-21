@@ -1,0 +1,14 @@
+<Solution>
+  <Project Path="../../Project02-be/src/ClinicApp.Auth/ClinicApp.Auth.csproj" />
+  <Project Path="../../Project02-be/src/ClinicApp.Domain/ClinicApp.Domain.csproj" />
+  <Project Path="../../Project02-be/src/ClinicApp.Infrastructure/ClinicApp.Infrastructure.csproj" />
+  <Project Path="ClinicNode.App/ClinicNode.App.csproj" />
+  <Project Path="ClinicNode.Core/ClinicNode.Core.csproj" />
+  <Project Path="ClinicNode.Data/ClinicNode.Data.csproj" />
+  <Project Path="ClinicNode.Sync/ClinicNode.Sync.csproj" />
+  <Project Path="ClinicNode.Tests/ClinicNode.Tests.csproj" />
+  <!-- JJQR - AI (Nov 21, 2026) -->
+  <Project Path="ClinicNode.Api/ClinicNode.Api.csproj" />
+  <Project Path="ClinicNode.Api.Tests/ClinicNode.Api.Tests.csproj" />
+  <!-- JJQR - END -->
+</Solution>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (21 Nov 2026) - 1:1 with web /admin/audit-logs: PageHeader "Audit log", filter card (Record type, Search),
+     table When / Action / Record / By / Details, pager. Built in code-behind. -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.Admin.AdminAuditPage"
+             Title="Audit log"
+             BackgroundColor="{StaticResource Background}">
+    <ScrollView>
+        <VerticalStackLayout x:Name="Root" Padding="24" Spacing="24" />
+    </ScrollView>
+</ContentPage>
+<!-- JJQR - END -->

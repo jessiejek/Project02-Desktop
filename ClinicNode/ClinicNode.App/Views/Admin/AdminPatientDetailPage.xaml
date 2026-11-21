@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (21 Nov 2026) - 1:1 with web /admin/patients/[id]: "All patients", name + "code · sex · Born date", "Edit details",
+     card with tabs Overview / Bookings (n) / Consultations (n) / Access log, "Edit patient details" modal. Built in code-behind. -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.Admin.AdminPatientDetailPage"
+             Title="Patient"
+             BackgroundColor="{StaticResource Background}">
+    <ScrollView>
+        <VerticalStackLayout x:Name="Root" Padding="24" Spacing="24" MaximumWidthRequest="960" />
+    </ScrollView>
+</ContentPage>
+<!-- JJQR - END -->

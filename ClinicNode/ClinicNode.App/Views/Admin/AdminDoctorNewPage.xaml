@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (21 Nov 2026) - 1:1 with web components/admin/DoctorForm.tsx; the body is AdminDoctorFormView (shared with the other doctor form page). -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.Admin.AdminDoctorNewPage"
+             Title="Add a doctor"
+             BackgroundColor="{StaticResource Background}">
+</ContentPage>
+<!-- JJQR - END -->

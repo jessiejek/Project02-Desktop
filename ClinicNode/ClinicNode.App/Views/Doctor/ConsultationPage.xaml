@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- JJQR - AI (Nov 21, 2026) - native consultation workspace: header, horizontal stepper, card host, footer actions. -->
+<!-- JJQR - AI (21 Nov 2026) - 1:1 with web /doctor/consultation2: title + visit-type toggle + View Patient History / print / Cancel amendment in the header,
+     numbered step pills with More/Less before the fee step (rendered in code), footer Prev / Next / Save & next / Review & complete, overlays for
+     the Completion Checklist, Apply SOAP template, certificate confirm and "Consultation saved". Light theme only (StaticResource colours). -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ClinicNode.App.Views.Doctor.ConsultationPage"
+             Title="Consultation"
+             BackgroundColor="{StaticResource Background}">
+    <!-- JJQR - AI (Nov 21, 2026) - desktop workspace: header row, then [steps | form | patient & visit summary], footer under the form -->
+    <Grid x:Name="Root" ColumnDefinitions="262,*,320" RowDefinitions="Auto,*,Auto" ColumnSpacing="16" RowSpacing="14" Padding="24,18,24,18">
+
+        <Grid Grid.Row="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto" ColumnSpacing="16">
+            <VerticalStackLayout Spacing="2">
+                <Label x:Name="PageTitle" Text="Document consultation" Style="{StaticResource PageKicker}" />
+                <Label x:Name="BannerName" Style="{StaticResource HeadlineMd}" />
+                <Label x:Name="BannerMeta" Style="{StaticResource MutedSm}" />
+            </VerticalStackLayout>
+            <HorizontalStackLayout Grid.Column="1" Spacing="0" HorizontalOptions="End" VerticalOptions="Center">
+                <Button x:Name="HelpButton" Text="?" Style="{StaticResource SecondaryButton}" Clicked="OnHelp" Margin="8,0,0,0" ToolTipProperties.Text="Keyboard shortcuts" />
+                <Button x:Name="HistoryButton" Text="Patient history" Style="{StaticResource SecondaryButton}" Clicked="OnHistory" Margin="8,0,0,0" />
+                <Button x:Name="PrintRxButton" Text="Print prescription" Style="{StaticResource SecondaryButton}" Clicked="OnPrintRx" Margin="8,0,0,0" />
+                <Button x:Name="PrintLabsButton" Text="Print lab orders" Style="{StaticResource SecondaryButton}" Clicked="OnPrintLabs" Margin="8,0,0,0" />
+                <Button x:Name="PrintCertButton" Text="Print certificate" Style="{StaticResource SecondaryButton}" Clicked="OnPrintCert" Margin="8,0,0,0" />
+                <Button x:Name="PrintSlipButton" Text="Print queue slip" Style="{StaticResource SecondaryButton}" Clicked="OnPrintSlip" Margin="8,0,0,0" />
+                <Button x:Name="CancelAmendButton" Text="Cancel amendment" Style="{StaticResource SecondaryButton}" Clicked="OnCancelAmend" IsVisible="False" Margin="8,0,0,0" />
+            </HorizontalStackLayout>
+        </Grid>
+
+        <!-- steps rail -->
+        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource Card}" Padding="10">
+            <ScrollView>
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="STEPS" Style="{StaticResource LabelSm}" Margin="8,4,0,4" />
+                    <VerticalStackLayout x:Name="StepBar" Spacing="4" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+
+        <!-- form -->
+        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Padding="22,18">
+            <ScrollView>
+                <VerticalStackLayout x:Name="SectionHost" Spacing="14" />
+            </ScrollView>
+        </Border>
+
+        <!-- patient and visit summary -->
+        <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}" Padding="16">
+            <ScrollView>
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="PATIENT" Style="{StaticResource LabelSm}" />
+                    <VerticalStackLayout x:Name="AllergyBar" Spacing="6" />
+                    <BoxView HeightRequest="1" Color="{StaticResource OutlineVariant}" />
+                    <Label Text="VISIT" Style="{StaticResource LabelSm}" />
+                    <FlexLayout x:Name="VisitTypeBar" Wrap="Wrap" AlignItems="Center" />
+                    <Label x:Name="FeePreview" Style="{StaticResource FieldLabel}" TextColor="{StaticResource Primary}" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+
+        <!-- footer under the form -->
+        <VerticalStackLayout Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Spacing="6">
+            <Label x:Name="StatusLabel" Style="{StaticResource MutedSm}" />
+            <Label x:Name="ErrorLabel" Style="{StaticResource ErrorText}" IsVisible="False" />
+            <HorizontalStackLayout x:Name="ToastBar" Spacing="8" IsVisible="False">
+                <Label x:Name="ToastLabel" Style="{StaticResource BodyMd}" VerticalOptions="Center" />
+                <Button x:Name="ToastAction" Text="Undo" Style="{StaticResource GhostButton}" Clicked="OnToastAction" />
+            </HorizontalStackLayout>
+            <FlexLayout Wrap="Wrap" JustifyContent="End">
+                <Button x:Name="PrevButton" Text="Prev" Style="{StaticResource SecondaryButton}" Clicked="OnPrev" Margin="8,0,0,0" />
+                <Button x:Name="NextButton" Text="Next" Style="{StaticResource SecondaryButton}" Clicked="OnNext" Margin="8,0,0,0" />
+                <Button x:Name="AmendButton" Text="Edit Consultation" Style="{StaticResource SecondaryButton}" Clicked="OnAmend" IsVisible="False" Margin="8,0,0,0" />
+                <Button x:Name="SaveNextButton" Text="Save &amp; next" Style="{StaticResource SecondaryButton}" Clicked="OnSaveNext" Margin="8,0,0,0" />
+                <Button x:Name="CompleteButton" Text="Review &amp; complete" Style="{StaticResource PrimaryButton}" Clicked="OnComplete" Margin="8,0,0,0" />
+            </FlexLayout>
+        </VerticalStackLayout>
+
+        <!-- JJQR - AI (Nov 21, 2026) - floating dropdown layer: panels open OVER the page so nothing below moves -->
+        <AbsoluteLayout x:Name="PopupLayer" Grid.RowSpan="3" Grid.ColumnSpan="3" IsVisible="False" ZIndex="15" BackgroundColor="Transparent" />
+        <!-- JJQR - END -->
+
+        <!-- JJQR - AI (Nov 21, 2026) - real modal: dimmed backdrop + floating card with title bar and close -->
+        <Grid x:Name="Overlay" Grid.RowSpan="3" Grid.ColumnSpan="3" IsVisible="False" ZIndex="10" BackgroundColor="#B3102A28">
+            <Border BackgroundColor="{StaticResource SurfaceContainerLowest}" Stroke="#73808A94" StrokeThickness="1" Padding="0"
+                    MaximumWidthRequest="720" HorizontalOptions="Center" VerticalOptions="Center" Margin="28">
+                <Border.StrokeShape><RoundRectangle CornerRadius="12" /></Border.StrokeShape>
+                <Border.Shadow><Shadow Brush="Black" Opacity="0.38" Radius="32" Offset="0,12" /></Border.Shadow>
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                    <Grid BackgroundColor="{StaticResource SurfaceContainerLow}" Padding="22,12,14,12" ColumnDefinitions="*,Auto">
+                        <Label x:Name="OverlayTitle" FontFamily="InterSemiBold" FontSize="17" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="✕" FontSize="15" BackgroundColor="Transparent" TextColor="{StaticResource OnSurfaceVariant}" BorderWidth="0"
+                                Padding="0" WidthRequest="34" HeightRequest="34" MinimumHeightRequest="34" MinimumWidthRequest="34" CornerRadius="17"
+                                Clicked="OnOverlayClose" SemanticProperties.Description="Close" ToolTipProperties.Text="Close" />
+                    </Grid>
+                    <BoxView Grid.Row="1" HeightRequest="1" Color="{StaticResource OutlineVariant}" />
+                    <ScrollView Grid.Row="2" MaximumHeightRequest="560"><VerticalStackLayout x:Name="OverlayBody" Spacing="10" Padding="22,18" /></ScrollView>
+                    <BoxView Grid.Row="3" HeightRequest="1" Color="{StaticResource OutlineVariant}" />
+                    <FlexLayout x:Name="OverlayActions" Grid.Row="4" Wrap="Wrap" JustifyContent="End" BackgroundColor="{StaticResource SurfaceContainerLow}" Padding="22,12,22,4" />
+                </Grid>
+            </Border>
+        </Grid>
+        <!-- JJQR - END -->
+    </Grid>
+</ContentPage>
+<!-- JJQR - END -->

@@ -1,0 +1,410 @@
+//JJQR - AI (Nov 21, 2026) - line-for-line port of Project02-fe src/lib/print-forms-html.ts (prescription A5, medical certificate A5, lab request 4.3x6.4in).
+// Output is byte-identical to the web builders for the same inputs (ClinicNode.Tests/Printing/golden proves it). CSS lives in Generated/FormsCss.g.cs.
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace ClinicNode.Core.Printing;
+
+public static class ClinicFormsHtml
+{
+    /// <summary>Pre-printed stationery letterhead (LETTERHEAD in the web module); not taken from clinic settings.</summary>
+    public static class Letterhead
+    {
+        public const string Name = "ALLYN GRACE T. ESPAÑA-GAVINO, MD";
+        public const string Line2 = "FAMILY AND COMMUNITY MEDICINE";
+        public const string Line3 = "ADULT AND PEDIA";
+        public const string Clinic = "GRACE MEDICAL CLINIC";
+        public const string Street = "3ML Quezon National Highway";
+        public const string City = "Buaya, Lapu Lapu City";
+        public const string Contact = "Contact # 09285612976";
+        public const string WeekdayDay = "Monday to Friday";
+        public const string WeekdayHours = "10:00am - 5:00pm";
+        public const string Evening = "7:00pm - 8:00pm";
+        public const string Saturday = "Saturday";
+        public const string SaturdayHours = "10:00pm- 5:00pm";
+    }
+
+    public static readonly IReadOnlyList<(string Name, string Y)> LabItems =
+    [
+        ("CBC", "2.94in"),
+        ("URINALYSIS", "3.13in"),
+        ("LIPID PROFILE", "3.31in"),
+        ("SGPT", "3.49in"),
+        ("CREA", "3.68in"),
+        ("FBS", "3.87in"),
+        ("BUA", "4.05in"),
+        ("DENGUE NS1, IgG, IgM", "4.40in"),
+        ("ECG 12L", "5.15in"),
+    ];
+
+    const RegexOptions Js = RegexOptions.ECMAScript | RegexOptions.CultureInvariant;
+    const RegexOptions JsI = Js | RegexOptions.IgnoreCase;
+
+    /// <summary>print.ts / print-forms-html.ts escapeHtml: &amp; &lt; &gt; &quot; only (not apostrophes).</summary>
+    public static string EscapeHtml(string value) =>
+        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+
+    static string E(string? v) => EscapeHtml(v ?? "");
+
+    static string Asset(string origin, string file) => E(origin) + "/forms/" + file;
+
+    static string Flat(string? v) => E(Regex.Replace(v ?? "", @"\s+", " ").Trim());
+
+    internal static string RxMcSigName(PrintDoctor doctor)
+    {
+        var n = (doctor.FullName ?? "").Trim();
+        if (n.Length == 0) return Letterhead.Name;
+        var u = n.ToUpperInvariant();
+        return Regex.IsMatch(u, @",\s*MD$", Js) ? u : u + ", MD";
+    }
+
+    internal static string LabSigName(PrintDoctor doctor)
+    {
+        var n = (doctor.FullName ?? "").Trim();
+        if (n.Length == 0) return Regex.Replace(Letterhead.Name, @", MD$", "", Js);
+        return Regex.Replace(n, @",?\s*MD\s*$", "", JsI).Trim();
+    }
+
+    internal static string LabSigFontSize(string name)
+    {
+        const double availIn = 1.48;
+        var est = name.Length * 0.5 * (6.0 / 72.0);
+        if (est <= availIn) return "6pt";
+        var pt = 6 * (availIn / est);
+        // JS Math.round rounds halves up; then Number→string is the shortest round-trip form.
+        var v = pt < 4.2 ? 4.2 : Math.Floor(pt * 100 + 0.5) / 100;
+        return JsNumber(v) + "pt";
+    }
+
+    internal static string JsNumber(double v) => v.ToString("R", CultureInfo.InvariantCulture);
+
+    static string LetterheadHtml(string origin) =>
+        "<div class=\"lh\">" +
+          "<img class=\"lh-logo\" src=\"" + Asset(origin, "logo.png") + "\" alt=\"\" />" +
+          "<div class=\"lh-doc\">" + Letterhead.Name + "</div>" +
+          "<div class=\"lh-spec lh-fam\">" + Letterhead.Line2 + "</div>" +
+          "<div class=\"lh-spec lh-adult\">" + Letterhead.Line3 + "</div>" +
+          "<img class=\"lh-seal\" src=\"" + Asset(origin, "seal.png") + "\" alt=\"\" />" +
+          "<div class=\"lh-c1\">" + Letterhead.Clinic + "</div>" +
+          "<div class=\"lh-c2\">" + Letterhead.Street + "</div>" +
+          "<div class=\"lh-c3\">" + Letterhead.City + "</div>" +
+          "<div class=\"lh-c4\">" + Letterhead.Contact + "</div>" +
+          "<div class=\"lh-r1d\"><span class=\"h-day\">" + Letterhead.WeekdayDay + " " + Letterhead.WeekdayHours + "</span></div>" +
+          "<div class=\"lh-r2t\"><span class=\"h-time\">" + Letterhead.Evening + "</span></div>" +
+          "<div class=\"lh-r3d\"><span class=\"h-day\">" + Letterhead.Saturday + "</span></div>" +
+          "<div class=\"lh-r3t\"><span class=\"h-time\">" + Letterhead.SaturdayHours + "</span></div>" +
+        "</div>";
+
+    static string CredLine(string label, string value) =>
+        "<div class=\"sig-row\"><span class=\"sig-lbl\">" + label + "</span><span class=\"u sig-u\">" + E(value) + "</span></div>";
+
+    static string SignatureBlock(PrintDoctor doctor)
+    {
+        var lines = new List<string>
+        {
+            "<div class=\"sig-name\">" + E(RxMcSigName(doctor)) + "</div>",
+            CredLine("License No:", doctor.LicenseNumber ?? ""),
+            CredLine("PTR No:", doctor.PtrNumber ?? ""),
+        };
+        if (!string.IsNullOrEmpty(doctor.S2Number)) lines.Add(CredLine("S2 No:", doctor.S2Number));
+        return "<div class=\"sig\">" + string.Concat(lines) + "</div>";
+    }
+
+    static string TitleOpts(string? sex)
+    {
+        var s = (sex ?? "").ToLowerInvariant();
+        static string Opt(string label, bool hit) => "<span class=\"t-opt" + (hit ? " t-hit" : "") + "\">" + label + "</span>";
+        return Opt("Mr.", s == "male") +
+               "<span class=\"t-sep\">/</span>" +
+               Opt("Ms.", s == "female") +
+               "<span class=\"t-sep\">/</span>" +
+               Opt("Mrs.", false);
+    }
+
+    public static string BuildMedicalCertificateHtml(MedCertHtmlOptions opts)
+    {
+        var exceptionText = opts.PurposeException.Trim();
+        var purposeBlock = exceptionText.Length > 0
+            ? "<div class=\"mc-purpose\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
+              "<div class=\"write-text\">" + E(exceptionText) + "</div></div>"
+            : "";
+        var css = FormsCss.ShellCss(opts.PageSize, "148mm", "210mm") + FormsCss.A5LetterheadCss("1.62in") + FormsCss.MedicalCertificateCss();
+
+        var inner =
+            LetterheadHtml(opts.Origin) +
+            "<div class=\"rule-double\"></div>" +
+            "<div class=\"mc-title\">MEDICAL CERTIFICATE</div>" +
+            "<div class=\"mc-date\">Date: <span class=\"u\">" + E(opts.IssueDate) + "</span></div>" +
+            "<div class=\"mc-to\">To whom it may concern,</div>" +
+            "<div class=\"mc-certify ln\"><span>This is to certify that " +
+            TitleOpts(opts.Patient.Sex) +
+            "</span><span class=\"u grow\">" + E(opts.Patient.FullName) + "</span></div>" +
+            "<div class=\"mc-residing ln\"><span>residing at</span><span class=\"u grow\">" + E(opts.Address) + "</span></div>" +
+            "<div class=\"mc-exam ln\"><span>has been examined in</span><span class=\"u grow\">" + E(opts.ExaminedAt) + "</span></div>" +
+            "<div class=\"mc-on ln\"><span>on</span><span class=\"u on-u\">" + E(opts.ExamFrom) +
+            "</span><span>until</span><span class=\"u grow\">" + E(opts.ExamTo) + "</span><span>.</span></div>" +
+            "<div class=\"write mc-diag\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
+            "<div class=\"write-text\">" +
+            "<span class=\"write-lbl\">Diagnosis/ Impressions:</span>" + Flat(opts.Diagnosis) +
+            "</div></div>" +
+            "<div class=\"write mc-rec\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
+            "<div class=\"write-text\">" +
+            "<span class=\"write-lbl\">Recommendations:</span>" + Flat(opts.Recommendations) +
+            "</div></div>" +
+            "<div class=\"mc-disc\">" +
+            "<div class=\"mc-boiler\">This certificate is issued upon the request for whatever purpose it may serve except</div>" +
+            purposeBlock +
+            "<div class=\"mc-boiler2\">and may not be used for medico-legal purposes.</div>" +
+            "</div>" +
+            "<div class=\"mc-back\"><div>Please come back on:</div><span class=\"u back-u\">" + E(opts.ComeBackOn) + "</span></div>" +
+            "<div class=\"mc-sig\">" + SignatureBlock(opts.Doctor) + "</div>";
+
+        return "<style>" + css + "</style><div class=\"form form-mc\">" + inner + "</div>";
+    }
+
+    static string SlotSpan(string label, string kind)
+    {
+        var cls = kind == "pill" ? "slot pill" : kind == "faint" ? "slot faint" : "slot";
+        return "<span class=\"" + cls + "\">" + label + "</span>";
+    }
+
+    static string SlotLine(IReadOnlyList<string> slots, bool asNeeded, bool asDirected)
+    {
+        if ((asNeeded || asDirected) && slots.Count == 0)
+            return "<span class=\"slot-note\">" + (asNeeded ? "as needed" : "as directed") + "</span>";
+        var chosen = new HashSet<string>(slots);
+        var mark = slots.Count > 0;
+        string[] labels = ["BREAKFAST", "LUNCH", "DINNER", "BEDTIME"];
+        var sb = new StringBuilder();
+        for (var i = 0; i < labels.Length; i++)
+        {
+            if (i > 0) sb.Append(" - ");
+            var kind = mark ? (chosen.Contains(labels[i]) ? "pill" : "faint") : "plain";
+            sb.Append(SlotSpan(labels[i], kind));
+        }
+        return sb.ToString();
+    }
+
+    static string MealLine(string? meal)
+    {
+        var m = meal is "before" or "after" ? meal : null;
+        var beforeKind = m is not null ? (m == "before" ? "pill" : "faint") : "plain";
+        var afterKind = m is not null ? (m == "after" ? "pill" : "faint") : "plain";
+        return SlotSpan("before/", beforeKind) + " " + SlotSpan("after", afterKind);
+    }
+
+    static string DurFill(string? kind, string want, int? value) =>
+        kind == want && value is not null ? E(value.Value.ToString(CultureInfo.InvariantCulture)) : "";
+
+    static bool IsWordChar(char c) => c is >= '0' and <= '9' or >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '_';
+
+    static bool StartsWithWord(string text, string word)
+    {
+        if (word.Length == 0 || text.Length < word.Length) return false;
+        if (text[..word.Length].ToLowerInvariant() != word.ToLowerInvariant()) return false;
+        if (text.Length == word.Length) return true;
+        return !IsWordChar(text[word.Length]);
+    }
+
+    static string CollapseDupFirstWord(string text)
+    {
+        var t = Regex.Replace(text, @"\s+", " ").Trim();
+        var sp = t.IndexOf(' ');
+        if (sp < 0) return t;
+        var first = t[..sp];
+        var rest = t[(sp + 1)..];
+        var sp2 = rest.IndexOf(' ');
+        var second = sp2 < 0 ? rest : rest[..sp2];
+        if (first.ToLowerInvariant() != second.ToLowerInvariant()) return t;
+        return first + (sp2 < 0 ? "" : rest[sp2..]);
+    }
+
+    internal static string SigFreeText(RxLine item)
+    {
+        var route = (item.Route ?? "").Trim();
+        var instruction = (item.Instruction ?? "").Trim();
+        string text;
+        if (route.Length == 0) text = instruction;
+        else if (instruction.Length == 0) text = route;
+        else if (StartsWithWord(instruction, route)) text = instruction;
+        else text = route + " " + instruction;
+        return CollapseDupFirstWord(text);
+    }
+
+    static string? SavedMeal(string? mealRelation)
+    {
+        var m = (mealRelation ?? "").Trim().ToLowerInvariant();
+        return m is "before" or "after" ? m : null;
+    }
+
+    static bool HasSavedStructured(RxLine item) =>
+        (item.MealRelation ?? "").Trim().Length > 0 || (item.Timing ?? "").Trim().Length > 0 || item.AsNeeded.HasValue;
+
+    static string RxRow(RxLine item)
+    {
+        string? meal;
+        IReadOnlyList<string> slots;
+        bool asNeeded, asDirected;
+        if (HasSavedStructured(item))
+        {
+            meal = SavedMeal(item.MealRelation);
+            slots = RxSig.TimingToSlots(item.Timing).Select(s => s.ToUpperInvariant()).ToList();
+            asNeeded = item.AsNeeded == true;
+            asDirected = false;
+        }
+        else
+        {
+            var parsed = RxSig.Parse(item.Instruction, item.Route, item.Timing, item.MealRelation);
+            meal = parsed.Meal;
+            slots = parsed.Slots;
+            asNeeded = parsed.AsNeeded;
+            asDirected = parsed.AsDirected;
+        }
+        var name = RxSig.DisplayName(item.GenericName, item.Dosage);
+        var qty = item.Quantity;
+        var sig = SigFreeText(item);
+        var sigClass = "sig-free" + (sig.Length > 70 ? " sig-long" : "");
+        var indication = item.Indication ?? "";
+        var kind = item.DurationKind;
+        var val = item.DurationValue;
+        var maintain = kind == "Maintain" ? "✓" : "";
+        return
+            "<tr class=\"rx-row\">" +
+              "<td class=\"rx-med\">" +
+                "<div class=\"rx-med-top\">" +
+                  "<div class=\"rx-med-name\">" + E(name) + "</div>" +
+                  "<div class=\"rx-qty\"># <span class=\"u\">" + E(qty) + "</span></div>" +
+                "</div>" +
+                "<div class=\"rx-sig\">" +
+                  "<span class=\"sig-k\">Sig.</span>" +
+                  "<span class=\"" + sigClass + "\">" + E(sig) + "</span>" +
+                  "<span class=\"meal\">" + MealLine(meal) + "</span>" +
+                "</div>" +
+                "<div class=\"rx-slots\">" + SlotLine(slots, asNeeded, asDirected) + "</div>" +
+              "</td>" +
+              "<td class=\"rx-dur\">" +
+                "<div class=\"dur-m\"><span class=\"cb\">" + maintain + "</span> Maintain</div>" +
+                "<div><span class=\"u dur-u\">" + DurFill(kind, "Days", val) + "</span> Days</div>" +
+                "<div><span class=\"u dur-u\">" + DurFill(kind, "Weeks", val) + "</span> Weeks</div>" +
+              "</td>" +
+              "<td class=\"rx-ind\">" + E(indication) + "</td>" +
+            "</tr>";
+    }
+
+    /// <summary>More than five lines switches the A5 pad to the flowing "form-tall" layout (same as the web).</summary>
+    public static bool IsTallPrescription(int itemCount) => itemCount > 5;
+
+    public static string BuildPrescriptionHtml(RxHtmlOptions opts)
+    {
+        var rows = string.Concat(opts.Items.Select(RxRow));
+        var tall = IsTallPrescription(opts.Items.Count);
+        var css = FormsCss.ShellCss(opts.PageSize, "148mm", "210mm") + FormsCss.A5LetterheadCss("1.58in") + FormsCss.PrescriptionCss();
+
+        var next = opts.NextAppointment ?? "";
+        var inner =
+            LetterheadHtml(opts.Origin) +
+            "<div class=\"rule-double\"></div>" +
+            "<div class=\"rx-name\"><span>Patient's Name:</span><span class=\"u grow\">" + E(opts.Patient.FullName) + "</span></div>" +
+            "<div class=\"rx-age\"><span>Age:</span><span class=\"u age\">" + E(opts.Age) + "</span></div>" +
+            "<div class=\"rx-sex\"><span>Sex:</span><span class=\"u sex\">" + E(opts.Patient.Sex) + "</span></div>" +
+            "<div class=\"rx-addr\"><span>Address:</span><span class=\"u grow\">" + E(opts.Patient.Address) + "</span></div>" +
+            "<div class=\"rx-date\"><span>Date:</span><span class=\"u date\">" + E(opts.Date) + "</span></div>" +
+            "<img class=\"rx-img\" src=\"" + Asset(opts.Origin, "rx.png") + "\" alt=\"Rx\" />" +
+            "<table class=\"rx-tbl\">" +
+              "<colgroup><col class=\"col-med\" /><col class=\"col-dur\" /><col class=\"col-ind\" /></colgroup>" +
+              "<thead><tr><td class=\"h-empty\"></td><th>DURATION</th><th>INDICATION</th></tr></thead>" +
+              "<tbody>" + rows + "</tbody>" +
+            "</table>" +
+            "<div class=\"rx-next\"><span>Next appointment:</span><span class=\"u next-u\">" + E(next) + "</span></div>" +
+            "<div class=\"rx-sig-block\">" + SignatureBlock(opts.Doctor) + "</div>";
+
+        return "<style>" + css + "</style>" +
+               "<div class=\"form form-rx" + (tall ? " form-tall" : "") + "\">" + inner + "</div>";
+    }
+
+    static string NormLab(string s) => Regex.Replace(s.ToLowerInvariant(), "[^a-z0-9]+", " ", Js).Trim();
+
+    internal static bool MatchLabItem(string ordered, string item)
+    {
+        var o = ordered.ToLowerInvariant();
+        var n = NormLab(ordered);
+        var i = NormLab(item);
+        if (n == i) return true;
+        if (i.Contains("dengue") && o.Contains("dengue")) return true;
+        if (i.Contains("ecg") && o.Contains("ecg")) return true;
+        if (item == "CREA" && (n == "crea" || o.Contains("creatinine"))) return true;
+        if (item == "LIPID PROFILE" && o.Contains("lipid")) return true;
+        if (item == "URINALYSIS" && (o.Contains("urinalysis") || Regex.IsMatch(" " + n + " ", "(^| )urine( |$)", Js))) return true;
+        return false;
+    }
+
+    /// <summary>Which pre-printed checklist rows get a tick, and which tests are hand-written in the margin.</summary>
+    public static (IReadOnlySet<string> Checked, IReadOnlyList<string> Extras) LabMatch(IEnumerable<string> tests)
+    {
+        var chk = new HashSet<string>();
+        var extras = new List<string>();
+        foreach (var test in tests)
+        {
+            var hit = "";
+            foreach (var (name, _) in LabItems)
+                if (MatchLabItem(test, name)) { hit = name; break; }
+            if (hit.Length > 0) chk.Add(hit);
+            else extras.Add(test);
+        }
+        return (chk, extras);
+    }
+
+    static string LabItemHtml(string name, bool on, string y)
+    {
+        var tick = on ? "<span class=\"tick\">✓</span>" : "";
+        return "<div class=\"lab-item\" style=\"top:" + y + "\"><span class=\"lab-blank\">" + tick + "___</span><span class=\"lab-name\">" + name + "</span></div>";
+    }
+
+    public static string BuildLabRequestHtml(LabHtmlOptions opts)
+    {
+        var (chk, extrasList) = LabMatch(opts.Tests);
+        var list = string.Concat(LabItems.Select(r => LabItemHtml(r.Name, chk.Contains(r.Name), r.Y)));
+
+        var extras = extrasList.Count > 0
+            ? "<div class=\"lab-extras\">" + string.Concat(extrasList.Select(x => "<div class=\"lab-extra\">" + E(x) + "</div>")) + "</div>"
+            : "";
+
+        var dxBits = new List<string>();
+        if (opts.Diagnoses is { Count: > 0 }) dxBits.Add(string.Join("; ", opts.Diagnoses));
+        if (!string.IsNullOrWhiteSpace(opts.ClinicalNotes) && opts.ClinicalNotes.Trim().Length > 0) dxBits.Add(opts.ClinicalNotes.Trim());
+        var dx = dxBits.Count > 0
+            ? "<div class=\"lab-dx\"><div class=\"lab-dx-lbl\">Dx:</div>" + E(string.Join(" — ", dxBits)) + "</div>"
+            : "";
+
+        var sigWritten = LabSigName(opts.Doctor);
+        var css = FormsCss.ShellCss(opts.PageSize, "4.3in", "6.4in") + FormsCss.LabRequestCss();
+
+        var inner =
+            LetterheadHtml(opts.Origin) +
+            "<div class=\"rule-single\"></div>" +
+            "<div class=\"lab-id-name\">" +
+              "<div class=\"lab-ids-left\"><span>Patient Name:</span><span class=\"u grow\">" + E(opts.Patient.FullName) + "</span></div>" +
+              "<div class=\"lab-ids-right\"><span>Date:</span><span class=\"u date\">" + E(opts.Date) + "</span></div>" +
+            "</div>" +
+            "<div class=\"lab-id-addr\">" +
+              "<div class=\"lab-ids-left\"><span>Address:</span><span class=\"u grow\">" + E(opts.Patient.Address) + "</span></div>" +
+              "<div class=\"lab-ids-right\"><span>Age:</span><span class=\"u age\">" + E(opts.Age) +
+              "</span><span>Sex:</span><span class=\"u sex\">" + E(opts.Patient.Sex) + "</span></div>" +
+            "</div>" +
+            "<div class=\"lab-rx\">R<span class=\"lab-rx-x\">x</span></div>" +
+            extras +
+            "<div class=\"lab-list\">" + list + "</div>" +
+            dx +
+            "<img class=\"lab-cartoon\" src=\"" + Asset(opts.Origin, "cartoon.png") + "\" alt=\"\" />" +
+            "<div class=\"lab-sig\">" +
+              "<div class=\"lab-sig-name\"><span class=\"lab-sig-written\" style=\"font-size:" + LabSigFontSize(sigWritten) + "\">" + E(sigWritten) +
+              "</span><span class=\"lab-md\">MD</span></div>" +
+              "<div class=\"lab-lic\">" + CredLine("LIC No:", opts.Doctor.LicenseNumber ?? "") + "</div>" +
+              "<div class=\"lab-ptr\">" + CredLine("PTR No:", opts.Doctor.PtrNumber ?? "") + "</div>" +
+            "</div>";
+
+        return "<style>" + css + "</style><div class=\"form form-lab\">" + inner + "</div>";
+    }
+}
+//JJQR - END
