@@ -1,6 +1,7 @@
 //JJQR - AI (Nov 21, 2026) - /staff/queue "Today’s queue": S- lane first, six counts, check in / call in / hold / complete / no-show / cancel (reason), print slip, open booking.
 using ClinicApp.Domain.Enums;
 using ClinicNode.App.Controls;
+using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.App.Services;
 using ClinicNode.Core.Print;
 using ClinicNode.Core.Staff;
@@ -11,6 +12,11 @@ public sealed class StaffQueuePage : StaffLivePage
 {
     private readonly FlexLayout _stats = new() { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
     private readonly VerticalStackLayout _list = new() { Spacing = 0 };
+    //JJQR - AI (Nov 22, 2026) - queue as a table: active patients first, filter chips (Active / Completed / No-show / All)
+    private readonly HorizontalStackLayout _chips = new() { Spacing = 8 };
+    private IReadOnlyList<StaffQueueRow> _rows = [];
+    private string _filter = "active";
+    //JJQR - END
     private readonly Label _actionError = StaffUi.Error();
     private readonly ReprintPanel _reprint; // JJQR - AI (Nov 21, 2026) - allen2 reprint flags badge + list
     //JJQR - AI (21 Nov 2026) - STAFF PARITY (web /staff/queue): ErrorState before the first load; warning + last queue kept afterwards
@@ -31,6 +37,7 @@ public sealed class StaffQueuePage : StaffLivePage
         page.Children.Add(ErrorStateView);
         _body.Children.Add(_reprint);
         _body.Children.Add(_stats);
+        _body.Children.Add(_chips);
         _body.Children.Add(LoadError);
         _body.Children.Add(_actionError);
         _body.Children.Add(_list);
@@ -50,25 +57,51 @@ public sealed class StaffQueuePage : StaffLivePage
         _stats.Children.Clear();
         foreach (var (label, value) in new[] { ("Waiting", s.Waiting), ("With doctor", s.WithDoctor), ("Booked, not arrived", s.BookedNotArrived), ("Completed", s.Completed), ("No-show", s.NoShow), ("Total today", s.Total) })
             _stats.Children.Add(StaffUi.Stat(label, value.ToString()));
-        _list.Children.Clear();
-        if (rows.Count == 0)
-        {
-            _list.Children.Add(ClinicTheme.Text("No one in the queue yet today.", "MutedBody"));
-            return;
-        }
-        foreach (var r in rows) _list.Children.Add(BuildRow(r));
+        _rows = rows;
+        RenderList();
     }
 
-    View BuildRow(StaffQueueRow r)
+    static bool IsDone(StaffQueueRow r) => r.Entry.Status is BookingStatus.Completed;
+    static bool IsGone(StaffQueueRow r) => r.Entry.Status is BookingStatus.NoShow or BookingStatus.Cancelled or BookingStatus.Expired;
+
+    void RenderList()
+    {
+        int Count(string f) => _rows.Count(r => Matches(r, f));
+        _chips.Children.Clear();
+        foreach (var (key, label) in new[] { ("active", "Active"), ("completed", "Completed"), ("gone", "No-show / cancelled"), ("all", "All") })
+        {
+            var k = key;
+            _chips.Children.Add(StaffUi.Chip($"{label}  {Count(k)}", _filter == k, () => { _filter = k; RenderList(); }));
+        }
+        var shown = _rows.Where(r => Matches(r, _filter))
+            //JJQR - AI (Nov 22, 2026) - the patient being seen first, then waiting (priority lane already first), then the rest
+            .OrderBy(r => r.Entry.Status == BookingStatus.InProgress ? 0 : IsDone(r) || IsGone(r) ? 2 : 1)
+            .ToList();
+        _list.Children.Clear();
+        var empty = _rows.Count == 0 ? "No one in the queue yet today." : _filter == "active" ? "Nobody is waiting right now." : "Nothing here.";
+        _list.Children.Add(ClinicUi.Table(
+            [
+                new TableColumn("Queue", new GridLength(96), o => ClinicTheme.MakeLaneBadge(((StaffQueueRow)o).Entry.QueueNumber)),
+                new TableColumn("Patient", GridLength.Star, o => { var r = (StaffQueueRow)o; var id = r.Entry.BookingId; return StaffUi.TwoLine(r.Entry.PatientName, r.Entry.PatientCode, () => StaffUi.PushAsync<StaffBookingDetailPage>(this, id)); }),
+                new TableColumn("Visit", new GridLength(150), o => { var r = (StaffQueueRow)o; return ClinicTheme.Text($"{r.SourceLabel} · {r.VisitLabel}", "BodyMd"); }),
+                new TableColumn("Status", new GridLength(130), o => ClinicTheme.MakeStatusPill(((StaffQueueRow)o).Entry.Status.ToString())),
+                new TableColumn("Fee", new GridLength(90), o => ClinicTheme.Text(StaffRules.Peso(((StaffQueueRow)o).Entry.AmountDue), "BodyMd")),
+                new TableColumn("", new GridLength(400), o => BuildActions((StaffQueueRow)o)),
+            ], shown.Cast<object>(), empty));
+    }
+
+    static bool Matches(StaffQueueRow r, string f) => f switch
+    {
+        "active" => !IsDone(r) && !IsGone(r),
+        "completed" => IsDone(r),
+        "gone" => IsGone(r),
+        _ => true,
+    };
+
+    View BuildActions(StaffQueueRow r)
     {
         var e = r.Entry;
         var a = r.Actions;
-        var head = new HorizontalStackLayout { Spacing = 8, Children = { ClinicTheme.Text(e.QueueNumber ?? "—", "HeadlineSm") } };
-        if (r.IsPriority) head.Children.Add(ClinicTheme.Text("Priority", "PageKicker"));
-        head.Children.Add(ClinicTheme.MakeStatusPill(e.Status.ToString()));
-        var name = StaffUi.Link(string.IsNullOrWhiteSpace(e.PatientName) ? "—" : e.PatientName, () => StaffUi.PushAsync<StaffBookingDetailPage>(this, e.BookingId));
-        var meta = ClinicTheme.Text($"{e.PatientCode} · {r.SourceLabel} · {r.VisitLabel} · {StaffRules.Peso(e.AmountDue)}", "MutedSm");
-
         var buttons = new List<View>();
         var id = e.BookingId;
         //JJQR - AI (21 Nov 2026) - web renderActions order: [Check in, No-show] · Call in · [Open consult, Complete] · [Hold, No-show] · Cancel (No-show / Cancel in red)
@@ -95,8 +128,7 @@ public sealed class StaffQueuePage : StaffLivePage
                 await PrintActions.RunAsync(this, () => Svc<IPrintDocumentFactory>().QueueSlipAsync(id));
             }, "SecondaryButton"));
             //JJQR - END
-        foreach (var b in buttons) b.Margin = new Thickness(0, 0, 8, 0);
-        return StaffUi.Row(head, name, meta, StaffUi.Wrap(buttons.ToArray()));
+        return StaffUi.Actions(buttons.ToArray());
     }
 
     async Task Act(Guid id, string action)

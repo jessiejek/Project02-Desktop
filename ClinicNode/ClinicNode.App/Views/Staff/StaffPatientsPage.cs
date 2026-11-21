@@ -1,5 +1,6 @@
 //JJQR - AI (Nov 21, 2026) - /staff/patients: search (name, code, phone, email), 25 per page newest first, quick register (MF- code), open patient.
 using ClinicNode.App.Controls;
+using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.Core.Staff;
 
 namespace ClinicNode.App.Views.Staff;
@@ -61,22 +62,32 @@ public sealed class StaffPatientsPage : StaffLivePage
     {
         var res = await Svc<IStaffPatientsService>().SearchAsync(_search.Text, _page, PageSize);
         _pageCount = res.PageCount;
+        //JJQR - AI (Nov 22, 2026) - patients as a table: name + code, age / sex, phone, portal account, Open
         _list.Children.Clear();
-        if (res.Items.Count == 0)
-            _list.Children.Add(ClinicTheme.Text(string.IsNullOrWhiteSpace(_search.Text) ? "No patients registered yet." : $"No patients match “{_search.Text.Trim()}”.", "MutedBody"));
-        foreach (var p in res.Items)
-        {
-            var id = p.PatientId;
-            var head = new HorizontalStackLayout { Spacing = 8, Children = { StaffUi.Link(p.FullName, () => StaffUi.PushAsync<StaffPatientDetailPage>(this, id)), ClinicTheme.MakeStatusPill(p.AccountStatus) } };
-            _list.Children.Add(StaffUi.Row(head,
-                ClinicTheme.Text($"{p.PatientCode} · {p.Sex} · Born {StaffUi.Date(p.DateOfBirth)} · {(p.ContactNumber.Length > 0 ? p.ContactNumber : "—")}", "MutedSm")));
-        }
+        _list.Children.Add(ClinicUi.Table(
+            [
+                new TableColumn("Patient", GridLength.Star, o => { var p = (StaffPatientRow)o; var id = p.PatientId; return StaffUi.TwoLine(p.FullName, p.PatientCode, () => StaffUi.PushAsync<StaffPatientDetailPage>(this, id)); }),
+                new TableColumn("Age / sex", new GridLength(130), o => { var p = (StaffPatientRow)o; return ClinicTheme.Text($"{AgeText(p.DateOfBirth)} · {p.Sex}", "BodyMd"); }),
+                new TableColumn("Phone", new GridLength(160), o => ClinicUi.Cell(((StaffPatientRow)o).ContactNumber)),
+                new TableColumn("Portal account", new GridLength(190), o => ClinicTheme.MakeStatusPill(((StaffPatientRow)o).AccountStatus)),
+                new TableColumn("", new GridLength(120), o => { var id = ((StaffPatientRow)o).PatientId; return StaffUi.Btn("Open", () => StaffUi.PushAsync<StaffPatientDetailPage>(this, id), "SecondaryButton"); }),
+            ], res.Items.Cast<object>(), string.IsNullOrWhiteSpace(_search.Text) ? "No patients registered yet." : $"No patients match “{_search.Text.Trim()}”."));
+        //JJQR - END
         _range.Text = $"{res.RangeStart}–{res.RangeEnd} of {res.TotalCount}";
         _pageLabel.Text = $"  Page {res.Page} of {res.PageCount}  ";
         //JJQR - AI (21 Nov 2026) - STAFF PARITY: web disables Previous on page 1 and Next on the last page
         _prev.IsEnabled = res.Page > 1;
         _next.IsEnabled = res.Page < res.PageCount;
         //JJQR - END
+    }
+
+    static string AgeText(DateOnly dob)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var years = today.Year - dob.Year - (today < dob.AddYears(today.Year - dob.Year) ? 1 : 0);
+        if (years >= 2) return $"{years}y";
+        var months = (today.Year - dob.Year) * 12 + today.Month - dob.Month - (today.Day < dob.Day ? 1 : 0);
+        return $"{Math.Max(0, months)}mo";
     }
 
     async Task RegisterAsync()

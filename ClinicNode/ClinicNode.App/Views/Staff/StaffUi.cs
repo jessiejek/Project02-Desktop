@@ -78,6 +78,32 @@ public static class StaffUi
         return card;
     }
 
+    //JJQR - AI (Nov 22, 2026) - table helpers: a row of compact action buttons, and a two-line "name + muted code" cell
+    public static View Actions(params View[] buttons)
+    {
+        var row = new HorizontalStackLayout { Spacing = 6, HorizontalOptions = LayoutOptions.End };
+        foreach (var b in buttons) row.Children.Add(b);
+        return row;
+    }
+
+    public static View TwoLine(string top, string? bottom, Func<Task>? onTap = null)
+    {
+        var t = onTap is null ? ClinicTheme.Text(string.IsNullOrWhiteSpace(top) ? "—" : top, "LabelLg") : Link(string.IsNullOrWhiteSpace(top) ? "—" : top, onTap);
+        t.Margin = new Thickness(0); //JJQR - AI (Nov 22, 2026) - BrandLink carries a 16 pt bottom margin //JJQR - END
+        var col = new VerticalStackLayout { Spacing = 1, Children = { t } };
+        if (!string.IsNullOrWhiteSpace(bottom)) col.Children.Add(ClinicTheme.Text(bottom!, "MutedSm"));
+        return col;
+    }
+
+    /// <summary>Filter chip: filled when selected.</summary>
+    public static Button Chip(string text, bool selected, Action onTap)
+    {
+        var b = new Button { Text = text, Style = ClinicTheme.Style(selected ? "PrimaryButton" : "SecondaryButton"), Padding = new Thickness(14, 6), MinimumHeightRequest = 32 };
+        b.Clicked += (_, _) => onTap();
+        return b;
+    }
+    //JJQR - END
+
     public static FlexLayout Wrap(params View[] children)
     {
         var f = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };

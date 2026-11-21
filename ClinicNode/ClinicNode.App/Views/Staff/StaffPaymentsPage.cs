@@ -1,5 +1,6 @@
 //JJQR - AI (Nov 21, 2026) - /staff/payments "Collect payments": today first then earlier days; doctor-waived rows at ₱0 with "Confirm waiver"; exact-amount Record payment.
 using ClinicNode.App.Controls;
+using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.App.Services;
 using ClinicNode.Core.Print;
 using ClinicNode.Core.Staff;
@@ -10,6 +11,10 @@ public sealed class StaffPaymentsPage : StaffLivePage
 {
     private readonly FlexLayout _stats = new() { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
     private readonly VerticalStackLayout _list = new() { Spacing = 0 };
+    //JJQR - AI (Nov 22, 2026) - payments as a table with a search box (29 identical cards were hard to scan)
+    private readonly Entry _search = new() { Placeholder = "Search patient name or code" };
+    private IReadOnlyList<CollectRow> _rows = [];
+    //JJQR - END
     private readonly Label _success = StaffUi.Success();
     private readonly Label _waiverError = StaffUi.Error();
     //JJQR - AI (21 Nov 2026) - STAFF PARITY (web /staff/payments): <ErrorState title="The payment list didn’t load" …/> replaces the counts and list
@@ -20,6 +25,7 @@ public sealed class StaffPaymentsPage : StaffLivePage
 
     public StaffPaymentsPage(IServiceProvider sp) : base(sp, "Payments")
     {
+        _search.TextChanged += (_, _) => RenderList();
         Content = StaffUi.Scroll(new VerticalStackLayout
         {
             Spacing = 16,
@@ -27,7 +33,7 @@ public sealed class StaffPaymentsPage : StaffLivePage
             {
                 StaffUi.Header("Collect payments", "Patients whose visit is done and who still owe the fee, today first, then earlier days."),
                 //JJQR - AI (21 Nov 2026) - STAFF PARITY
-                LoadError, ErrorStateView, BodyOf(_body, _stats, _success, _waiverError, _list),
+                LoadError, ErrorStateView, BodyOf(_body, _stats, StaffUi.Field("Search", _search), _success, _waiverError, _list),
                 //JJQR - END
             }
         });
@@ -52,34 +58,33 @@ public sealed class StaffPaymentsPage : StaffLivePage
         _stats.Children.Add(StaffUi.Stat("Waiting to pay", board.WaitingToPay.ToString()));
         _stats.Children.Add(StaffUi.Stat("Total due", StaffRules.Peso(board.TotalDue)));
         _stats.Children.Add(StaffUi.Stat("Waived — to confirm", board.WaivedToConfirm.ToString()));
-        _list.Children.Clear();
-        if (board.Rows.Count == 0)
-        {
-            _list.Children.Add(ClinicTheme.Text("Everyone has paid. Nothing to collect right now.", "MutedBody"));
-            return;
-        }
-        foreach (var r in board.Rows) _list.Children.Add(BuildRow(r));
+        _rows = board.Rows;
+        RenderList();
     }
 
-    View BuildRow(CollectRow r)
+    void RenderList()
     {
-        var views = new List<View>
-        {
-            ClinicTheme.Text(r.PatientName, "HeadlineSm"),
-            ClinicTheme.Text($"{(r.PatientCode.Length > 0 ? r.PatientCode + " · " : "")}{StaffUi.Date(r.AppointmentDate)} · Queue {r.QueueNumber ?? "—"}", "MutedSm"),
-            ClinicTheme.Text(StaffRules.Peso(r.AmountDue), "HeadlineSm"),
-        };
-        if (r.IsWaived)
-        {
-            views.Add(new HorizontalStackLayout { Spacing = 6, Children = { ClinicTheme.MakeStatusPill("Waived"), ClinicTheme.Text("by doctor" + (string.IsNullOrWhiteSpace(r.WaivedReason) ? "" : $" — {r.WaivedReason}"), "MutedSm") } });
-            views.Add(StaffUi.Btn("Confirm waiver", () => ConfirmWaiverAsync(r), "SecondaryButton"));
-        }
-        else
-        {
-            views.Add(StaffUi.Btn("Record payment", () => RecordAsync(r), "SecondaryButton"));
-        }
-        return StaffUi.Row(views.ToArray());
+        var q = (_search.Text ?? "").Trim();
+        var shown = _rows.Where(r => q.Length == 0 || r.PatientName.Contains(q, StringComparison.OrdinalIgnoreCase) || r.PatientCode.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        _list.Children.Clear();
+        _list.Children.Add(ClinicUi.Table(
+            [
+                new TableColumn("Patient", GridLength.Star, o => { var r = (CollectRow)o; return StaffUi.TwoLine(r.PatientName, r.PatientCode); }),
+                new TableColumn("Visit date", new GridLength(130), o => ClinicTheme.Text(StaffUi.Date(((CollectRow)o).AppointmentDate), "BodyMd")),
+                new TableColumn("Queue", new GridLength(90), o => ClinicTheme.MakeLaneBadge(((CollectRow)o).QueueNumber)),
+                new TableColumn("Amount", new GridLength(110), o => ClinicTheme.Text(StaffRules.Peso(((CollectRow)o).AmountDue), "LabelLg")),
+                new TableColumn("Note", new GridLength(230), o => NoteCell((CollectRow)o)),
+                new TableColumn("", new GridLength(200), o => ActionCell((CollectRow)o)),
+            ], shown.Cast<object>(), _rows.Count == 0 ? "Everyone has paid. Nothing to collect right now." : "No patient matches this search."));
     }
+
+    static View NoteCell(CollectRow r) => r.IsWaived
+        ? new HorizontalStackLayout { Spacing = 6, Children = { ClinicTheme.MakeStatusPill("Waived"), ClinicTheme.Text(string.IsNullOrWhiteSpace(r.WaivedReason) ? "by doctor" : r.WaivedReason!, "MutedSm") } }
+        : ClinicTheme.Text("Waiting to pay", "MutedSm");
+
+    View ActionCell(CollectRow r) => r.IsWaived
+        ? StaffUi.Btn("Confirm waiver", () => ConfirmWaiverAsync(r), "SecondaryButton")
+        : StaffUi.Btn("Record payment", () => RecordAsync(r));
 
     async Task RecordAsync(CollectRow r)
     {

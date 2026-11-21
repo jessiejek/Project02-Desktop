@@ -97,17 +97,18 @@ public sealed class StaffBookingDetailPage : StaffLivePage
             col.Children.Add(StaffUi.Card(ClinicTheme.Text("Next step", "HeadlineSm"), _pageError, StaffUi.Wrap(buttons.ToArray())));
         }
 
-        col.Children.Add(StaffUi.Card(
+        //JJQR - AI (Nov 22, 2026) - Patient | Doctor | Payment side by side (three full-width cards stacked down the page left most of the screen empty)
+        var patientCard = StaffUi.Card(
             ClinicTheme.Text("Patient", "HeadlineSm"),
             Info("Patient code", b.PatientCode),
             Info("Sex", b.PatientSex?.ToString()),
             Info("Date of birth", b.PatientDob is { } dob ? StaffUi.Date(dob) : null),
             Info("Contact", b.PatientContact),
-            Info("Email", b.PatientEmail))); //JJQR - AI (21 Nov 2026) - STAFF PARITY: removed desktop-only "Open patient" link (the web Patient card has none) //JJQR - END
-        col.Children.Add(StaffUi.Card(
+            Info("Email", b.PatientEmail)); //JJQR - AI (21 Nov 2026) - STAFF PARITY: removed desktop-only "Open patient" link (the web Patient card has none) //JJQR - END
+        var doctorCard = StaffUi.Card(
             ClinicTheme.Text("Doctor", "HeadlineSm"),
             Info("Name", b.DoctorName),
-            Info("Specialty", b.DoctorSpecialization)));
+            Info("Specialty", b.DoctorSpecialization));
         var pay = new List<View>
         {
             ClinicTheme.Text("Payment", "HeadlineSm"),
@@ -117,7 +118,11 @@ public sealed class StaffBookingDetailPage : StaffLivePage
         if (a.Settled && b.OrNumber is not null) pay.Add(Info("OR number", b.OrNumber));
         if (b.PaymentStatus == PaymentStatus.Waived && !string.IsNullOrWhiteSpace(b.WaivedReason))
             pay.Add(ClinicTheme.Text($"Professional fee waived: {b.WaivedReason}", "BodySm"));
-        col.Children.Add(StaffUi.Card(pay.ToArray()));
+        var grid = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        grid.Add(patientCard, 0, 0); grid.Add(doctorCard, 1, 0); grid.Add(StaffUi.Card(pay.ToArray()), 2, 0);
+        foreach (var v in grid.Children.OfType<View>()) v.VerticalOptions = LayoutOptions.Start;
+        col.Children.Add(grid);
+        //JJQR - END
         _body.Content = col;
     }
 

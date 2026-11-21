@@ -36,8 +36,8 @@ public static class ClinicTheme
     /// <summary>Web StatusPill tones for booking/payment vocabulary.</summary>
     public static (string BorderStyle, string LabelStyle) StatusPill(string status) => status switch
     {
-        "Completed" or "Paid" or "Available" or "Active" => ("PillSuccess", "PillLabelSuccess"),
-        "Pending" or "InProgress" or "OnHold" or "RunningLate" => ("PillWarning", "PillLabelWarning"),
+        "Completed" or "Paid" or "Available" or "Active" or "LinkedAccount" => ("PillSuccess", "PillLabelSuccess"),
+        "Pending" or "InProgress" or "OnHold" or "RunningLate" or "AccountUnknown" => ("PillWarning", "PillLabelWarning"),
         "Cancelled" or "Expired" or "NoShow" or "Unpaid" or "Refunded" or "UnavailableToday" => ("PillDanger", "PillLabelDanger"),
         "ProofSubmitted" or "Confirmed" or "CheckedIn" or "Waived" or "Rescheduled" or "Invited" => ("PillInfo", "PillLabelInfo"),
         _ => ("PillNeutral", "PillLabelNeutral"),
@@ -52,6 +52,10 @@ public static class ClinicTheme
         "NoShow" => "No-show",
         "RunningLate" => "Running late",
         "UnavailableToday" => "Unavailable today",
+        //JJQR - AI (Nov 22, 2026) - patient account states printed as run-together capitals ("NOACCOUNT") //JJQR - END
+        "NoAccount" => "No account",
+        "AccountUnknown" => "Account unknown",
+        "LinkedAccount" => "Portal account",
         _ => status,
     };
 

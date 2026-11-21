@@ -74,13 +74,8 @@ public sealed class StaffPatientDetailPage : StaffLivePage
         col.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant") });
         var account = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
         account.Add(new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { ClinicTheme.Text("Portal account", "MutedSm"), ClinicTheme.MakeStatusPill(p.AccountStatus) } }, 0, 0);
-        if (p.AccountStatus == "NoAccount" && !_createAccountOpen)
-            account.Add(StaffUi.Btn("Create portal account", async () => { _createAccountOpen = true; await ReloadAsync(); }, "SecondaryButton"), 1, 0);
+        //JJQR - AI (Nov 22, 2026) - the "Create portal account" button only led to a "not wired yet" note: removed until the flow exists //JJQR - END
         col.Children.Add(account);
-        if (p.AccountStatus == "NoAccount" && _createAccountOpen)
-            col.Children.Add(StaffUi.Card(
-                ClinicTheme.Text("Portal account creation from this page is not wired yet. Use the admin/staff invite flow when available.", "MutedBody"),
-                StaffUi.Btn("Close", async () => { _createAccountOpen = false; await ReloadAsync(); }, "SecondaryButton")));
         return col;
     }
     //JJQR - END
@@ -91,38 +86,27 @@ public sealed class StaffPatientDetailPage : StaffLivePage
     View Bookings(StaffPatientDetail d)
     {
         if (d.Bookings.Count == 0) return ClinicTheme.Text("No bookings yet.", "MutedBody");
-        var col = new VerticalStackLayout();
-        foreach (var b in d.Bookings)
-        {
-            var id = b.BookingId;
-            //JJQR - AI (21 Nov 2026) - STAFF PARITY: the whole row is the link (date, doctor, status pill), like the web <Link> row
-            var row = StaffUi.Row(
-                ClinicTheme.Text(StaffUi.Date(b.AppointmentDate), "HeadlineSm"),
-                ClinicTheme.Text(b.DoctorName.Length > 0 ? b.DoctorName : "—", "MutedSm"),
-                ClinicTheme.MakeStatusPill(b.Status.ToString()));
-            var tap = new TapGestureRecognizer();
-            tap.Tapped += async (_, _) => await StaffUi.PushAsync<StaffBookingDetailPage>(this, id);
-            row.GestureRecognizers.Add(tap);
-            col.Children.Add(row);
-            //JJQR - END
-        }
-        return col;
+        //JJQR - AI (Nov 22, 2026) - bookings as a table (date, doctor, status); a row opens the booking
+        return ClinicNode.App.Views.Shared.Controls.ClinicUi.Table(
+            [
+                new ClinicNode.App.Views.Shared.Controls.TableColumn("Date", new GridLength(160), o => ClinicTheme.Text(StaffUi.Date(((ClinicNode.Core.Staff.PatientBookingRow)o).AppointmentDate), "LabelLg")),
+                new ClinicNode.App.Views.Shared.Controls.TableColumn("Doctor", GridLength.Star, o => ClinicTheme.Text(((ClinicNode.Core.Staff.PatientBookingRow)o).DoctorName is { Length: > 0 } dn ? dn : "—", "BodyMd")),
+                new ClinicNode.App.Views.Shared.Controls.TableColumn("Status", new GridLength(150), o => ClinicTheme.MakeStatusPill(((ClinicNode.Core.Staff.PatientBookingRow)o).Status.ToString())),
+            ], d.Bookings.Cast<object>(), "No bookings yet.", o => { var id = ((ClinicNode.Core.Staff.PatientBookingRow)o).BookingId; _ = StaffUi.PushAsync<StaffBookingDetailPage>(this, id); });
+        //JJQR - END
     }
 
     static View Records(StaffPatientDetail d)
     {
         var col = new VerticalStackLayout { Spacing = 8, Children = { ClinicTheme.Text("Read-only. Only the doctor can change medical records.", "MutedSm") } };
-        if (d.Records.Count == 0) { col.Children.Add(ClinicTheme.Text("No medical records yet.", "MutedBody")); return col; }
-        foreach (var r in d.Records)
-        {
-            var row = new List<View>
-            {
-                ClinicTheme.Text(r.AppointmentDate is { } dt ? LongDate(dt) : "—", "MutedSm"), //JJQR - AI (21 Nov 2026) - web formatClinicDate //JJQR - END
-                ClinicTheme.Text(r.ChiefComplaint.Length > 0 ? r.ChiefComplaint : "No chief complaint recorded", "HeadlineSm"),
-            };
-            if (r.Diagnoses.Count > 0) row.Add(ClinicTheme.Text(string.Join(", ", r.Diagnoses), "MutedBody"));
-            col.Children.Add(StaffUi.Row(row.ToArray()));
-        }
+        //JJQR - AI (Nov 22, 2026) - records as a table: date, chief complaint, diagnosis
+        col.Children.Add(ClinicNode.App.Views.Shared.Controls.ClinicUi.Table(
+            [
+                new ClinicNode.App.Views.Shared.Controls.TableColumn("Date", new GridLength(190), o => ClinicTheme.Text(((ClinicNode.Core.Staff.PatientRecordRow)o).AppointmentDate is { } dt ? LongDate(dt) : "—", "BodyMd")),
+                new ClinicNode.App.Views.Shared.Controls.TableColumn("Chief complaint", GridLength.Star, o => ClinicTheme.Text(((ClinicNode.Core.Staff.PatientRecordRow)o).ChiefComplaint is { Length: > 0 } c ? c : "No chief complaint recorded", "LabelLg")),
+                new ClinicNode.App.Views.Shared.Controls.TableColumn("Diagnosis", new GridLength(320), o => ClinicNode.App.Views.Shared.Controls.ClinicUi.Cell(string.Join(", ", ((ClinicNode.Core.Staff.PatientRecordRow)o).Diagnoses))),
+            ], d.Records.Cast<object>(), "No medical records yet."));
+        //JJQR - END
         return col;
     }
 }

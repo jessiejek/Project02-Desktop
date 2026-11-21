@@ -1,5 +1,6 @@
 //JJQR - AI (Nov 21, 2026) - /staff/dashboard "Front desk today": 3 glance cards, "N patients are ready to pay" + Go to payments, shortcuts, Arrivals (Check in / Undo check-in / Cancel with reason).
 using ClinicNode.App.Controls;
+using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.Core.Staff;
 
 namespace ClinicNode.App.Views.Staff;
@@ -29,11 +30,8 @@ public sealed class StaffHomePage : StaffLivePage
             Spacing = 16,
             Children =
             {
-                StaffUi.Header("Front desk today", "Who is booked, who has arrived, and who is waiting to pay.",
+                StaffUi.Header("Front desk today", $"{DateTime.Today:dddd, MMMM d}  ·  Who is booked, who has arrived, and who is waiting to pay.",
                     StaffUi.Btn("New walk-in", () => Shell.Current.GoToAsync("//staff-walk-in"))),
-                //JJQR - AI (21 Nov 2026)
-                _announcements,
-                //JJQR - END
                 LoadError,
                 //JJQR - AI (21 Nov 2026) - STAFF PARITY: error state card replaces the body below on a failed load
                 ErrorStateView,
@@ -48,15 +46,13 @@ public sealed class StaffHomePage : StaffLivePage
     {
         _body.Children.Add(_reprint);
         _body.Children.Add(_stats);
-        _body.Children.Add(_banner);
-        _body.Children.Add(StaffUi.Wrap(
-            StaffUi.Btn("Payments", () => Shell.Current.GoToAsync("//staff-payments"), "SecondaryButton"),
-            StaffUi.Btn("Doctor status", () => Shell.Current.GoToAsync("//staff-doctor-status"), "SecondaryButton"),
-            StaffUi.Btn("Patients", () => Shell.Current.GoToAsync("//staff-patients"), "SecondaryButton")));
         _body.Children.Add(StaffUi.Card(
             StaffUi.Wrap(ClinicTheme.Text("Arrivals", "HeadlineSm"), ClinicTheme.Text("   ", "BodyMd"), StaffUi.Link("Open queue board", () => Shell.Current.GoToAsync("//staff-queue"))),
             _actionError,
             _arrivals));
+        //JJQR - AI (Nov 22, 2026) - announcements now sit under the work, not above it
+        _body.Children.Add(_announcements);
+        //JJQR - END
         return _body;
     }
     //JJQR - END
@@ -83,32 +79,32 @@ public sealed class StaffHomePage : StaffLivePage
                 StaffUi.Btn("Go to payments", () => Shell.Current.GoToAsync("//staff-payments"), "SecondaryButton"))
             : null;
 
+        //JJQR - AI (Nov 22, 2026) - arrivals as a table; the duplicate "ready to pay" card and the three button-tabs are gone (the tiles above already link there)
         _arrivals.Children.Clear();
-        if (d.Arrivals.Count == 0)
-        {
-            _arrivals.Children.Add(ClinicTheme.Text("No one is booked or waiting right now.", "MutedBody"));
-            return;
-        }
-        foreach (var a in d.Arrivals)
-        {
-            var row = a;
-            //JJQR - AI (21 Nov 2026) - web order and look: "Cancel" (ghost, red) first, then the secondary Check in / Undo check-in; name as plain text ("—" when blank).
-            var buttons = new List<View>();
-            if (a.CanCancel) buttons.Add(StaffUi.DangerGhost("Cancel", () => CancelAsync(row)));
-            //JJQR - AI (21 Nov 2026) - Jessie/allen0: "Check in" only while the booking is Pending; "Undo check-in" stays for checked-in rows; no button otherwise
-            if (a.Status == ClinicApp.Domain.Enums.BookingStatus.Pending)
-                buttons.Add(StaffUi.Btn("Check in", () => ToggleAsync(row), "SecondaryButton"));
-            else if (a.Status == ClinicApp.Domain.Enums.BookingStatus.CheckedIn)
-                buttons.Add(StaffUi.Btn("Undo check-in", () => ToggleAsync(row), "SecondaryButton"));
-            //JJQR - END
-            _arrivals.Children.Add(StaffUi.Row(
-                ClinicTheme.Text(a.PatientName.Length > 0 ? a.PatientName : "—", "HeadlineSm"),
-            //JJQR - END
-                ClinicTheme.Text($"{StaffUi.Time(a.SlotStart)} · Queue {a.QueueNumber ?? "—"}", "MutedSm"),
-                ClinicTheme.MakeStatusPill(a.Status.ToString()),
-                StaffUi.Wrap(buttons.ToArray())));
-        }
+        _arrivals.Children.Add(ClinicUi.Table(
+            [
+                new TableColumn("Time", new GridLength(100), o => ClinicTheme.Text(StaffUi.Time(((ArrivalRow)o).SlotStart), "BodyMd")),
+                new TableColumn("Patient", GridLength.Star, o => StaffUi.TwoLine(((ArrivalRow)o).PatientName, null)),
+                new TableColumn("Queue", new GridLength(96), o => ClinicTheme.MakeLaneBadge(((ArrivalRow)o).QueueNumber)),
+                new TableColumn("Status", new GridLength(130), o => ClinicTheme.MakeStatusPill(((ArrivalRow)o).Status.ToString())),
+                new TableColumn("", new GridLength(240), o => ArrivalActions((ArrivalRow)o)),
+            ], d.Arrivals.Cast<object>(), "No one is booked or waiting right now."));
     }
+
+    View ArrivalActions(ArrivalRow a)
+    {
+        var row = a;
+        var buttons = new List<View>();
+        if (a.CanCancel) buttons.Add(StaffUi.DangerGhost("Cancel", () => CancelAsync(row)));
+        //JJQR - AI (21 Nov 2026) - Jessie/allen0: "Check in" only while the booking is Pending; "Undo check-in" stays for checked-in rows; no button otherwise
+        if (a.Status == ClinicApp.Domain.Enums.BookingStatus.Pending)
+            buttons.Add(StaffUi.Btn("Check in", () => ToggleAsync(row), "SecondaryButton"));
+        else if (a.Status == ClinicApp.Domain.Enums.BookingStatus.CheckedIn)
+            buttons.Add(StaffUi.Btn("Undo check-in", () => ToggleAsync(row), "SecondaryButton"));
+        //JJQR - END
+        return StaffUi.Actions(buttons.ToArray());
+    }
+    //JJQR - END
 
     //JJQR - AI (21 Nov 2026) - AnnouncementsPanel: title, body, date (newest first, max 3).
     async Task LoadAnnouncementsAsync()

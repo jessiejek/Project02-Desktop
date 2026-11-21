@@ -50,7 +50,7 @@ public sealed class StaffProfilePage : StaffLivePage
                 StaffUi.Header("Your profile", "Your name and number as the clinic sees them, and your sign-in password."),
                 LoadError,
                 ErrorStateView, //JJQR - AI (21 Nov 2026) - STAFF PARITY //JJQR - END
-                BodyOf(_body, //JJQR - AI (21 Nov 2026) - STAFF PARITY: the cards the web ErrorState replaces //JJQR - END
+                BodyOf(_body, TwoColumns(
                 StaffUi.Card(
                     ClinicTheme.Text("Details", "HeadlineSm"),
                     _detailsSaved, _detailsError, //JJQR - AI (21 Nov 2026) - STAFF PARITY: web order: saved, then error //JJQR - END
@@ -65,7 +65,7 @@ public sealed class StaffProfilePage : StaffLivePage
                     StaffUi.Field("New password", _new, StaffProfileService.PasswordHint),
                     StaffUi.Field("Confirm new password", _confirm),
                     _mismatch,
-                    _update)), //JJQR - AI (21 Nov 2026) - closes BodyOf //JJQR - END
+                    _update))), //JJQR - AI (Nov 22, 2026) - details and password side by side instead of two 1,165 pt wide cards //JJQR - END
             }
         });
     }
@@ -86,6 +86,14 @@ public sealed class StaffProfilePage : StaffLivePage
 
     //JJQR - AI (21 Nov 2026) - STAFF PARITY helpers
     void RefreshDirty() => _save.IsEnabled = (_fullName.Text ?? "") != _initialName || (_contact.Text ?? "") != _initialContact;
+
+    static View TwoColumns(View left, View right)
+    {
+        var g = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        left.VerticalOptions = LayoutOptions.Start; right.VerticalOptions = LayoutOptions.Start;
+        g.Add(left, 0, 0); g.Add(right, 1, 0);
+        return g;
+    }
 
     static View BodyOf(VerticalStackLayout body, params View[] children)
     {
