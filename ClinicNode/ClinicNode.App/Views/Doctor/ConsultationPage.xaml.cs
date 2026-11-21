@@ -1027,7 +1027,7 @@ public partial class ConsultationPage : ContentPage
             var detail = string.Join(" · ", new[] { ConsultRules.DirectionsLine(rx), rx.Route, rx.Indication, rx.Instruction }.Where(s => !string.IsNullOrWhiteSpace(s)));
             var actions = new HorizontalStackLayout();
             actions.Children.Add(Btn("Edit", () => { RestoreRxEdit(); _rxEditIndex = D.Prescriptions.IndexOf(line); _rxEditOriginal = line; _rxNew = Clone(line); D.Prescriptions.Remove(line); _rxTab = "new"; RenderSection(); Changed(); }));
-            actions.Children.Add(Btn("Remove", () => { D.Prescriptions.Remove(line); RenderSection(); Changed(); }));
+            actions.Children.Add(Btn("Remove", () => { D.Prescriptions.Remove(line); ToastBar.IsVisible = false; RenderSection(); Changed(); }));
             //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs) - Select / Select All for bulk delete
             //JJQR - AI (Nov 21, 2026) - each medicine is its own small card: bold name line, muted directions, Edit / Remove underneath (the old side-by-side row overlapped in a narrow pane)
             var titleLbl = new Label { Text = head, FontFamily = ClinicTheme.FontSemiBold, FontSize = 14, TextColor = ClinicTheme.Color("OnSurface"), LineBreakMode = LineBreakMode.WordWrap };
@@ -1442,6 +1442,16 @@ public partial class ConsultationPage : ContentPage
             barActions.Children.Add(rm);
         }
         bar.Add(barActions, 1, 0);
+        //JJQR - AI (Nov 22, 2026) - a certificate without the doctor's License / PTR number is not valid when printed: say so before it is issued //JJQR - END
+        if (string.IsNullOrWhiteSpace(_doctor?.LicenseNumber) || string.IsNullOrWhiteSpace(_doctor?.PtrNumber))
+            SectionHost.Children.Add(new Border
+            {
+                BackgroundColor = Color.FromArgb("#FFF4D6"),
+                StrokeThickness = 0,
+                Padding = new Thickness(12, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+                Content = ClinicTheme.Text("Your License No. and/or PTR No. is missing, so the printed certificate will show a blank. Add them under Profile before issuing.", "MutedSm"),
+            });
         SectionHost.Children.Add(new Border
         {
             BackgroundColor = Color.FromArgb("#E7F6F2"),
