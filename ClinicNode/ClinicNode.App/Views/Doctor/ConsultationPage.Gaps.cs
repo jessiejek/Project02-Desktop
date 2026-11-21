@@ -284,7 +284,7 @@ public partial class ConsultationPage
         var feeLine = ConsultClinicalAids.ProfessionalFeeLine(D.PfDecision, amount, D.PfWaiveReason, PreviewFee().Total);
         SectionHost.Children.Add(Row(ClinicTheme.Text(feeLine, "BodyMd"), Btn("Edit", OpenProfessionalFeeForEdit, "GhostButton")));
 
-        FeePreview.Text = PreviewFee().Summary;
+        SetFeePreview();
         UpdateFooter();
         PrevButton.IsVisible = false;
         NextButton.IsVisible = false;

@@ -18,12 +18,16 @@ public sealed class QuickRegisterPage : ContentPage
     QuickRegisterPage(IStaffPatientsService svc)
     {
         Title = "Register a new patient";
-        BackgroundColor = ClinicTheme.Color("Background");
+        //JJQR - AI (Nov 21, 2026) - a real dialog: dimmed window, floating card, title bar + close, two-column form
+        ControlTemplate = null;
+        BackgroundColor = Colors.Transparent;
+        Shell.SetPresentationMode(this, PresentationMode.ModalNotAnimated);
+        //JJQR - END
         var first = new Entry();
         var middle = new Entry();
         var last = new Entry();
         var dob = new DatePicker { Date = null, MaximumDate = DateTime.Today, MinimumDate = new DateTime(1900, 1, 1) };
-        var sex = new Picker { Title = "Select…", ItemsSource = new[] { "Male", "Female" } };
+        var sexIndex = -1; //JJQR - AI (Nov 21, 2026) - two choices = two buttons, not a dropdown //JJQR - END
         var contact = new Entry { Keyboard = Keyboard.Telephone };
         var address = new Entry();
         //JJQR - AI (21 Nov 2026) - web FormAlerts: register error (danger), quickRegisterProblem (warning), portal note (info)
@@ -37,7 +41,7 @@ public sealed class QuickRegisterPage : ContentPage
 
         QuickRegisterForm Form() => new(first.Text ?? "", middle.Text, last.Text ?? "",
             dob.Date is { } d ? DateOnly.FromDateTime(d) : null,
-            sex.SelectedIndex switch { 0 => SexType.Male, 1 => SexType.Female, _ => null },
+            sexIndex switch { 0 => SexType.Male, 1 => SexType.Female, _ => null },
             contact.Text, address.Text);
 
         Button? register = null;
@@ -80,46 +84,33 @@ public sealed class QuickRegisterPage : ContentPage
         });
         foreach (var e in new[] { first, middle, last, contact, address }) e.TextChanged += (_, _) => Sync();
         dob.DateSelected += (_, _) => Sync();
-        sex.SelectedIndexChanged += (_, _) => Sync();
         //JJQR - END
 
-        Content = new ScrollView
+        //JJQR - AI (Nov 21, 2026) - dialog body: alerts on top, then a two-column form, then the portal option
+        var sexHost = new ContentView();
+        void RenderSex() => sexHost.Content = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(["Male", "Female"], sexIndex, i => { sexIndex = i; RenderSex(); Sync(); });
+        RenderSex();
+        var dobBox = ClinicPickers.DateBox(this, dob, DateTime.Today.AddYears(-30), fill: true);
+        first.Placeholder = "e.g. Maria Teresa"; last.Placeholder = "e.g. Dela Cruz"; middle.Placeholder = "optional";
+        contact.Placeholder = "e.g. 0917 123 4567"; address.Placeholder = "Street, barangay, city (optional)";
+        var form = new Grid { ColumnSpacing = 16, RowSpacing = 14, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        form.Add(StaffUi.Field("First name *", first), 0, 0);
+        form.Add(StaffUi.Field("Last name *", last), 1, 0);
+        form.Add(StaffUi.Field("Middle name", middle), 0, 1);
+        form.Add(StaffUi.Field("Date of birth *", dobBox), 1, 1);
+        form.Add(StaffUi.Field("Sex *", sexHost), 0, 2);
+        form.Add(StaffUi.Field("Contact number", contact), 1, 2);
+        var addr = StaffUi.Field("Address", address);
+        form.Add(addr, 0, 3);
+        Grid.SetColumnSpan(addr, 2);
+        var body = new VerticalStackLayout
         {
-            Content = new VerticalStackLayout
-            {
-                Padding = 24, Spacing = 12, MaximumWidthRequest = 560,
-                Children =
-                {
-                    ClinicTheme.Text("Register a new patient", "HeadlineMd"),
-                    error,
-                    problem,
-                    StaffUi.Field("First name", first),
-                    StaffUi.Field("Middle name (optional)", middle),
-                    StaffUi.Field("Last name", last),
-                    StaffUi.Field("Date of birth", dob),
-                    StaffUi.Field("Sex", sex),
-                    StaffUi.Field("Contact number (optional)", contact),
-                    StaffUi.Field("Address (optional)", address),
-                    //JJQR - AI (21 Nov 2026)
-                    new HorizontalStackLayout
-                    {
-                        Spacing = 8,
-                        Children =
-                        {
-                            portal,
-                            new VerticalStackLayout
-                            {
-                                Spacing = 2,
-                                Children = { ClinicTheme.Text("Prepare portal account", "BodyMd"), ClinicTheme.Text("Creates login access; the patient sets a password on first login.", "FieldHint") },
-                            },
-                        },
-                    },
-                    portalNote,
-                    StaffUi.Wrap(cancel, register),
-                    //JJQR - END
-                }
-            }
+            Spacing = 14,
+            Children = { error, problem, form, ClinicPickers.CheckRow(portal, "Prepare portal account", "Creates login access; the patient sets a password on first login."), portalNote },
         };
+        var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { cancel, register } };
+        Content = ClinicModal.Build("Register a new patient", body, footer, async () => { if (_registering) return; _done.TrySetResult(null); await Navigation.PopModalAsync(); }, maxWidth: 780, maxBodyHeight: 640);
+        //JJQR - END
         Sync();
     }
 

@@ -139,15 +139,66 @@ public sealed class DoctorProfilePage : StaffLivePage
             },
         };
 
-        //JJQR - AI (21 Nov 2026) - one muted note under Full Name / Specialization and one under the fee / license / PTR / S2 grid
-        static Label AdminNote() => ClinicTheme.Text("Contact the admin to change this.", "MutedSm");
-        _body.Children.Add(StaffUi.Card(
-            _saved, header, Divider(), _error,
-            StaffUi.Field("Full Name", _name), StaffUi.Field("Specialization", _spec), AdminNote(), StaffUi.Field("Bio", _bio),
-            grid, AdminNote(), save,
+        //JJQR - AI (Nov 21, 2026) - desktop layout: LEFT = who you are (read-only identity as a tidy details grid) + the one editable thing (Bio) + Save; RIGHT = password and availability
+        static View Info(string label, string? value)
+        {
+            var v = new Label { Text = string.IsNullOrWhiteSpace(value) ? "—" : value, FontSize = 15, FontFamily = ClinicTheme.FontMedium, TextColor = ClinicTheme.Color("OnSurface") };
+            return new VerticalStackLayout { Spacing = 3, Children = { ClinicTheme.Text(label, "FieldLabel"), v } };
+        }
+        var initials = string.Concat((_name.Text ?? "Dr").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+        var avatar = new Border
+        {
+            WidthRequest = 56, HeightRequest = 56, StrokeThickness = 0, BackgroundColor = ClinicTheme.Color("PrimarySubtle"),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 28 },
+            Content = new Label { Text = initials, FontFamily = ClinicTheme.FontSemiBold, FontSize = 20, TextColor = ClinicTheme.Color("Primary"), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+        };
+        var who = new Grid { ColumnSpacing = 14, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
+        who.Add(avatar, 0, 0);
+        who.Add(new VerticalStackLayout
+        {
+            Spacing = 2, VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label { Text = _name.Text, FontFamily = ClinicTheme.FontSemiBold, FontSize = 20 },
+                ClinicTheme.Text(string.Join("  ·  ", new[] { _spec.Text, _email.Text }.Where(x => !string.IsNullOrWhiteSpace(x))), "MutedBody"),
+            },
+        }, 1, 0);
+
+        var details = new Grid { ColumnSpacing = 24, RowSpacing = 18, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        details.Add(Info("Consultation fee", "₱" + _fee.Text), 0, 0);
+        details.Add(Info("License no.", _license.Text), 1, 0);
+        details.Add(Info("PTR no.", _ptr.Text), 2, 0);
+        details.Add(Info("S2 no.", _s2.Text), 0, 1);
+        details.Add(Info("Specialization", _spec.Text), 1, 1);
+
+        var lockNote = new Border
+        {
+            BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"), StrokeThickness = 0, Padding = new Thickness(12, 8),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Content = ClinicTheme.Text("🔒 Name, specialization, fee and licence numbers are set by the clinic admin. Contact the admin to change them.", "MutedSm"),
+        };
+
+        var bioBox = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Bio", "FieldLabel"), ClinicTheme.Text("Shown on your public profile. This is the one thing you can edit here.", "MutedSm"), _bio } };
+        _bio.HeightRequest = 120;
+
+        var left = StaffUi.Card(_saved, who, Divider(), details, lockNote, Divider(), _error, bioBox, save);
+        left.VerticalOptions = LayoutOptions.Start;
+
+        var pwCard = StaffUi.Card(
+            new Label { Text = "Change password", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17 }, _pwSaved, _pwError,
+            StaffUi.Field("Current password", _current), StaffUi.Field("New password", _new), StaffUi.Field("Confirm new password", _confirm),
+            _updatePw);
+        var availCard = StaffUi.Card(
+            new Label { Text = "Clinic availability", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17 },
+            ClinicTheme.Text("Weekly hours and dates away.", "MutedBody"),
+            StaffUi.Btn("Manage availability", () => StaffUi.PushAsync<DoctorSchedulePage>(this), "SecondaryButton"));
+        var right = new VerticalStackLayout { Spacing = 16, Children = { pwCard, availCard }, VerticalOptions = LayoutOptions.Start };
+
+        var cols = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(new GridLength(3, GridUnitType.Star)), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) } };
+        cols.Add(left, 0, 0);
+        cols.Add(right, 1, 0);
+        _body.Children.Add(cols);
         //JJQR - END
-            Divider(), availability,
-            Divider(), password));
         UpdatePwButton();
     }
 }

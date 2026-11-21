@@ -8,6 +8,10 @@
     <true/>
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
+    <!-- JJQR - AI (Nov 21, 2026) - printing: the PDF is saved to ~/Downloads and opened in the default viewer -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    <!-- JJQR - END -->
     <key>com.apple.security.print</key>
     <true/>
 </dict>

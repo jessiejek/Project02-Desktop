@@ -9,9 +9,9 @@
              Title="Consultation"
              BackgroundColor="{StaticResource Background}">
     <!-- JJQR - AI (Nov 21, 2026) - desktop workspace: header row, then [steps | form | patient & visit summary], footer under the form -->
-    <Grid x:Name="Root" ColumnDefinitions="262,*,320" RowDefinitions="Auto,*,Auto" ColumnSpacing="16" RowSpacing="14" Padding="24,18,24,18">
+    <Grid x:Name="Root" ColumnDefinitions="262,*" RowDefinitions="Auto,Auto,*,Auto" ColumnSpacing="16" RowSpacing="14" Padding="24,18,24,18">
 
-        <Grid Grid.Row="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" ColumnSpacing="16">
             <VerticalStackLayout Spacing="2">
                 <Label x:Name="PageTitle" Text="Document consultation" Style="{StaticResource PageKicker}" />
                 <Label x:Name="BannerName" Style="{StaticResource HeadlineMd}" />
@@ -23,13 +23,14 @@
                 <Button x:Name="PrintRxButton" Text="Print prescription" Style="{StaticResource SecondaryButton}" Clicked="OnPrintRx" Margin="8,0,0,0" />
                 <Button x:Name="PrintLabsButton" Text="Print lab orders" Style="{StaticResource SecondaryButton}" Clicked="OnPrintLabs" Margin="8,0,0,0" />
                 <Button x:Name="PrintCertButton" Text="Print certificate" Style="{StaticResource SecondaryButton}" Clicked="OnPrintCert" Margin="8,0,0,0" />
+                <Button x:Name="SaveCertButton" Text="Save certificate" Style="{StaticResource SecondaryButton}" Clicked="OnSaveCert" IsVisible="False" Margin="8,0,0,0" />
                 <Button x:Name="PrintSlipButton" Text="Print queue slip" Style="{StaticResource SecondaryButton}" Clicked="OnPrintSlip" Margin="8,0,0,0" />
                 <Button x:Name="CancelAmendButton" Text="Cancel amendment" Style="{StaticResource SecondaryButton}" Clicked="OnCancelAmend" IsVisible="False" Margin="8,0,0,0" />
             </HorizontalStackLayout>
         </Grid>
 
         <!-- steps rail -->
-        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource Card}" Padding="10">
+        <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource Card}" Padding="10">
             <ScrollView>
                 <VerticalStackLayout Spacing="6">
                     <Label Text="STEPS" Style="{StaticResource LabelSm}" Margin="8,4,0,4" />
@@ -39,28 +40,29 @@
         </Border>
 
         <!-- form -->
-        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Padding="22,18">
+        <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource Card}" Padding="22,18">
             <ScrollView>
                 <VerticalStackLayout x:Name="SectionHost" Spacing="14" />
             </ScrollView>
         </Border>
 
-        <!-- patient and visit summary -->
-        <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}" Padding="16">
-            <ScrollView>
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="PATIENT" Style="{StaticResource LabelSm}" />
-                    <VerticalStackLayout x:Name="AllergyBar" Spacing="6" />
-                    <BoxView HeightRequest="1" Color="{StaticResource OutlineVariant}" />
-                    <Label Text="VISIT" Style="{StaticResource LabelSm}" />
-                    <FlexLayout x:Name="VisitTypeBar" Wrap="Wrap" AlignItems="Center" />
-                    <Label x:Name="FeePreview" Style="{StaticResource FieldLabel}" TextColor="{StaticResource Primary}" />
+        <!-- patient / visit / fee: one tidy strip ABOVE the work area (aligned blocks, labels on top, content on one line) -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Card}" Padding="20,14">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="48" RowDefinitions="Auto,Auto" RowSpacing="8">
+                <Label Grid.Row="0" Grid.Column="0" Text="PATIENT" Style="{StaticResource LabelSm}" />
+                <Label Grid.Row="0" Grid.Column="1" Text="VISIT TYPE" Style="{StaticResource LabelSm}" />
+                <Label Grid.Row="0" Grid.Column="2" Text="FEE" Style="{StaticResource LabelSm}" />
+                <VerticalStackLayout Grid.Row="1" Grid.Column="0" x:Name="AllergyBar" Spacing="6" VerticalOptions="Start" />
+                <VerticalStackLayout Grid.Row="1" Grid.Column="1" x:Name="VisitTypeBar" Spacing="4" VerticalOptions="Start" />
+                <VerticalStackLayout Grid.Row="1" Grid.Column="2" Spacing="0" VerticalOptions="Start" MinimumWidthRequest="190">
+                    <Label x:Name="FeeTotal" FontFamily="InterSemiBold" FontSize="24" TextColor="{StaticResource Primary}" />
+                    <Label x:Name="FeePreview" Style="{StaticResource MutedSm}" MaximumWidthRequest="300" />
                 </VerticalStackLayout>
-            </ScrollView>
+            </Grid>
         </Border>
 
         <!-- footer under the form -->
-        <VerticalStackLayout Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Spacing="6">
+        <VerticalStackLayout Grid.Row="3" Grid.Column="1" Spacing="6">
             <Label x:Name="StatusLabel" Style="{StaticResource MutedSm}" />
             <Label x:Name="ErrorLabel" Style="{StaticResource ErrorText}" IsVisible="False" />
             <HorizontalStackLayout x:Name="ToastBar" Spacing="8" IsVisible="False">
@@ -77,13 +79,13 @@
         </VerticalStackLayout>
 
         <!-- JJQR - AI (Nov 21, 2026) - floating dropdown layer: panels open OVER the page so nothing below moves -->
-        <AbsoluteLayout x:Name="PopupLayer" Grid.RowSpan="3" Grid.ColumnSpan="3" IsVisible="False" ZIndex="15" BackgroundColor="Transparent" />
+        <AbsoluteLayout x:Name="PopupLayer" Grid.RowSpan="4" Grid.ColumnSpan="2" IsVisible="False" ZIndex="15" BackgroundColor="Transparent" />
         <!-- JJQR - END -->
 
         <!-- JJQR - AI (Nov 21, 2026) - real modal: dimmed backdrop + floating card with title bar and close -->
-        <Grid x:Name="Overlay" Grid.RowSpan="3" Grid.ColumnSpan="3" IsVisible="False" ZIndex="10" BackgroundColor="#B3102A28">
-            <Border BackgroundColor="{StaticResource SurfaceContainerLowest}" Stroke="#73808A94" StrokeThickness="1" Padding="0"
-                    MaximumWidthRequest="720" HorizontalOptions="Center" VerticalOptions="Center" Margin="28">
+        <Grid x:Name="Overlay" Grid.RowSpan="4" Grid.ColumnSpan="2" IsVisible="False" ZIndex="10" BackgroundColor="#B3102A28">
+            <Border x:Name="OverlayCard" BackgroundColor="{StaticResource SurfaceContainerLowest}" Stroke="#73808A94" StrokeThickness="1" Padding="0"
+                    MaximumWidthRequest="880" HorizontalOptions="Center" VerticalOptions="Center" Margin="28">
                 <Border.StrokeShape><RoundRectangle CornerRadius="12" /></Border.StrokeShape>
                 <Border.Shadow><Shadow Brush="Black" Opacity="0.38" Radius="32" Offset="0,12" /></Border.Shadow>
                 <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">

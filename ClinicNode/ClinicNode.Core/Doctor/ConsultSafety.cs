@@ -129,13 +129,13 @@ public static class RxAllergy
 public static class TemplateSpecialty
 {
     public const string All = "All";
-    public static readonly (string Id, string Label)[] ChipLabels = [("All", "All"), ("General", "General"), ("Peds", "Peds"), ("OB", "OB"), ("IM", "IM")];
+    public static readonly (string Id, string Label)[] ChipLabels = [("All", "All"), ("General", "Adult"), ("Peds", "Pedia")]; //JJQR - AI (Nov 21, 2026) - family medicine: adult and pedia only (OB / IM removed; their templates are Adult now) //JJQR - END
 
     static readonly (Regex Match, string[] Tags)[] SoapTitleTags =
     [
         (new Regex("pediatric|peds|child|infant|uri", RegexOptions.IgnoreCase), ["Peds", "General"]),
-        (new Regex("prenatal|anc|obstet|pregnancy|postpartum|labor", RegexOptions.IgnoreCase), ["OB"]),
-        (new Regex(@"hypertension|diabetes|dm\b|cad|copd|asthma adult|internal", RegexOptions.IgnoreCase), ["IM", "General"]),
+        (new Regex("prenatal|anc|obstet|pregnancy|postpartum|labor", RegexOptions.IgnoreCase), ["General"]),
+        (new Regex(@"hypertension|diabetes|dm\b|cad|copd|asthma adult|internal", RegexOptions.IgnoreCase), ["General"]),
         (new Regex("uri|upper respiratory|pharyng", RegexOptions.IgnoreCase), ["General", "Peds"]),
     ];
 
@@ -155,8 +155,6 @@ public static class TemplateSpecialty
     {
         var s = (specialization ?? "").ToLowerInvariant();
         if (s.Contains("pediatr")) return "Peds";
-        if (s.Contains("obstet") || s.Contains("gyn")) return "OB";
-        if (s.Contains("internal")) return "IM";
         return "General";
     }
 

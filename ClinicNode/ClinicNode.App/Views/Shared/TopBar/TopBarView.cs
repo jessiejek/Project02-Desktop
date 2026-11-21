@@ -252,20 +252,11 @@ public sealed class GlobalSearchPage : ContentPage
     {
         _sp = sp;
         Title = "Search";
-        BackgroundColor = ClinicTheme.Color("Background");
-        var close = StaffUi.Btn("Close", async () => await Navigation.PopModalAsync(), "SecondaryButton");
+        BackgroundColor = Colors.Transparent;
+        ControlTemplate = null;
         _entry.TextChanged += (_, e) => _ = SearchAsync(e.NewTextValue ?? "");
         _entry.Completed += async (_, _) => { if (_hits.Count > 0) await OpenAsync(_hits[0]); };
-        Content = new ScrollView
-        {
-            Content = new VerticalStackLayout
-            {
-                Padding = 24,
-                Spacing = 12,
-                MaximumWidthRequest = 640,
-                Children = { ClinicTheme.Text("Search", "HeadlineMd"), _entry, _status, _results, close },
-            },
-        };
+        Content = ClinicModal.Build("Search", new VerticalStackLayout { Spacing = 10, Children = { _entry, _status, _results } }, null, () => Navigation.PopModalAsync(), 640, 460);
     }
 
     protected override void OnAppearing()
@@ -298,15 +289,20 @@ public sealed class GlobalSearchPage : ContentPage
             foreach (var h in hits)
             {
                 var hit = h;
-                var b = new Button
+                var can = TopBarNav.CanOpen(_sp, hit);
+                var kind = new Border { Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(8, 3), VerticalOptions = LayoutOptions.Center, Content = ClinicTheme.Text(hit.KindLabel, "PillLabelInfo") };
+                var g = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(96), new ColumnDefinition(GridLength.Star) } };
+                g.Add(kind, 0, 0); g.Add(new Label { Text = hit.Label, FontSize = 14, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.TailTruncation }, 1, 0);
+                var row = new Border { StrokeThickness = 0, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 }, Padding = new Thickness(10, 9), BackgroundColor = Colors.Transparent, Opacity = can ? 1 : 0.5, Content = g };
+                if (can)
                 {
-                    Text = $"{hit.KindLabel.ToUpperInvariant()}   {hit.Label}",
-                    Style = ClinicTheme.Style("SecondaryButton"),
-                    HorizontalOptions = LayoutOptions.Fill,
-                    IsEnabled = TopBarNav.CanOpen(_sp, hit),
-                };
-                b.Clicked += async (_, _) => await OpenAsync(hit);
-                _results.Children.Add(b);
+                    var hv = new PointerGestureRecognizer();
+                    hv.PointerEntered += (_, _) => row.BackgroundColor = ClinicTheme.Color("PrimarySubtle");
+                    hv.PointerExited += (_, _) => row.BackgroundColor = Colors.Transparent;
+                    row.GestureRecognizers.Add(hv);
+                    row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await OpenAsync(hit)) });
+                }
+                _results.Children.Add(row);
             }
         }
         catch (OperationCanceledException) { }
@@ -333,18 +329,9 @@ public sealed class NotificationsPage : ContentPage
         _sp = sp;
         _onClosed = onClosed;
         Title = "Notifications";
-        BackgroundColor = ClinicTheme.Color("Background");
-        var close = StaffUi.Btn("Close", async () => { await Navigation.PopModalAsync(); _onClosed(); }, "SecondaryButton");
-        Content = new ScrollView
-        {
-            Content = new VerticalStackLayout
-            {
-                Padding = 24,
-                Spacing = 12,
-                MaximumWidthRequest = 640,
-                Children = { ClinicTheme.Text("Notifications", "HeadlineMd"), _list, close },
-            },
-        };
+        BackgroundColor = Colors.Transparent;
+        ControlTemplate = null;
+        Content = ClinicModal.Build("Notifications", _list, null, async () => { await Navigation.PopModalAsync(); _onClosed(); }, 600, 480);
     }
 
     public static async Task<bool> HasUnseenAsync(IServiceProvider sp)

@@ -74,7 +74,7 @@ public static class ClinicUi
     public static View PageHeader(string title, string? subtitle = null, params View[] actions)
     {
         var grid = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 12 };
-        var left = new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text(title, "HeadlineMd") } };
+        var left = new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text(title, "HeadlineLg") } }; //JJQR - AI (Nov 21, 2026) page title size //JJQR - END
         if (!string.IsNullOrWhiteSpace(subtitle)) left.Children.Add(ClinicTheme.Text(subtitle!, "MutedBody"));
         grid.Add(left, 0, 0);
         if (actions.Length > 0)
@@ -89,23 +89,62 @@ public static class ClinicUi
     // ── table (DataTable.tsx: rounded-xl frame, header row bg-surface-container-low, row dividers, empty text) ──
     public static View Table(IReadOnlyList<TableColumn> columns, IEnumerable<object> rows, string empty = "Nothing to show yet.", Action<object>? onTap = null)
     {
-        var body = new VerticalStackLayout { Spacing = 0 };
-        body.Children.Add(Row(columns, c => ClinicTheme.Text(c.Header, "TableHeader"), "TableHeaderRow"));
+        //JJQR - AI (Nov 21, 2026) - ONE grid for header + every row so each column has the same width on every row (Auto columns used to
+        // resize per row and push the headers out of line); the row background spans all columns and lights up on hover.
+        var grid = new Grid { ColumnSpacing = 0, RowSpacing = 0 };
+        for (var i = 0; i < columns.Count; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(columns[i].Width));
+        var lastCol = Math.Max(0, columns.Count - 1);
+        var surface = ClinicTheme.Color("SurfaceContainerLowest");
+        var gridRow = 0;
+
+        void AddRow(Func<TableColumn, View> make, Color background, double minHeight, double vPad, object? item, bool interactive)
+        {
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var bg = new BoxView { Color = background, MinimumHeightRequest = minHeight };
+            grid.Add(bg, 0, gridRow); Grid.SetColumnSpan(bg, columns.Count);
+            var touched = new List<View> { bg };
+            for (var c = 0; c < columns.Count; c++)
+            {
+                var cell = make(columns[c]);
+                cell.VerticalOptions = LayoutOptions.Center;
+                if (string.IsNullOrEmpty(columns[c].Header) && c == lastCol) cell.HorizontalOptions = LayoutOptions.End;
+                var holder = new ContentView { Padding = new Thickness(c == 0 ? 16 : 8, vPad, c == lastCol ? 16 : 8, vPad), VerticalOptions = LayoutOptions.Fill, Content = cell, MinimumHeightRequest = minHeight };
+                grid.Add(holder, c, gridRow);
+                touched.Add(holder);
+            }
+            if (interactive)
+            {
+                foreach (var t in touched)
+                {
+                    var hv = new PointerGestureRecognizer();
+                    hv.PointerEntered += (_, _) => bg.Color = ClinicTheme.Color("PrimarySubtle");
+                    hv.PointerExited += (_, _) => bg.Color = surface;
+                    t.GestureRecognizers.Add(hv);
+                    if (onTap is not null && item is not null)
+                    {
+                        var captured = item;
+                        t.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => onTap(captured)) });
+                    }
+                }
+            }
+            gridRow++;
+        }
+
+        AddRow(c => ClinicTheme.Text(c.Header, "TableHeader"), ClinicTheme.Color("SurfaceContainerLow"), 36, 9, null, false);
         var any = false;
         foreach (var item in rows)
         {
             any = true;
-            body.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.3f) });
-            var row = Row(columns, c => c.Cell(item), "TableRow");
-            if (onTap is not null)
-            {
-                var captured = item;
-                row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => onTap(captured)) });
-            }
-            body.Children.Add(row);
+            grid.RowDefinitions.Add(new RowDefinition(1));
+            var sep = new BoxView { Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.3f), HeightRequest = 1 };
+            grid.Add(sep, 0, gridRow); Grid.SetColumnSpan(sep, columns.Count);
+            gridRow++;
+            AddRow(c => c.Cell(item), surface, 42, 10, item, true);
         }
+        var body = new VerticalStackLayout { Spacing = 0, Children = { grid } };
         if (!any) body.Children.Add(ClinicTheme.Text(empty, "TableEmpty"));
         return new Border { Style = ClinicTheme.Style("TableFrame"), Content = body };
+        //JJQR - END
     }
 
     public static View Cell(string? text) => ClinicTheme.Text(string.IsNullOrWhiteSpace(text) ? "—" : text!, "TableCell");

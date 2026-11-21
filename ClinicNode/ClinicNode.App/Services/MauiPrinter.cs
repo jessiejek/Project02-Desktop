@@ -28,6 +28,14 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         {
             var pdf = await Printing.MacPrintRenderer.RenderPdfAsync(document);
             KeepCopy(document, pdf.ToArray());
+            //JJQR - AI (Nov 21, 2026) - save the PDF to Downloads and open it; the doctor prints from the viewer (the direct print hand-off is the fragile part)
+            if (_options.OpenAsPdf)
+            {
+                if (_options.AutoPrintInBrowser) OpenHtmlAndAutoPrint(document);
+                else OpenPdfInViewer(document, pdf.ToArray());
+                return;
+            }
+            //JJQR - END
             await Printing.MacPrintRenderer.PrintPdfAsync(pdf, document.Title, grayscale: PrintPaper.KindOf(document.Page) == PaperKind.Roll,
                 showDialog, printerName, resolved.PaperPoints);
         });
@@ -82,6 +90,61 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
                 return false;
         }
     }
+
+    //JJQR - AI (Nov 21, 2026) - write {Downloads}/Clinic Node/<time>-<title>.pdf and hand it to macOS to open in the default app
+#if MACCATALYST
+    /// <summary>Saves the document as a web page that prints itself on load and opens it in the default browser: the Print dialog appears on its own.</summary>
+    static void OpenHtmlAndAutoPrint(PrintDocument document)
+    {
+        var dir = DownloadsFolder();
+        var safe = string.Concat(document.Title.Select(c => char.IsLetterOrDigit(c) ? c : '-')).Trim('-');
+        var path = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{(safe.Length == 0 ? "document" : safe)}.html");
+        const string auto = "<script>window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print();},500);});</script>";
+        var html = document.Html;
+        var i = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        html = i >= 0 ? html.Insert(i, auto) : html + auto;
+        File.WriteAllText(path, html, System.Text.Encoding.UTF8);
+        UIKit.UIApplication.SharedApplication.OpenUrl(Foundation.NSUrl.FromFilename(path), new UIKit.UIApplicationOpenUrlOptions(), null);
+    }
+
+    static string DownloadsFolder()
+    {
+        try
+        {
+            var dl = Foundation.NSSearchPath.GetDirectories(Foundation.NSSearchPathDirectory.DownloadsDirectory, Foundation.NSSearchPathDomain.User, true).FirstOrDefault();
+            var dir = Path.Combine(string.IsNullOrEmpty(dl) ? FileSystem.CacheDirectory : dl, "Clinic Node");
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+        catch (Exception)
+        {
+            var dir = Path.Combine(FileSystem.CacheDirectory, "Clinic Node");
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+    }
+
+    static void OpenPdfInViewer(PrintDocument document, byte[] pdf)
+    {
+        string dir;
+        try
+        {
+            var dl = Foundation.NSSearchPath.GetDirectories(Foundation.NSSearchPathDirectory.DownloadsDirectory, Foundation.NSSearchPathDomain.User, true).FirstOrDefault();
+            dir = Path.Combine(string.IsNullOrEmpty(dl) ? FileSystem.CacheDirectory : dl, "Clinic Node");
+            Directory.CreateDirectory(dir);
+        }
+        catch (Exception)
+        {
+            dir = Path.Combine(FileSystem.CacheDirectory, "Clinic Node");
+            Directory.CreateDirectory(dir);
+        }
+        var safe = string.Concat(document.Title.Select(c => char.IsLetterOrDigit(c) ? c : '-')).Trim('-');
+        var path = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{(safe.Length == 0 ? "document" : safe)}.pdf");
+        File.WriteAllBytes(path, pdf);
+        UIKit.UIApplication.SharedApplication.OpenUrl(Foundation.NSUrl.FromFilename(path), new UIKit.UIApplicationOpenUrlOptions(), null);
+    }
+#endif
+    //JJQR - END
 
     void KeepCopy(PrintDocument document, byte[] pdf)
     {

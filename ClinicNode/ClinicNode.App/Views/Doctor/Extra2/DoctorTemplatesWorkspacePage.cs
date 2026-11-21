@@ -167,14 +167,18 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         _list.Children.Add(DoctorExtraUi.Tabs(DoctorTemplateRules.Tabs.Select(t => (t.Id, $"{t.Label} ({counts[t.Id]})")).ToArray(), () => _tab, id => { _tab = id; Render(); }));
         // search row: input, "This tab" / "All tabs" chips
         _search.Placeholder = _allTabs ? "Search all tabs…" : "Search this tab…";
-        var chips = StaffUi.Wrap(
-            DoctorExtraUi.Chip("This tab", !_allTabs, () => { _allTabs = false; Render(); }),
-            DoctorExtraUi.Chip("All tabs", _allTabs, () => { _allTabs = true; Render(); }));
-        //JJQR - AI (21 Nov 2026) - web ViewToggle: "List" (default) / "Cards"
-        var view = StaffUi.Wrap(
-            DoctorExtraUi.Chip("List", !_cards, () => { _cards = false; Render(); }),
-            DoctorExtraUi.Chip("Cards", _cards, () => { _cards = true; Render(); }));
-        _list.Children.Add(StaffUi.Wrap(DoctorExtraUi.Spaced(_search), chips, view));
+        //JJQR - AI (Nov 21, 2026) - one tidy toolbar row: wide search | scope toggle | view toggle (the old chips wrapped onto three lines)
+        _search.HorizontalOptions = LayoutOptions.Fill;
+        _search.WidthRequest = -1;
+        _search.MaximumWidthRequest = 460;
+        var scope = DoctorExtraUi.Segmented(["This tab", "All tabs"], _allTabs ? 1 : 0, i => { _allTabs = i == 1; Render(); });
+        var viewToggle = DoctorExtraUi.Segmented(["List", "Cards"], _cards ? 1 : 0, i => { _cards = i == 1; Render(); });
+        var toolbar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto) } };
+        toolbar.Add(_search, 0, 0);
+        toolbar.Add(scope, 1, 0);
+        toolbar.Add(viewToggle, 2, 0);
+        _list.Children.Add(toolbar);
+        //JJQR - END
         if (_missing)
             _list.Children.Add(StaffUi.Card(
                 ClinicTheme.Text("That item no longer exists or isn’t yours to open.", "BodyMd"),
@@ -392,10 +396,24 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
             pv.LineBreakMode = LineBreakMode.TailTruncation;
             col.Children.Add(pv);
         }
-        var acts = StaffUi.Wrap();
-        foreach (var (text, run) in actions) acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn(text, run, "SegmentedButton")));
-        acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.DangerGhost("Delete", () => Confirm(id, title, delete))));
-        col.Children.Add(acts);
+        //JJQR - AI (Nov 21, 2026) - cards: actions under the text; list: actions on the RIGHT of the row, vertically centred
+        View acts;
+        if (_cards)
+        {
+            var wrapActs = StaffUi.Wrap();
+            foreach (var (text, run) in actions) wrapActs.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn(text, run, "SegmentedButton")));
+            wrapActs.Children.Add(DoctorExtraUi.Spaced(StaffUi.DangerGhost("Delete", () => Confirm(id, title, delete))));
+            col.Children.Add(wrapActs);
+            acts = wrapActs;
+        }
+        else
+        {
+            var rowActs = new HorizontalStackLayout { Spacing = 6, VerticalOptions = LayoutOptions.Center };
+            foreach (var (text, run) in actions) rowActs.Children.Add(StaffUi.Btn(text, run, "SecondaryButton"));
+            rowActs.Children.Add(StaffUi.DangerGhost("Delete", () => Confirm(id, title, delete)));
+            acts = rowActs;
+        }
+        //JJQR - END
         View row;
         if (_cards)
             row = new Border
@@ -406,9 +424,17 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
             };
         else
         {
-            var r = StaffUi.Row(col);
-            if (highlight) r.BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.05f);
+            //JJQR - AI (Nov 21, 2026) - list row: text on the left, actions on the right
+            var line = new Grid { ColumnSpacing = 16, Padding = new Thickness(6, 8), ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+            line.Add(col, 0, 0);
+            line.Add(acts, 1, 0);
+            var r = new Border
+            {
+                StrokeThickness = 1, Stroke = ClinicTheme.Color(highlight ? "Primary" : "OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+                Padding = new Thickness(10, 4), Margin = new Thickness(0, 0, 0, 8), BackgroundColor = highlight ? ClinicTheme.Color("PrimarySubtle") : ClinicTheme.Color("SurfaceContainerLowest"), Content = line,
+            };
             row = r;
+            //JJQR - END
         }
         row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await open()) });
         if (highlight) _scrollTarget ??= row;

@@ -130,6 +130,31 @@ public static class ClinicFormsHtml
               "<div class=\"write-text\">" + E(exceptionText) + "</div></div>"
             : "";
         var css = FormsCss.ShellCss(opts.PageSize, "148mm", "210mm") + FormsCss.A5LetterheadCss("1.62in") + FormsCss.MedicalCertificateCss();
+        //JJQR - AI (Nov 21, 2026) - the form is a pre-printed A5 sheet with every line pinned at a fixed height. A long address used to wrap onto the next pinned line and overprint it.
+        // Now a field that needs a second row pushes every line below it down by one row (0.16 in); a value that would need three rows is shrunk to fit two.
+        static int ExtraRows(string text, int perRow) => text.Length <= perRow ? 0 : 1;
+        var resLong = opts.Address.Trim().Length > 78;
+        var examLong = opts.ExaminedAt.Trim().Length > 150;
+        var rowsRes = ExtraRows(opts.Address.Trim(), 50);
+        var rowsExam = ExtraRows(opts.ExaminedAt.Trim(), 44);
+        var shiftRes = rowsRes * 0.16;
+        var shiftAll = (rowsRes + rowsExam) * 0.16;
+        string In(double n) => n.ToString("0.00", CultureInfo.InvariantCulture) + "in";
+        // every pinned line used width:100% inside left/right margins, so its underline ran past the right margin to the page edge: let it fill only the margin box
+        css += "\n.form-mc .ln { width: auto; }";
+        if (shiftAll > 0 || resLong || examLong)
+        {
+            css += "\n.form-mc .mc-residing, .form-mc .mc-exam { align-items: baseline; }" +
+                   "\n.form-mc .mc-residing .u, .form-mc .mc-exam .u { display: block; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }" +
+                   (resLong ? "\n.form-mc .mc-residing { font-size: 7.5pt; }" : "") +
+                   (examLong ? "\n.form-mc .mc-exam { font-size: 7.5pt; }" : "") +
+                   $"\n.form-mc .mc-exam {{ top: calc(3.42in + {In(shiftRes)}); }}" +
+                   $"\n.form-mc .mc-on {{ top: calc(3.66in + {In(shiftAll)}); }}" +
+                   $"\n.form-mc .mc-diag {{ top: calc(4.17in + {In(shiftAll)}); }}" +
+                   $"\n.form-mc .mc-rec {{ top: calc(5.10in + {In(shiftAll)}); }}" +
+                   $"\n.form-mc .mc-disc {{ top: calc(5.90in + {In(shiftAll)}); }}";
+        }
+        //JJQR - END
 
         var inner =
             LetterheadHtml(opts.Origin) +

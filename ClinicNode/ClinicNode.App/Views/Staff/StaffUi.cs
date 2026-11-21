@@ -20,15 +20,19 @@ public static class StaffUi
 
     public static ScrollView Scroll(View content) => new() { Content = new ContentView { Padding = 24, Content = content } };
 
+    //JJQR - AI (Nov 21, 2026) - one page-header look for every screen: 24 pt title, muted line under it, actions on the right
     public static View Header(string title, string description, params View[] actions)
     {
-        var col = new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text(title, "HeadlineMd"), ClinicTheme.Text(description, "MutedBody") } };
+        var col = new VerticalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { ClinicTheme.Text(title, "HeadlineLg"), ClinicTheme.Text(description, "MutedBody") } };
         if (actions.Length == 0) return col;
-        var row = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
-        foreach (var a in actions) { a.Margin = new Thickness(0, 8, 8, 0); row.Children.Add(a); }
-        col.Children.Add(row);
-        return col;
+        var row = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center };
+        foreach (var a in actions) row.Children.Add(a);
+        var grid = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        grid.Add(col, 0, 0);
+        grid.Add(row, 1, 0);
+        return grid;
     }
+    //JJQR - END
 
     public static Button Btn(string text, Func<Task> onClick, string style = "PrimaryButton")
     {

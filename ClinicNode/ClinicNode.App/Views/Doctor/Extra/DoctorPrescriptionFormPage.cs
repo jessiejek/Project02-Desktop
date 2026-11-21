@@ -615,7 +615,7 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
         private readonly string _originalSnapshot;
         private readonly VerticalStackLayout _list = StaffUi.Column(8);
         private readonly VerticalStackLayout _tabBody = StaffUi.Column(8);
-        private readonly FlexLayout _tabs;
+        private readonly VerticalStackLayout _tabs;
         private readonly Entry _title;
         private readonly Button _save;
         private readonly Label _saveError = StaffUi.Error();

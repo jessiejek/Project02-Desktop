@@ -65,25 +65,24 @@ public sealed class RecordPaymentPage : ContentPage
         var back = StaffUi.Btn("Back", async () => { _done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
         var who = string.IsNullOrWhiteSpace(patientCode) ? patientName : $"{patientName} · {patientCode}";
 
-        Content = new ScrollView
-        {
-            Content = new VerticalStackLayout
+        BackgroundColor = Colors.Transparent;
+        ControlTemplate = null;
+        var body = new VerticalStackLayout
             {
-                Padding = 24, Spacing = 12, MaximumWidthRequest = 480,
+                Spacing = 14,
                 Children =
                 {
-                    ClinicTheme.Text($"Record payment of {StaffRules.Peso(amountDue)}", "HeadlineMd"),
-                    ClinicTheme.Text(who, "BodyMd"),
+                    new Border { Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(14, 10), Content = new VerticalStackLayout { Spacing = 2, Children = { ClinicTheme.Text(who, "LabelMd"), ClinicTheme.Text($"Amount due {StaffRules.Peso(amountDue)}", "HeadlineSm") } } },
                     error,
-                    StaffUi.Field("Method", method),
+                    StaffUi.Field("Method", ClinicPickers.PickerBox(null, method)),
                     StaffUi.Field("Amount received (₱)", amount, $"Collect exactly {StaffRules.Peso(amountDue)} — the amount the doctor set."),
                     StaffUi.Field("Reference number (optional)", reference, receiptHint ? "Shown on the printed receipt." : null),
                     StaffUi.Field("Notes (optional)", notes),
                     orField, //JJQR - AI (21 Nov 2026) - shown only after 409 or_number_duplicate //JJQR - END
-                    StaffUi.Wrap(back, record),
                 }
-            }
-        };
+            };
+        var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, record } };
+        Content = ClinicNode.App.Controls.ClinicModal.Build("Record payment", body, footer, async () => { _done.TrySetResult(null); await Navigation.PopModalAsync(); }, 480);
     }
 
     /// <summary>Returns the amount recorded, or null when the desk backed out.</summary>

@@ -211,7 +211,7 @@ public sealed class NodeSettingsPage : ContentPage, INodeSettingsDialogs
         return new VerticalStackLayout
         {
             Spacing = 4,
-            Children = { ClinicTheme.Text(row.Label, "BodyMd"), printer, new HorizontalStackLayout { Spacing = 8, Children = { paper, dialog } } },
+            Children = { ClinicTheme.Text(row.Label, "BodyMd"), printer, new HorizontalStackLayout { Spacing = 8, Children = { ClinicPickers.PickerBox(null, paper, 150), ClinicPickers.PickerBox(null, dialog, 220) } } },
         };
     }
 
@@ -226,7 +226,7 @@ public sealed class NodeSettingsPage : ContentPage, INodeSettingsDialogs
     {
         var p = new Picker { Title = title, ItemsSource = items.ToList() };
         p.SetBinding(Picker.SelectedItemProperty, new Binding(path, BindingMode.TwoWay));
-        return p;
+        return ClinicPickers.PickerBox(null, p, 260);
     }
 
     View BackupSection()

@@ -165,7 +165,7 @@ public sealed class DoctorTemplateEditorPage : ContentPage
             body = v;
             if (!nameEdited) { setting = true; name.Text = DoctorTemplateRules.PhraseNameFromText(v); setting = false; }
         });
-        p._body.Children.Add(StaffUi.Field("SOAP field", picker));
+        p._body.Children.Add(StaffUi.Field("SOAP field", ClinicPickers.PickerBox(null, picker)));
         p._body.Children.Add(StaffUi.Field("Phrase name", name, "Filled in from the first words of your text. Shown in the “Insert phrase…” list."));
         p._body.Children.Add(StaffUi.Field("Phrase text", text, "Inserted into the note at the cursor, on its own line."));
         p._reason = () => DoctorTemplateRules.ValidatePhrase(label, body);

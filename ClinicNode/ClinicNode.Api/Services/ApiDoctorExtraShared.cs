@@ -21,7 +21,8 @@ internal static class ApiDoctorExtra
     internal sealed record BookingServiceEmbed(ServiceEmbed? Services);
     internal sealed record BookingDto(Guid BookingId, Guid PatientId, Guid DoctorId, DateOnly AppointmentDate, TimeOnly? SlotStartTime, BookingStatus Status,
         string? QueueNumber, decimal? TotalFee, decimal? AmountDue, VisitType? VisitType, DateTimeOffset? CreatedAt,
-        PatientEmbed? Patients, DoctorEmbed? Doctors, PaymentEmbed? Payments, List<BookingServiceEmbed>? BookingServices);
+        PatientEmbed? Patients, DoctorEmbed? Doctors, PaymentEmbed? Payments, List<BookingServiceEmbed>? BookingServices,
+        bool? MedCertRequested = null, string? DiscountCategory = null);
 
     internal sealed record DiagnosisDto(string? Icd10Code, string? CustomDescription);
     internal sealed record FollowUpDto(DateOnly? FollowUpDate, string? Instructions);

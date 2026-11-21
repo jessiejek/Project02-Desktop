@@ -21,6 +21,12 @@ public sealed record ChartRxGroup(Guid GroupId, Guid BookingId, DateTimeOffset C
 public sealed record ChartFile(Guid Id, string Title, DateTimeOffset UploadedAt);
 public sealed record ChartVaccination(Guid Id, string VaccineName, short? DoseNumber, DateOnly? Date, VaccinationStatus Status);
 
+/// <summary>Everything else about one visit that the chart shows when the visit is opened: fee line, lab orders, follow-up and medical certificate.</summary>
+public sealed record ChartVisitExtras(
+    Guid BookingId, string VisitType, string? Discount, decimal? Fee, bool MedCertRequested,
+    IReadOnlyList<string> LabOrders, DateOnly? FollowUpDate, string? FollowUpReason, string? FollowUpInstructions,
+    bool HasCertificate, string? CertificateDiagnosis, DateOnly? CertificateIssued);
+
 public sealed record PatientChart(
     ChartPatient Patient,
     IReadOnlyList<ChartBooking> Bookings,
@@ -30,14 +36,14 @@ public sealed record PatientChart(
     IReadOnlyList<ChartRxGroup> Prescriptions,
     IReadOnlyList<ChartFile> LabResults,
     IReadOnlyList<ChartFile> Documents,
-    IReadOnlyList<ChartVaccination> Vaccinations);
+    IReadOnlyList<ChartVaccination> Vaccinations,
+    IReadOnlyList<ChartVisitExtras>? VisitExtras = null);
 
 public static class ChartTabs
 {
     public static readonly (string Id, string Label)[] All =
     [
-        ("timeline", "Timeline"), ("appointments", "Appointments"), ("consultations", "Consultations"), ("vitals", "Vitals"),
-        ("prescriptions", "Prescriptions"), ("labs", "Lab Results"), ("documents", "Documents"), ("vaccinations", "Vaccinations"),
+        ("timeline", "Visits"), ("labs", "Lab Results"), ("documents", "Documents"), ("vaccinations", "Vaccinations"),
     ];
 }
 
@@ -117,6 +123,21 @@ public sealed class DoctorPatientsService : IDoctorPatientsService
         var docs = await db.PatientDocuments.AsNoTracking().Where(d => d.PatientId == patientId).ToListAsync(ct);
         var vax = await db.PatientVaccinations.AsNoTracking().Where(v => v.PatientId == patientId && v.DeletedAt == null).ToListAsync(ct);
 
+        //JJQR - AI (Nov 21, 2026) - per-visit extras (fee line, lab orders, follow-up, certificate) shown when a visit is opened in the chart
+        var cidToBooking = consults.ToDictionary(c => c.ConsultationId, c => c.BookingId);
+        var labOrders = await db.LabOrders.AsNoTracking().Where(l => l.PatientId == patientId && l.DeletedAt == null).ToListAsync(ct);
+        var followUps = await db.FollowUps.AsNoTracking().Where(f => f.PatientId == patientId).ToListAsync(ct);
+        var certs = await db.MedicalCertificates.AsNoTracking().Where(m => m.PatientId == patientId).ToListAsync(ct);
+        var extras = bookings.Select(b =>
+        {
+            var cid = cidToBooking.FirstOrDefault(kv => kv.Value == b.BookingId).Key;
+            var fu = cid == Guid.Empty ? null : followUps.FirstOrDefault(f => f.ConsultationId == cid);
+            var mc = cid == Guid.Empty ? null : certs.FirstOrDefault(m => m.ConsultationId == cid);
+            return new ChartVisitExtras(b.BookingId, b.VisitType.ToString(), b.DiscountCategory, b.TotalFee, b.MedCertRequested,
+                cid == Guid.Empty ? [] : labOrders.Where(l => l.ConsultationId == cid).Select(l => l.TestName).ToList(),
+                fu?.FollowUpDate, fu?.Reason, fu?.Instructions, mc is not null, mc?.DiagnosisText, mc?.IssueDate);
+        }).ToList();
+        //JJQR - END
         return new PatientChart(
             new ChartPatient(p.PatientId, $"{p.FirstName} {p.LastName}".Trim(), p.PatientCode, p.Sex, p.DateOfBirth, DoctorExtraRules.AgeOn(p.DateOfBirth, today), p.ContactNumber),
             chartBookings, chartConsults,
@@ -124,7 +145,8 @@ public sealed class DoctorPatientsService : IDoctorPatientsService
             visits, rx,
             labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt)).ToList(),
             docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName : d.Title!, d.UploadedAt)).ToList(),
-            vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName, v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList());
+            vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName, v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList(),
+            extras);
     }
 }
 //JJQR - END

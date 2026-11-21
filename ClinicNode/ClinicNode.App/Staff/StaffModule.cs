@@ -36,6 +36,7 @@ public static class StaffModule
         services.AddOnlineFirst<IStaffBookingService, ApiStaffBookingService, StaffBookingService>();            // booking detail
         services.AddOnlineFirst<IDoctorStatusService, ApiStaffDoctorStatusService, DoctorStatusService>();       // doctor status
         services.AddOnlineFirst<IStaffAnnouncementsService, ApiStaffAnnouncementsService, StaffAnnouncementsService>(); // announcements
+        services.AddOnlineFirst<ClinicNode.Core.Practice.IGlobalSearchService, ApiGlobalSearchService, ClinicNode.Core.Practice.GlobalSearchService>(); // top-bar search
 
         // profile: same router, kept inside the existing SessionRefreshingStaffProfileService so a name change still refreshes the signed-in session.
         services.TryAddSingleton<StaffProfileService>(sp => ActivatorUtilities.CreateInstance<StaffProfileService>(sp));

@@ -46,6 +46,16 @@ public partial class App : Application
         //JJQR - AI (Nov 21, 2026) - desktop window: a sensible first size and a minimum so the three-column workspace never gets squeezed
         window.Width = 1360; window.Height = 860; window.MinimumWidth = 1100; window.MinimumHeight = 700;
         //JJQR - END
+#if MACCATALYST
+        var zoomed = false;
+        window.Activated += async (_, _) =>
+        {
+            if (zoomed) return;
+            zoomed = true;
+            await Task.Delay(400);
+            MainThread.BeginInvokeOnMainThread(ClinicNode.App.Platforms.MacCatalyst.WindowZoom.ZoomFirstWindow);
+        };
+#endif
         window.Created += async (_, _) =>
         {
             try

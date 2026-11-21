@@ -3,6 +3,7 @@
 // the Prescriptions tab shows "New Prescription" and per-group Edit / Copy / Delete ("Delete Prescription?"); every group has Print (the web "Print Preview"
 // modal, then Print). "Print patient card" in the header prints GET /api/patients/{id}/card (no clinical notes). Data is online-first.
 //JJQR - END
+using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.App.Controls;
 using ClinicNode.App.Services;
 using ClinicNode.App.Views.Staff;
@@ -27,7 +28,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     //JJQR - END
     //JJQR - AI (21 Nov 2026)
     private readonly Label _tabError = StaffUi.Error();
-    private FlexLayout? _tabs;
+    private VerticalStackLayout? _tabs;
 
     /// <summary>Web ?bookingId=: the visit the doctor is working on. Enables New / Edit / Copy / Delete on the Prescriptions tab.</summary>
     public Guid? ReferredBookingId { get; init; }
@@ -37,6 +38,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     {
         var sp = from.Handler?.MauiContext?.Services ?? StaffUi.Services;
         var page = new DoctorPatientChartPage(sp, patientId) { ReferredBookingId = bookingId };
+        if (tab is "appointments" or "consultations" or "vitals" or "prescriptions") tab = "timeline"; //JJQR - AI (Nov 21, 2026) - Appointments and Timeline were the same list: one "Visits" tab now //JJQR - END
         if (tab is not null && ChartTabs.All.Any(t => t.Id == tab)) page.Select(tab);
         return from.Navigation.PushAsync(page);
     }
@@ -46,18 +48,16 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     {
         _patientId = patientId;
         //JJQR - AI (21 Nov 2026) - tab strip kept so Select() can re-render it; tab-level error line for prescription actions
-        _tabs = DoctorExtraUi.Tabs(ChartTabs.All, () => _selected, id => { _selected = id; RenderTab(); });
+        _tabs = DoctorExtraUi.Tabs(LabelledTabs(), () => _selected, id => { _selected = id; RenderTab(); });
+        //JJQR - AI (Nov 21, 2026) - clinical record layout: patient summary rail on the left (identity, latest vitals, diagnoses, medicines), tabs + content on the right
+        var main = new VerticalStackLayout { Spacing = 12, Children = { _tabs, _tabError, _tab } };
+        var split = new Grid { ColumnSpacing = 20, ColumnDefinitions = { new ColumnDefinition(300), new ColumnDefinition(GridLength.Star) } };
+        split.Add(_header, 0, 0);
+        split.Add(main, 1, 0);
         Content = StaffUi.Scroll(new VerticalStackLayout
         {
             Spacing = 16,
-            Children =
-            {
-                StaffUi.Link("← Back to Patients", () => Navigation.PopAsync()),
-                LoadError, _header,
-                _tabs,
-                _tabError,
-                StaffUi.Card(_tab),
-            },
+            Children = { StaffUi.Link("← Back to Patients", () => Navigation.PopAsync()), LoadError, split },
         });
         //JJQR - END
     }
@@ -67,10 +67,333 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     {
         _selected = tab;
         if (_tabs is null) return;
-        var fresh = DoctorExtraUi.Tabs(ChartTabs.All, () => _selected, id => { _selected = id; RenderTab(); });
+        RefreshTabs();
+    }
+
+    //JJQR - AI (Nov 21, 2026) - tab labels carry the record counts ("Prescriptions 3") so the doctor sees what is on file before opening a tab
+    private (string Id, string Label)[] LabelledTabs()
+    {
+        int N(string id) => _chart is not { } c ? 0 : id switch
+        {
+            "timeline" => c.Bookings.Count, "labs" => c.LabResults.Count, "documents" => c.Documents.Count, "vaccinations" => c.Vaccinations.Count, _ => 0,
+        };
+        return ChartTabs.All.Select(t => (t.Id, N(t.Id) > 0 ? $"{t.Label}  {N(t.Id)}" : t.Label)).ToArray();
+    }
+
+    private void RefreshTabs()
+    {
+        var fresh = DoctorExtraUi.Tabs(LabelledTabs(), () => _selected, id => { _selected = id; RenderTab(); });
         _tabs.Children.Clear();
         foreach (var child in fresh.Children.ToList()) { fresh.Children.Remove(child); _tabs.Children.Add(child); }
     }
+
+    //JJQR - AI (Nov 21, 2026) - medicine names: ALL CAPS -> readable case, keeping units (mg, ml) and acronyms (ORS) right
+    internal static string NiceMedicine(string name)
+    {
+        if (name != name.ToUpperInvariant()) return name;
+        var t = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+        t = System.Text.RegularExpressions.Regex.Replace(t, @"(?<=\d)(Mg|Ml|Mcg|G|Iu)\b", m => m.Value.ToLowerInvariant());
+        return t.Replace("(Ors)", "(ORS)").Replace(" Tab", " tab").Replace(" Cap", " cap");
+    }
+    //JJQR - END
+
+    private View Rail(PatientChart c)
+    {
+        var p = c.Patient;
+        View Panel(string title, View body) => new Border
+        {
+            Style = ClinicTheme.Style("Card"), Padding = new Thickness(16, 14),
+            Content = new VerticalStackLayout { Spacing = 10, Children = { new Label { Text = title.ToUpperInvariant(), Style = ClinicTheme.Style("TableHeader") }, body } },
+        };
+        View Line(string left, string right) { var g = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+            g.Add(new Label { Text = left, Style = ClinicTheme.Style("BodyMd"), LineBreakMode = LineBreakMode.WordWrap }, 0, 0);
+            g.Add(new Label { Text = right, Style = ClinicTheme.Style("LabelMd"), HorizontalOptions = LayoutOptions.End, VerticalOptions = LayoutOptions.Start }, 1, 0); return g; }
+
+        // identity
+        var avatar = new Border
+        {
+            WidthRequest = 64, HeightRequest = 64, StrokeThickness = 0, HorizontalOptions = LayoutOptions.Start,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 32 }, BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.12f),
+            Content = new Label { Text = DoctorPatientCardRules.Initials(p.FullName), FontSize = 20, FontAttributes = FontAttributes.Bold, TextColor = ClinicTheme.Color("Primary"), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+        };
+        var identity = new VerticalStackLayout { Spacing = 4 };
+        identity.Children.Add(avatar);
+        identity.Children.Add(new Label { Text = p.FullName, Style = ClinicTheme.Style("HeadlineMd"), Margin = new Thickness(0, 6, 0, 0) });
+        identity.Children.Add(new Label { Text = p.PatientCode, Style = ClinicTheme.Style("MutedSm"), FontFamily = "Courier New" });
+        identity.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.5f), Margin = new Thickness(0, 8) });
+        identity.Children.Add(Line("Sex", p.Sex.ToString()));
+        identity.Children.Add(Line("Age", $"{p.Age} years"));
+        identity.Children.Add(Line("Born", Iso(p.DateOfBirth)));
+        if (!string.IsNullOrWhiteSpace(p.ContactNumber)) identity.Children.Add(Line("Phone", p.ContactNumber!));
+        if (c.Bookings.Count > 0) identity.Children.Add(Line("Last visit", Iso(c.Bookings.Max(b => b.AppointmentDate))));
+        identity.Children.Add(Line("Visits with you", c.Bookings.Count.ToString()));
+        var print = StaffUi.Btn("Print patient card", () => PrintActions.RunAsync(this, async () =>
+        {
+            var card = await Svc<IDoctorPrintDataService>().GetPatientCardAsync(_patientId)
+                ?? throw new InvalidOperationException("The patient card could not be loaded.");
+            return PatientCardDocument.Build(card);
+        }), "SecondaryButton");
+        print.HorizontalOptions = LayoutOptions.Fill;
+        identity.Children.Add(new BoxView { HeightRequest = 1, Color = Colors.Transparent });
+        identity.Children.Add(print);
+        var rail = new VerticalStackLayout { Spacing = 12, Children = { new Border { Style = ClinicTheme.Style("Card"), Padding = new Thickness(16, 16), Content = identity } } };
+
+        // latest record: a highlighted box so the most recent visit stands out from the history below it
+        //JJQR - AI (Nov 21, 2026) - "latest" = newest booking that has vitals; several visits on one day are ordered by queue number
+        static int Seq(string? q) => int.TryParse(new string((q ?? "").Where(char.IsDigit).ToArray()), out var n) ? n : 0;
+        var last = c.Bookings.OrderByDescending(b => b.AppointmentDate).ThenByDescending(b => Seq(b.QueueNumber))
+            .Select(b => c.VitalVisits.FirstOrDefault(v => v.BookingId == b.BookingId)).FirstOrDefault(v => v is not null)
+            ?? c.VitalVisits.OrderByDescending(v => v.Date).FirstOrDefault();
+        //JJQR - END
+        if (last is not null)
+        {
+            var tiles = new Grid { ColumnSpacing = 8, RowSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+            var n = 0;
+            foreach (var t in c.VitalTemplates.Where(t => t.IsDefault))
+            {
+                if (!last.Values.TryGetValue(t.TemplateId, out var val) || string.IsNullOrWhiteSpace(val)) continue;
+                var value = new FormattedString();
+                value.Spans.Add(new Span { Text = val, FontSize = 16, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurface") });
+                if (!string.IsNullOrWhiteSpace(t.Unit)) value.Spans.Add(new Span { Text = " " + t.Unit, FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant") });
+                var tile = new Border
+                {
+                    BackgroundColor = Colors.White, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, Padding = new Thickness(10, 7),
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+                    Content = new VerticalStackLayout { Spacing = 1, Children = { new Label { Text = t.Description[..1] + t.Description[1..].ToLowerInvariant(), FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant") }, new Label { FormattedText = value } } },
+                };
+                if (n % 2 == 0) tiles.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                tiles.Add(tile, n % 2, n / 2);
+                n++;
+            }
+            if (n > 0)
+            {
+                var consult = c.Consultations.FirstOrDefault(x => x.BookingId == last.BookingId);
+                var booking = c.Bookings.FirstOrDefault(x => x.BookingId == last.BookingId);
+                var head = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+                head.Add(new Label { Text = "LATEST RECORD", FontSize = 11, FontAttributes = FontAttributes.Bold, CharacterSpacing = 1, TextColor = ClinicTheme.Color("Primary"), VerticalOptions = LayoutOptions.Center }, 0, 0);
+                head.Add(new Border { BackgroundColor = ClinicTheme.Color("Primary"), StrokeThickness = 0, Padding = new Thickness(8, 3), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+                    Content = new Label { Text = Iso(last.Date), FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Colors.White } }, 1, 0);
+                var box = new VerticalStackLayout { Spacing = 10, Children = { head } };
+                var what = !string.IsNullOrWhiteSpace(consult?.ChiefComplaint) ? consult!.ChiefComplaint! : "Consultation";
+                var sub = string.Join(" · ", new[] { booking?.QueueNumber, consult is { Diagnoses.Count: > 0 } ? string.Join(", ", consult.Diagnoses) : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                box.Children.Add(new VerticalStackLayout { Spacing = 1, Children = { new Label { Text = what, Style = ClinicTheme.Style("LabelLg") }, new Label { Text = sub, Style = ClinicTheme.Style("MutedSm"), IsVisible = sub.Length > 0 } } });
+                box.Children.Add(new Label { Text = "VITALS", Style = ClinicTheme.Style("TableHeader"), Margin = new Thickness(0, 4, 0, -4) });
+                box.Children.Add(tiles);
+                // diagnosis + medicines of THIS visit
+                if (consult is { Diagnoses.Count: > 0 })
+                {
+                    box.Children.Add(new Label { Text = "DIAGNOSIS", Style = ClinicTheme.Style("TableHeader"), Margin = new Thickness(0, 4, 0, -4) });
+                    var dxPills = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
+                    foreach (var d in consult.Diagnoses)
+                        dxPills.Children.Add(new Border { BackgroundColor = Colors.White, Stroke = ClinicTheme.Color("Primary").WithAlpha(0.5f), StrokeThickness = 1, Padding = new Thickness(10, 5), Margin = new Thickness(0, 0, 6, 6),
+                            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 }, Content = new Label { Text = d, FontSize = 12, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("Primary"), LineBreakMode = LineBreakMode.WordWrap } });
+                    box.Children.Add(dxPills);
+                }
+                var visitRx = c.Prescriptions.Where(g => g.BookingId == last.BookingId).SelectMany(g => g.Lines).ToList();
+                if (visitRx.Count > 0)
+                {
+                    box.Children.Add(new Label { Text = "PRESCRIBED", Style = ClinicTheme.Style("TableHeader"), Margin = new Thickness(0, 4, 0, -4) });
+                    foreach (var l in visitRx)
+                        box.Children.Add(new Border { BackgroundColor = Colors.White, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, Padding = new Thickness(10, 7),
+                            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+                            Content = new VerticalStackLayout { Spacing = 1, Children = { new Label { Text = NiceMedicine(l.GenericName), FontSize = 13, FontFamily = ClinicTheme.FontSemiBold, LineBreakMode = LineBreakMode.WordWrap },
+                                new Label { Text = string.Join(" · ", new[] { l.Dosage, l.Quantity }.Where(x => !string.IsNullOrWhiteSpace(x))), FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant") },
+                                new Label { Text = l.Instruction ?? "", FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant"), IsVisible = !string.IsNullOrWhiteSpace(l.Instruction), LineBreakMode = LineBreakMode.WordWrap } } } });
+                }
+                rail.Children.Add(new Border
+                {
+                    BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.07f), Stroke = ClinicTheme.Color("Primary"), StrokeThickness = 1.5, Padding = new Thickness(14),
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 }, Content = box,
+                });
+            }
+        }
+        //JJQR - AI (Nov 21, 2026) - the old "all diagnoses / all medicines" history panels were removed: they only repeated the Consultations and Prescriptions tabs
+        return rail;
+    }
+
+    //JJQR - AI (Nov 21, 2026) - ONE Visits list. A visit opens to show everything about it: notes, vitals, prescriptions, lab orders, follow-up, certificate and fee
+    // (this replaces the separate Timeline / Appointments / Consultations / Vitals / Prescriptions tabs).
+    internal static int Seq(string? q) => int.TryParse(new string((q ?? "").Where(char.IsDigit).ToArray()), out var n) ? n : 0;
+
+    private static View Block(string title, View body) =>
+        new VerticalStackLayout { Spacing = 6, Children = { new Label { Text = title.ToUpperInvariant(), Style = ClinicTheme.Style("TableHeader") }, body } };
+
+    private static View NoneText(string text) => new Label { Text = text, Style = ClinicTheme.Style("MutedSm") };
+
+    private static View MiniBox(View content) => new Border
+    {
+        BackgroundColor = Colors.White, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, Padding = new Thickness(10, 7),
+        StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 }, Content = content,
+    };
+
+    private void RenderVisits(PatientChart c)
+    {
+        if (c.Bookings.Count == 0) { Empty("No visits with you yet."); return; }
+        if (ReferredBookingId is { } vb)
+        {
+            var bar = new HorizontalStackLayout { Spacing = 8 };
+            bar.Children.Add(StaffUi.Btn("New Prescription", () => OpenEditorAsync(vb, null, null)));
+            bar.Children.Add(StaffUi.Btn("Add Vitals", () => DoctorExtraUi.OpenConsultAsync(vb), "SecondaryButton"));
+            _tab.Children.Add(bar);
+        }
+        var defaults = c.VitalTemplates.Where(t => t.IsDefault).ToList();
+        foreach (var b in c.Bookings.OrderByDescending(x => x.AppointmentDate).ThenByDescending(x => Seq(x.QueueNumber)))
+        {
+            var consult = c.Consultations.FirstOrDefault(x => x.BookingId == b.BookingId);
+            var ex = c.VisitExtras?.FirstOrDefault(e => e.BookingId == b.BookingId);
+            var vit = c.VitalVisits.FirstOrDefault(v => v.BookingId == b.BookingId);
+            var rx = c.Prescriptions.Where(g => g.BookingId == b.BookingId).ToList();
+            var open = _expandedConsult == b.BookingId;
+            var bookingId = b.BookingId;
+
+            // ----- header row
+            var title = !string.IsNullOrWhiteSpace(consult?.ChiefComplaint) ? consult!.ChiefComplaint! : b.ServiceNames.Count == 0 ? "Consultation" : string.Join(", ", b.ServiceNames);
+            var tags = new List<string>();
+            if (rx.Count > 0) tags.Add($"Rx {rx.Sum(g => g.Lines.Count)}");
+            if (ex is { LabOrders.Count: > 0 }) tags.Add($"Labs {ex.LabOrders.Count}");
+            if (ex?.FollowUpDate is { } fd) tags.Add("Follow-up " + Iso(fd));
+            if (ex is { HasCertificate: true }) tags.Add("Med cert issued"); else if (ex is { MedCertRequested: true }) tags.Add("Med cert requested");
+            var what = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center, Children = { new Label { Text = title, Style = ClinicTheme.Style("LabelLg") } } };
+            if (consult is { Diagnoses.Count: > 0 }) what.Children.Add(new Label { Text = string.Join(" · ", consult.Diagnoses), Style = ClinicTheme.Style("MutedSm") });
+            if (tags.Count > 0)
+            {
+                var chips = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
+                foreach (var t in tags)
+                    chips.Children.Add(new Border { Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(7, 2), Margin = new Thickness(0, 2, 6, 0), Content = new Label { Text = t, Style = ClinicTheme.Style("PillLabelInfo") } });
+                what.Children.Add(chips);
+            }
+            var head = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(105), new ColumnDefinition(64), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(96) } };
+            head.Add(new Label { Text = Iso(b.AppointmentDate), Style = ClinicTheme.Style("LabelMd"), VerticalOptions = LayoutOptions.Center }, 0, 0);
+            head.Add(new Label { Text = b.QueueNumber ?? "—", Style = ClinicTheme.Style("MutedSm"), FontFamily = "Courier New", VerticalOptions = LayoutOptions.Center }, 1, 0);
+            head.Add(what, 2, 0);
+            head.Add(new HorizontalStackLayout { VerticalOptions = LayoutOptions.Center, Children = { ClinicTheme.MakeStatusPill(b.Status.ToString()) } }, 3, 0);
+            head.Add(new Label { Text = open ? "Hide ▴" : "Details ▾", FontSize = 13, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("Primary"), HorizontalOptions = LayoutOptions.End, VerticalOptions = LayoutOptions.Center }, 4, 0);
+            var col = new VerticalStackLayout { Spacing = 12, Children = { head } };
+
+            if (open)
+            {
+                col.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.5f) });
+                // ----- left column: notes + vitals
+                var left = new VerticalStackLayout { Spacing = 16 };
+                var hasSoap = consult is not null && new[] { consult.Subjective, consult.Objective, consult.Assessment, consult.Plan }.Any(f => !string.IsNullOrWhiteSpace(f));
+                if (hasSoap)
+                {
+                    var soap = new VerticalStackLayout { Spacing = 8 };
+                    foreach (var (label, value) in new[] { ("Subjective", consult!.Subjective), ("Objective", consult.Objective), ("Assessment", consult.Assessment), ("Plan", consult.Plan) })
+                        soap.Children.Add(new VerticalStackLayout { Spacing = 1, Children = { new Label { Text = label, Style = ClinicTheme.Style("LabelMd"), TextColor = ClinicTheme.Color("Primary") }, ClinicTheme.Text(string.IsNullOrWhiteSpace(value) ? "Not recorded." : value!, "BodyMd") } });
+                    left.Children.Add(Block("Notes", soap));
+                }
+                else left.Children.Add(Block("Notes", NoneText("No notes recorded for this visit.")));
+                if (vit is not null)
+                {
+                    var tiles = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
+                    foreach (var t in defaults)
+                    {
+                        if (!vit.Values.TryGetValue(t.TemplateId, out var val) || string.IsNullOrWhiteSpace(val)) continue;
+                        var fs = new FormattedString();
+                        fs.Spans.Add(new Span { Text = val, FontSize = 15, FontFamily = ClinicTheme.FontSemiBold });
+                        if (!string.IsNullOrWhiteSpace(t.Unit)) fs.Spans.Add(new Span { Text = " " + t.Unit, FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant") });
+                        var tile = MiniBox(new VerticalStackLayout { Spacing = 1, Children = { new Label { Text = t.Description[..1] + t.Description[1..].ToLowerInvariant(), FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant"), LineBreakMode = LineBreakMode.NoWrap }, new Label { FormattedText = fs, LineBreakMode = LineBreakMode.NoWrap } } });
+                        tile.Margin = new Thickness(0, 0, 8, 8);
+                        FlexLayout.SetShrink(tile, 0);
+                        tiles.Children.Add(tile);
+                    }
+                    left.Children.Add(Block("Vitals", tiles));
+                }
+                else left.Children.Add(Block("Vitals", NoneText("No vitals recorded.")));
+
+                // ----- right column: prescriptions, labs, follow-up, certificate, fee
+                var right = new VerticalStackLayout { Spacing = 16 };
+                if (rx.Count > 0)
+                {
+                    var list = new VerticalStackLayout { Spacing = 8 };
+                    foreach (var g in rx)
+                    {
+                        var group = g;
+                        foreach (var l in g.Lines)
+                            list.Children.Add(MiniBox(new VerticalStackLayout { Spacing = 1, Children =
+                            {
+                                new Label { Text = NiceMedicine(l.GenericName), FontSize = 13, FontFamily = ClinicTheme.FontSemiBold, LineBreakMode = LineBreakMode.WordWrap },
+                                new Label { Text = string.Join(" · ", new[] { l.Dosage, l.Quantity }.Where(x => !string.IsNullOrWhiteSpace(x))), FontSize = 11, TextColor = ClinicTheme.Color("OnSurfaceVariant") },
+                                new Label { Text = l.Instruction ?? "", FontSize = 12, IsVisible = !string.IsNullOrWhiteSpace(l.Instruction), LineBreakMode = LineBreakMode.WordWrap },
+                            } }));
+                        var actions = new HorizontalStackLayout { Spacing = 8 };
+                        actions.Children.Add(StaffUi.Btn("Print prescription", () => PrintPreviewAsync(c.Patient.FullName, group), "SecondaryButton"));
+                        if (ReferredBookingId is { } copyTo)
+                        {
+                            actions.Children.Add(StaffUi.Btn("Edit", () => OpenEditorAsync(group.BookingId, group.GroupId, null), "GhostButton"));
+                            actions.Children.Add(StaffUi.Btn("Copy", () => OpenEditorAsync(copyTo, null, group.GroupId), "GhostButton"));
+                            actions.Children.Add(StaffUi.DangerGhost("Delete", () => DeleteGroupAsync(group.GroupId)));
+                        }
+                        list.Children.Add(actions);
+                    }
+                    right.Children.Add(Block("Prescription", list));
+                }
+                else right.Children.Add(Block("Prescription", NoneText("None prescribed.")));
+
+                if (ex is { LabOrders.Count: > 0 })
+                {
+                    var labs = new VerticalStackLayout { Spacing = 3 };
+                    foreach (var n in ex.LabOrders) labs.Children.Add(ClinicTheme.Text("• " + n, "BodyMd"));
+                    right.Children.Add(Block("Lab orders", labs));
+                }
+                else right.Children.Add(Block("Lab orders", NoneText("None ordered.")));
+
+                if (ex?.FollowUpDate is { } fdate)
+                {
+                    var f = new VerticalStackLayout { Spacing = 2, Children = { ClinicTheme.Text(Iso(fdate), "LabelLg") } };
+                    if (!string.IsNullOrWhiteSpace(ex.FollowUpReason)) f.Children.Add(ClinicTheme.Text(ex.FollowUpReason!, "BodyMd"));
+                    if (!string.IsNullOrWhiteSpace(ex.FollowUpInstructions)) f.Children.Add(ClinicTheme.Text(ex.FollowUpInstructions!, "MutedSm"));
+                    right.Children.Add(Block("Follow-up", f));
+                }
+                else right.Children.Add(Block("Follow-up", NoneText("No follow-up scheduled.")));
+
+                if (ex is { HasCertificate: true })
+                    right.Children.Add(Block("Medical certificate", new VerticalStackLayout { Spacing = 2, Children =
+                        { ClinicTheme.Text("Issued" + (ex.CertificateIssued is { } ci ? " " + Iso(ci) : ""), "LabelLg"), ClinicTheme.Text(ex.CertificateDiagnosis ?? "", "MutedSm") } }));
+                else if (ex is { MedCertRequested: true }) right.Children.Add(Block("Medical certificate", NoneText("Requested by the patient. Not issued yet.")));
+                else right.Children.Add(Block("Medical certificate", NoneText("Not requested.")));
+
+                if (ex is not null)
+                {
+                    var fee = $"{(ex.VisitType == "FollowUp" ? "Follow-up visit" : "New visit")}{(string.IsNullOrWhiteSpace(ex.Discount) ? "" : " · " + ex.Discount + " discount")}{(ex.Fee is { } f2 ? " · " + ClinicNode.Core.FeeCalculator.FormatPeso(f2) : "")}";
+                    right.Children.Add(Block("Visit & fee", ClinicTheme.Text(fee, "BodyMd")));
+                }
+
+                var body = new Grid { ColumnSpacing = 28, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+                body.Add(left, 0, 0); body.Add(right, 1, 0);
+                col.Children.Add(body);
+            }
+            var card = StaffUi.Row(col);
+            card.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { _expandedConsult = open ? null : bookingId; RenderTab(); }) });
+            _tab.Children.Add(card);
+        }
+    }
+    //JJQR - END
+
+    private static View Snapshot(PatientChart c)
+    {
+        View Tile(string value, string label, bool emphasise = false)
+        {
+            var v = new Label { Text = value, FontSize = 22, FontFamily = ClinicTheme.FontSemiBold, TextColor = emphasise ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OnSurface") };
+            var l = new Label { Text = label, FontSize = 12, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
+            return new Border { Style = ClinicTheme.Style("Card"), Padding = new Thickness(16, 12), Content = new VerticalStackLayout { Spacing = 2, Children = { v, l } } };
+        }
+        var last = c.Bookings.Count == 0 ? "—" : Iso(c.Bookings.Max(b => b.AppointmentDate));
+        var tiles = new (string, string, bool)[]
+        {
+            (c.Bookings.Count.ToString(), "Visits with you", false), (last, "Last visit", true), (c.Consultations.Count.ToString(), "Consultations", false),
+            (c.Prescriptions.Count.ToString(), "Prescriptions", false), (c.Vaccinations.Count.ToString(), "Vaccinations", false),
+        };
+        var g = new Grid { ColumnSpacing = 12 };
+        for (var i = 0; i < tiles.Length; i++)
+        {
+            g.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            g.Add(Tile(tiles[i].Item1, tiles[i].Item2, tiles[i].Item3), i, 0);
+        }
+        return g;
+    }
+    //JJQR - END
     //JJQR - END
 
     protected override async Task LoadAsync()
@@ -95,20 +418,16 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         var p = _chart.Patient;
         //JJQR - AI (21 Nov 2026) - header card = web layout (initials avatar, name + code, sex · age · Born ISO, phone chip) via Extra2/DoctorPatientHeaderCard; the "Print patient card" button
         // (GET /api/patients/{id}/card; identity, blood type, allergies, emergency contact only) stays under it.
-        _header.Children.Add(Views.Doctor.Extra2.DoctorPatientHeaderCard.Build(p,
-            StaffUi.Wrap(DoctorExtraUi.Spaced(StaffUi.Btn("Print patient card", () => PrintActions.RunAsync(this, async () =>
-            {
-                var card = await Svc<IDoctorPrintDataService>().GetPatientCardAsync(_patientId)
-                    ?? throw new InvalidOperationException("The patient card could not be loaded.");
-                return PatientCardDocument.Build(card);
-            }), "SecondaryButton")))));
+        _header.Children.Add(Rail(_chart));
+        _expandedConsult ??= _chart.Bookings.OrderByDescending(x => x.AppointmentDate).ThenByDescending(x => Seq(x.QueueNumber)).Select(x => (Guid?)x.BookingId).FirstOrDefault();
+        RefreshTabs();
         //JJQR - END
         RenderTab();
     }
 
     private IEnumerable<T> Sorted<T, TKey>(IEnumerable<T> items, Func<T, TKey> key, bool newest = true) => newest ? items.OrderByDescending(key) : items.OrderBy(key);
 
-    private void Empty(string text) => _tab.Children.Add(ClinicTheme.Text(text, "MutedBody"));
+    private void Empty(string text) => _tab.Children.Add(StaffUi.Card(ClinicTheme.Text(text, "MutedBody")));
 
     //JJQR - AI (21 Nov 2026) - helpers for the web tables (Appointments, Vitals, Vaccinations) and the sort select
     private static string Iso(DateOnly d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
@@ -133,7 +452,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     {
         var picker = new Picker { ItemsSource = new[] { "Newest first", "Oldest first" }, SelectedIndex = newest ? 0 : 1, WidthRequest = 160 };
         picker.SelectedIndexChanged += (_, _) => { set(picker.SelectedIndex != 1); RenderTab(); };
-        return picker;
+        return ClinicPickers.PickerBox(null, picker, 170);
     }
     //JJQR - END
 
@@ -144,143 +463,8 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         if (_chart is not { } c) return;
         switch (_selected)
         {
-            //JJQR - AI (21 Nov 2026) - web Timeline: the patient's bookings only (service names or "Consultation", date, status pill), in the order the chart returns them
             case "timeline":
-                if (c.Bookings.Count == 0) { Empty("No appointments with you yet."); break; }
-                foreach (var b in c.Bookings)
-                    _tab.Children.Add(StaffUi.Row(
-                        ClinicTheme.Text(b.ServiceNames.Count == 0 ? "Consultation" : string.Join(", ", b.ServiceNames), "BodyMd"),
-                        ClinicTheme.Text(Iso(b.AppointmentDate), "MutedSm"),
-                        StaffUi.Wrap(ClinicTheme.MakeStatusPill(b.Status.ToString()))));
-                break;
-            // web Appointments: a table Date | Service | Status | Queue # ("—" when empty); no row actions
-            case "appointments":
-                if (c.Bookings.Count == 0) { Empty("No appointments with you yet."); break; }
-                _tab.Children.Add(Table(["Date", "Service", "Status", "Queue #"],
-                    c.Bookings.Select(b => new View[]
-                    {
-                        Cell(Iso(b.AppointmentDate)),
-                        Cell(b.ServiceNames.Count == 0 ? "—" : string.Join(", ", b.ServiceNames)),
-                        StaffUi.Wrap(ClinicTheme.MakeStatusPill(b.Status.ToString())),
-                        Cell(b.QueueNumber ?? "—"),
-                    }).ToList()));
-                break;
-            // web Consultations: one-line header (chief complaint or "Consultation" + date), diagnosis chips, tap to expand the SOAP notes
-            case "consultations":
-                if (c.Consultations.Count == 0) { Empty("No consultations recorded yet."); break; }
-                foreach (var x in c.Consultations)
-                {
-                    var id = x.ConsultationId;
-                    var expanded = _expandedConsult == id;
-                    var col = StaffUi.Column(6);
-                    var head = StaffUi.Wrap(
-                        DoctorExtraUi.Spaced(ClinicTheme.Text((expanded ? "▾ " : "▸ ") + (string.IsNullOrWhiteSpace(x.ChiefComplaint) ? "Consultation" : x.ChiefComplaint), "LabelLg"), 12, 0),
-                        ClinicTheme.Text(Iso(x.AppointmentDate), "MutedSm"));
-                    head.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { _expandedConsult = expanded ? null : id; RenderTab(); }) });
-                    col.Children.Add(head);
-                    if (x.Diagnoses.Count > 0)
-                    {
-                        var chips = StaffUi.Wrap();
-                        foreach (var d in x.Diagnoses) chips.Children.Add(DoctorExtraUi.Spaced(ClinicTheme.Text(d, "MutedSm"), 8, 4));
-                        col.Children.Add(chips);
-                    }
-                    if (expanded)
-                    {
-                        var hasSoap = new[] { x.Subjective, x.Objective, x.Assessment, x.Plan }.Any(f => !string.IsNullOrWhiteSpace(f));
-                        if (!hasSoap) col.Children.Add(ClinicTheme.Text("No SOAP notes recorded for this visit.", "MutedBody"));
-                        else
-                            foreach (var (label, value) in new[] { ("Subjective", x.Subjective), ("Objective", x.Objective), ("Assessment", x.Assessment), ("Plan", x.Plan) })
-                                col.Children.Add(ClinicTheme.Text($"{label}: {(string.IsNullOrWhiteSpace(value) ? "Not recorded." : value)}", "BodyMd"));
-                    }
-                    _tab.Children.Add(StaffUi.Row(col));
-                }
-                break;
-            // web Vitals: List / Table toggle, Newest/Oldest select (only when there are readings), "Add Vitals" when the chart was opened for a booking;
-            // only the default vital fields are shown, "—" for a missing reading
-            case "vitals":
-            {
-                var bar = StaffUi.Wrap(
-                    DoctorExtraUi.Chip("List view", !_vitalsTable, () => { _vitalsTable = false; RenderTab(); }),
-                    DoctorExtraUi.Chip("Table view", _vitalsTable, () => { _vitalsTable = true; RenderTab(); }));
-                if (c.VitalVisits.Count > 0) bar.Children.Add(DoctorExtraUi.Spaced(SortSelect(_vitalsNewest, v => _vitalsNewest = v)));
-                if (ReferredBookingId is { } vb) bar.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Add Vitals", () => DoctorExtraUi.OpenConsultAsync(vb))));
-                _tab.Children.Add(bar);
-                if (c.VitalVisits.Count == 0) { Empty("No vital signs recorded yet."); break; }
-                var defaults = c.VitalTemplates.Where(t => t.IsDefault).ToList();
-                var visits = Sorted(c.VitalVisits, v => v.Date, _vitalsNewest).ToList();
-                string Reading(ChartVitalVisit v, ChartVitalTemplate t) =>
-                    v.Values.TryGetValue(t.TemplateId, out var val) && !string.IsNullOrWhiteSpace(val) ? val + (string.IsNullOrWhiteSpace(t.Unit) ? "" : " " + t.Unit) : "—";
-                if (!_vitalsTable)
-                    foreach (var v in visits)
-                    {
-                        var col = StaffUi.Column(6);
-                        col.Children.Add(ClinicTheme.Text(Iso(v.Date), "LabelMd"));
-                        var grid = StaffUi.Wrap();
-                        foreach (var t in defaults)
-                        {
-                            var one = StaffUi.Column(0);
-                            one.Children.Add(ClinicTheme.Text(t.Description, "MutedSm"));
-                            one.Children.Add(ClinicTheme.Text(Reading(v, t), "BodyMd"));
-                            one.Margin = new Thickness(0, 0, 20, 6);
-                            grid.Children.Add(one);
-                        }
-                        col.Children.Add(grid);
-                        var card = StaffUi.Row(col);
-                        var bookingId = v.BookingId;
-                        card.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await DoctorExtraUi.OpenConsultAsync(bookingId)) });
-                        _tab.Children.Add(card);
-                    }
-                else
-                {
-                    var g = new Grid { ColumnSpacing = 16, RowSpacing = 8 };
-                    g.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-                    foreach (var _ in visits) g.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-                    g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-                    g.Add(ClinicTheme.Text("Vital", "LabelMd"), 0, 0);
-                    for (var i = 0; i < visits.Count; i++) g.Add(ClinicTheme.Text(Iso(visits[i].Date), "LabelMd"), i + 1, 0);
-                    for (var r = 0; r < defaults.Count; r++)
-                    {
-                        g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-                        g.Add(Cell(defaults[r].Description), 0, r + 1);
-                        for (var i = 0; i < visits.Count; i++) g.Add(Cell(Reading(visits[i], defaults[r])), i + 1, r + 1);
-                    }
-                    _tab.Children.Add(new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = g });
-                }
-                break;
-            }
-            //JJQR - END
-            case "prescriptions":
-                //JJQR - AI (21 Nov 2026) - web Prescriptions tab (group card, Print Preview, Edit / Copy / Delete only for a referred booking)
-                if (ReferredBookingId is { } referred)
-                    _tab.Children.Add(StaffUi.Wrap(DoctorExtraUi.Spaced(StaffUi.Btn("New Prescription",
-                        () => OpenEditorAsync(referred, null, null)))));
-                if (c.Prescriptions.Count > 0) _tab.Children.Add(StaffUi.Wrap(DoctorExtraUi.Spaced(SortSelect(_rxNewest, v => _rxNewest = v)))); //JJQR - AI (21 Nov 2026) web rxSort select // JJQR - END
-                if (c.Prescriptions.Count == 0) Empty("No prescriptions recorded yet.");
-                foreach (var g in Sorted(c.Prescriptions, g => g.CreatedAt, _rxNewest))
-                {
-                    var col = StaffUi.Column(4);
-                    var created = g.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd");
-                    col.Children.Add(ClinicTheme.Text($"{g.Lines.Count} {(g.Lines.Count == 1 ? "medicine" : "medicines")}", "LabelLg"));
-                    col.Children.Add(ClinicTheme.Text(created, "MutedSm"));
-                    var i = 0;
-                    foreach (var l in g.Lines)
-                    {
-                        i++;
-                        col.Children.Add(ClinicTheme.Text($"{i}. {l.GenericName} #{l.Quantity}", "BodyMd"));
-                        col.Children.Add(ClinicTheme.Text($"Sig. {l.Dosage} {l.Instruction}", "MutedSm"));
-                    }
-                    var group = g;
-                    var actions = StaffUi.Wrap(DoctorExtraUi.Spaced(StaffUi.Btn("Print", () => PrintPreviewAsync(c.Patient.FullName, group), "SecondaryButton")));
-                    if (ReferredBookingId is { } bookingForCopy)
-                    {
-                        actions.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Edit", () => OpenEditorAsync(group.BookingId, group.GroupId, null), "GhostButton")));
-                        actions.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Copy", () => OpenEditorAsync(bookingForCopy, null, group.GroupId), "GhostButton")));
-                        actions.Children.Add(DoctorExtraUi.Spaced(StaffUi.DangerGhost("Delete", () => DeleteGroupAsync(group.GroupId))));
-                    }
-                    col.Children.Add(actions);
-                    _tab.Children.Add(StaffUi.Row(col));
-                }
-                //JJQR - END
+                RenderVisits(c);
                 break;
             case "labs":
                 Files(c.LabResults, "No lab results yet.");

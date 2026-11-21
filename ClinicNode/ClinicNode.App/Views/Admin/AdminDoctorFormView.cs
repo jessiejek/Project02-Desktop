@@ -70,7 +70,7 @@ public static class AdminDoctorFormView
             account.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             var status = new Picker { ItemsSource = edit.StatusOptions.ToList() };
             status.SetBinding(Picker.SelectedItemProperty, nameof(AdminDoctorEditViewModel.StatusChoice), BindingMode.TwoWay);
-            account.Add(ClinicUi.Field("Status", status), 0, 1);
+            account.Add(ClinicUi.Field("Status", ClinicPickers.PickerBox(null, status)), 0, 1);
         }
         root.Children.Add(Section(ClinicTheme.Text("Account", "HeadlineSm"), account));
 
@@ -159,7 +159,7 @@ public static class AdminDoctorFormView
         var end = new TimePicker { Time = day.End, WidthRequest = 136 };
         start.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TimePicker.Time) && start.Time is { } t) day.Start = t; };
         end.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TimePicker.Time) && end.Time is { } t) day.End = t; };
-        var times = new HorizontalStackLayout { Spacing = 8, Children = { start, new Label { Text = "–", VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") }, end } };
+        var times = new HorizontalStackLayout { Spacing = 8, Children = { ClinicPickers.TimeBox(null, start), new Label { Text = "–", VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") }, ClinicPickers.TimeBox(null, end) } };
         var off = ClinicTheme.Text("Not working", "MutedBody");
         off.VerticalOptions = LayoutOptions.Center;
         void Apply() { times.IsVisible = day.IsActive; off.IsVisible = !day.IsActive; }

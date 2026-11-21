@@ -95,7 +95,7 @@ public partial class AdminBookingDetailPage : ContentPage
             {
                 var date = new DatePicker { Date = DateTime.Today, Format = "MMM d, yyyy" };
                 var reason = Area("Reason (optional)");
-                var body = new VerticalStackLayout { Spacing = 12, Children = { ClinicUi.Field("New appointment date", date), reason } };
+                var body = new VerticalStackLayout { Spacing = 12, Children = { ClinicUi.Field("New appointment date", ClinicPickers.DateBox(null, date, null, true)), reason } };
                 await AdminDialog.ShowSubmitAsync(this, "Reschedule Booking", body, "Confirm Reschedule",
                     () => _vm.SubmitRescheduleAsync(date.Date ?? DateTime.Today, reason.Text), cancel: "Back", busyText: "Saving…");
                 break;

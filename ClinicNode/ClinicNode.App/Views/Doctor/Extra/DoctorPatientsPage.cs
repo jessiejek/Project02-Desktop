@@ -97,26 +97,41 @@ public sealed class DoctorPatientsPage : StaffLivePage
 
         var columns = new List<TableColumn>
         {
-            new("Patient", new GridLength(2, GridUnitType.Star), o =>
+            new("Patient", GridLength.Star, o =>
             {
                 var r = (DoctorPatientRow)o;
-                return new VerticalStackLayout
+                var avatar = new Border
                 {
-                    Spacing = 2,
+                    WidthRequest = 36, HeightRequest = 36, StrokeThickness = 0, VerticalOptions = LayoutOptions.Center,
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 18 }, BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.1f),
+                    Content = new Label { Text = DoctorPatientCardRules.Initials(r.FullName), FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ClinicTheme.Color("Primary"), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+                };
+                var names = new VerticalStackLayout
+                {
+                    Spacing = 2, VerticalOptions = LayoutOptions.Center,
                     Children =
                     {
                         new Label { Text = r.FullName, Style = ClinicTheme.Style("BodyMd"), FontAttributes = FontAttributes.Bold, LineBreakMode = LineBreakMode.WordWrap },
                         new Label { Text = r.PatientCode, Style = ClinicTheme.Style("LabelSm"), TextColor = ClinicTheme.Color("OnSurfaceVariant"), FontFamily = "Courier New" },
                     },
                 };
+                return new HorizontalStackLayout { Spacing = 12, Children = { avatar, names } };
             }),
-            new("Latest appointment", new GridLength(1.2, GridUnitType.Star), o => ClinicTheme.Text(DoctorExtraRules.VisitDate(((DoctorPatientRow)o).LatestVisitDate), "BodyMd")),
+            new("Latest appointment", new GridLength(190), o => ClinicTheme.Text(DoctorExtraRules.VisitDate(((DoctorPatientRow)o).LatestVisitDate), "BodyMd")),
             new("", GridLength.Auto, o =>
             {
                 var r = (DoctorPatientRow)o;
-                return StaffUi.Wrap(
-                    DoctorExtraUi.Spaced(StaffUi.Btn("Open chart", () => StaffUi.PushAsync<DoctorPatientChartPage>(this, r.PatientId)), 8, 0),
-                    StaffUi.Btn("Latest appointment", () => StaffUi.PushAsync<DoctorAppointmentDetailPage>(this, r.LatestBookingId), "SecondaryButton"));
+                //JJQR - AI (Nov 21, 2026) - both actions on ONE line, vertically centred in the row
+                return new HorizontalStackLayout
+                {
+                    Spacing = 8, VerticalOptions = LayoutOptions.Center,
+                    Children =
+                    {
+                        StaffUi.Btn("Open chart", () => StaffUi.PushAsync<DoctorPatientChartPage>(this, r.PatientId)),
+                        StaffUi.Btn("Latest appointment", () => StaffUi.PushAsync<DoctorAppointmentDetailPage>(this, r.LatestBookingId), "SecondaryButton"),
+                    },
+                };
+                //JJQR - END
             }),
         };
         var empty = _pending ? "Loading patients…"

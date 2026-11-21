@@ -199,19 +199,21 @@ public sealed class StaffBookingDetailPage : StaffLivePage
             await Navigation.PopModalAsync();
         });
         var back = StaffUi.Btn("Back", async () => { done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
-        page.Content = new VerticalStackLayout
+        page.BackgroundColor = Colors.Transparent;
+        page.ControlTemplate = null;
+        var rbody = new VerticalStackLayout
         {
-            Padding = 24, Spacing = 12, MaximumWidthRequest = 480,
+            Spacing = 14,
             Children =
             {
-                ClinicTheme.Text("Reschedule Booking", "HeadlineMd"),
-                ClinicTheme.Text($"{b.PatientName} · currently {StaffUi.Date(b.AppointmentDate)}", "MutedBody"),
+                new Border { Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(14, 10), Content = ClinicTheme.Text($"{b.PatientName} · currently {StaffUi.Date(b.AppointmentDate)}", "LabelMd") },
                 error,
-                StaffUi.Field("New appointment date", date),
-                reason,
-                StaffUi.Wrap(back, confirm),
+                StaffUi.Field("New appointment date", ClinicPickers.DateBox(null, date, null, true)),
+                StaffUi.Field("Reason (optional)", reason),
             }
         };
+        var rfooter = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, confirm } };
+        page.Content = ClinicNode.App.Controls.ClinicModal.Build("Reschedule booking", rbody, rfooter, async () => { done.TrySetResult(null); await Navigation.PopModalAsync(); }, 480);
         await Navigation.PushModalAsync(page);
         var newId = await done.Task;
         if (newId is { } id)

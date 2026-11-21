@@ -131,10 +131,10 @@ public sealed class DoctorPerformancePage : StaffLivePage
         unpaid.Children.Add(ClinicTheme.Text("Still to collect", "LabelLg"));
         unpaid.Children.Add(ClinicTheme.Text(R.PesoLabel(r.Unpaid.Total), "HeadlineLg"));
         unpaid.Children.Add(ClinicTheme.Text(R.UnpaidDetail(r.Unpaid.Count), "MutedSm"));
-        _body.Children.Add(StaffUi.Wrap(Cell(StaffUi.Card(hero)), Cell(StaffUi.Card(pat)), Cell(StaffUi.Card(unpaid))));
+        _body.Children.Add(Cols((StaffUi.Card(hero), 1), (StaffUi.Card(pat), 1), (StaffUi.Card(unpaid), 1))); //JJQR - AI (Nov 21, 2026) - cards share the full width //JJQR - END
 
-        _body.Children.Add(StaffUi.Wrap(Cell(StaffUi.Card(ChartView(r))), Cell(StaffUi.Card(DiagnosesView(r)))));
-        _body.Children.Add(StaffUi.Wrap(Cell(StaffUi.Card(UnpaidView(r))), Cell(StaffUi.Card(FollowUpsView(r)))));
+        _body.Children.Add(Cols((StaffUi.Card(ChartView(r)), 2), (StaffUi.Card(DiagnosesView(r)), 1)));
+        _body.Children.Add(Cols((StaffUi.Card(UnpaidView(r)), 1), (StaffUi.Card(FollowUpsView(r)), 1)));
 
         var also = StaffUi.Wrap();
         foreach (var a in R.AlsoItems(c))
@@ -147,6 +147,20 @@ public sealed class DoctorPerformancePage : StaffLivePage
         }
         _body.Children.Add(StaffUi.Card(ClinicTheme.Text("ALSO", "LabelMd"), also));
     }
+
+    //JJQR - AI (Nov 21, 2026) - a row of cards that always fills the width (star-weighted columns) instead of wrapping like tags
+    private static View Cols(params (View View, double Weight)[] cells)
+    {
+        var g = new Grid { ColumnSpacing = 16 };
+        for (var i = 0; i < cells.Length; i++)
+        {
+            g.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(cells[i].Weight, GridUnitType.Star)));
+            cells[i].View.VerticalOptions = LayoutOptions.Fill;
+            g.Add(cells[i].View, i, 0);
+        }
+        return g;
+    }
+    //JJQR - END
 
     private static View Cell(View v) { v.Margin = new Thickness(0, 0, 12, 12); return v; }
 

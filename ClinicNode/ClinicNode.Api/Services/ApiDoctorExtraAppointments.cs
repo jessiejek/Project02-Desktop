@@ -75,6 +75,9 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
     sealed record VitalReadingDto(Guid BookingId, Guid TemplateId, string? Value, DateOnly RecordedAt, DateTimeOffset? UpdatedAt);
     sealed record LabResultDto(Guid Id, string? ResultTitle, DateTimeOffset UploadedAt);
     sealed record DocumentDto(Guid Id, string? Title, string? FileName, DateTimeOffset UploadedAt);
+    sealed record LabOrderDto(Guid ConsultationId, string? TestName);
+    sealed record FollowUpRowDto(Guid ConsultationId, DateOnly? FollowUpDate, string? Reason, string? Instructions);
+    sealed record CertRowDto(Guid ConsultationId, string? DiagnosisText, DateOnly? IssueDate);
     sealed record VaccinationDto(Guid Id, string? VaccineName, short? DoseNumber, DateOnly? AdministeredDate, DateOnly? NextDoseDate, VaccinationStatus Status);
 
     public async Task<IReadOnlyList<DoctorPatientRow>> ListAsync(Guid doctorId, CancellationToken ct = default)
@@ -137,6 +140,20 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
         var docs = await Optional(() => api.GetAsync<List<DocumentDto>>("/api/patient-documents", Q(("patientId", pid)), ct), null) ?? [];
         var vax = await Optional(() => api.GetAsync<List<VaccinationDto>>("/api/patient-vaccinations", Q(("patientId", pid)), ct), null) ?? [];
 
+        //JJQR - AI (Nov 21, 2026) - per-visit extras: lab orders, follow-up and certificate (each optional: the chart still loads without them)
+        var labOrders = await Optional(() => api.GetAsync<List<LabOrderDto>>("/api/lab-orders", Q(("patientId", pid)), ct), null) ?? [];
+        var followUps = await Optional(() => api.GetAsync<List<FollowUpRowDto>>("/api/follow-ups", Q(("patientId", pid)), ct), null) ?? [];
+        var certs = await Optional(() => api.GetAsync<List<CertRowDto>>("/api/medical-certificates", Q(("patientId", pid)), ct), null) ?? [];
+        var extras = bookings.Select(b =>
+        {
+            var cid = consults.FirstOrDefault(c => c.BookingId == b.BookingId)?.ConsultationId ?? Guid.Empty;
+            var fu = cid == Guid.Empty ? null : followUps.FirstOrDefault(f => f.ConsultationId == cid);
+            var mc = cid == Guid.Empty ? null : certs.FirstOrDefault(m => m.ConsultationId == cid);
+            return new ChartVisitExtras(b.BookingId, (b.VisitType ?? VisitType.New).ToString(), b.DiscountCategory, b.TotalFee, b.MedCertRequested ?? false,
+                cid == Guid.Empty ? [] : labOrders.Where(l => l.ConsultationId == cid).Select(l => l.TestName ?? "").Where(n => n.Length > 0).ToList(),
+                fu?.FollowUpDate, fu?.Reason, fu?.Instructions, mc is not null, mc?.DiagnosisText, mc?.IssueDate);
+        }).ToList();
+        //JJQR - END
         return new PatientChart(
             new ChartPatient(p.PatientId, $"{p.FirstName} {p.LastName}".Trim(), p.PatientCode ?? "", p.Sex, p.DateOfBirth, DoctorExtraRules.AgeOn(p.DateOfBirth, ClinicClock.Today), p.ContactNumber),
             chartBookings, chartConsults,
@@ -144,7 +161,8 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
             visits, rx,
             labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt)).ToList(),
             docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName ?? "" : d.Title!, d.UploadedAt)).ToList(),
-            vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName ?? "", v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList());
+            vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName ?? "", v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList(),
+            extras);
     }
 }
 //JJQR - END

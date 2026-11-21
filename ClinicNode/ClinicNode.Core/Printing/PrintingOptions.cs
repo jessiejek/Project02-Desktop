@@ -48,6 +48,13 @@ public sealed class PrintingOptions
     /// <summary>Keep the rendered PDF of every job under {DataDirectory}/print-pdf (field debugging; off by default because PDFs hold PHI).</summary>
     public bool KeepPdfCopies { get; set; }
 
+    //JJQR - AI (Nov 21, 2026) - default: "Print" saves the document as a PDF and OPENS it in the computer's PDF viewer / browser, and you print from there (Cmd+P). Set false in printing.json to send straight to the macOS print system.
+    public bool OpenAsPdf { get; set; } = true;
+    //JJQR - AI (Nov 21, 2026) - with OpenAsPdf on: true (default) = open the document in the browser and pop the Print dialog automatically; false = just open the PDF file.
+    public bool AutoPrintInBrowser { get; set; } = true;
+    //JJQR - END
+    //JJQR - END
+
     //JJQR - AI (Nov 21, 2026) - per-document printer/paper (Settings > This computer); missing kinds fall back to the fields above.
     public Dictionary<ClinicPrintKind, DocumentPrintSettings> Documents { get; set; } = new();
     //JJQR - END

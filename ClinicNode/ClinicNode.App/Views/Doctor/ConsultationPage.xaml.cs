@@ -80,13 +80,17 @@ public partial class ConsultationPage : ContentPage
     private bool IsClosed => _workspace is { } w && w.Draft.Status != ConsultationStatus.Draft;
     private bool ReadOnly => _mode == "view";
 
+    readonly IServiceProvider _serviceProvider;
+
     public ConsultationPage(IConsultationService consults, IPrintDocumentFactory printDocs, IPrinter printer, IDoctorCatalogService catalog, IServiceProvider services)
     {
         InitializeComponent();
+        Overlay.SizeChanged += (_, _) => { if (Overlay.Width > 0) OverlayCard.WidthRequest = Math.Max(420, Math.Min(880, Overlay.Width - 56)); }; //JJQR - AI (Nov 21, 2026) - dialogs get a proper width //JJQR - END
         _consults = consults;
         _printDocs = printDocs;
         _printer = printer;
         _catalog = catalog;
+        _serviceProvider = services; //JJQR - AI (Nov 21, 2026) - for the live Patient history //JJQR - END
         // registered by DoctorModule.AddDoctorModule(); until that line is added the local implementation is used directly
         _lib = services.GetService<IConsultationLibraryService>() ?? ActivatorUtilities.CreateInstance<ConsultationLibraryService>(services);
         //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
@@ -197,6 +201,23 @@ public partial class ConsultationPage : ContentPage
     bool MedCertRequested() => ConsultRules.MedCertRequested(_medCertManual,
         ConsultRules.MedCertFeeAddOn(D.CertificateExists, D.McRecommendations, D.McPurposeException, D.McComeBackOn));
 
+    //JJQR - AI (Nov 21, 2026) - the fee strip shows the TOTAL as a clear amount and the breakdown quietly underneath
+    void SetFeePreview()
+    {
+        var f = PreviewFee();
+        FeeTotal.Text = FeeCalculator.FormatPeso(f.Total);
+        //JJQR - AI (Nov 21, 2026) - plain-language breakdown: "Follow-up ₱350 + PWD rate adjustment ₱50" instead of "− PWD discount ₱-50" when the Senior/PWD rate is above the visit fee
+        FeePreview.Text = string.Concat(f.Parts.Select((part, i) =>
+        {
+            var amount = FeeCalculator.FormatPeso(Math.Abs(part.Amount));
+            if (i == 0) return $"{part.Label} {amount}";
+            if (!part.Subtract) return $" + {part.Label} {amount}";
+            return part.Amount >= 0 ? $" − {part.Label} {amount}" : $" + {part.Label.Replace("discount", "rate")} adjustment {amount}";
+        }));
+        //JJQR - END
+    }
+    //JJQR - END
+
     ClinicFeePreview PreviewFee() => ConsultRules.PreviewFee(_settings, D.VisitType, D.DiscountCategory, MedCertRequested());
 
     decimal? TypedAmount() => decimal.TryParse(_pfTyped.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null;
@@ -258,7 +279,7 @@ public partial class ConsultationPage : ContentPage
     void Changed()
     {
         CheckOverrideBase();
-        FeePreview.Text = PreviewFee().Summary;
+        SetFeePreview();
         RebuildSteps();
         UpdateFooter();
     }
@@ -279,7 +300,7 @@ public partial class ConsultationPage : ContentPage
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - ConsultPatientBanner: one "name · sex · age" line (RenderBanner in ConsultationPage.Ui.cs)
         RenderBanner();
         //JJQR - END
-        FeePreview.Text = PreviewFee().Summary;
+        SetFeePreview();
         CancelAmendButton.IsVisible = _mode == "amend";
         RenderVisitTypeBar();
     }
@@ -289,21 +310,18 @@ public partial class ConsultationPage : ContentPage
         VisitTypeBar.Children.Clear();
         if (ReadOnly)
         {
-            VisitTypeBar.Children.Add(ClinicTheme.Text(D.VisitType == VisitType.FollowUp ? "Follow-up visit" : "New visit", "LabelMd"));
+            VisitTypeBar.Children.Add(new Label { Text = D.VisitType == VisitType.FollowUp ? "Follow-up visit" : "New visit", FontFamily = ClinicTheme.FontSemiBold, FontSize = 14 });
             return;
         }
-        foreach (var vt in new[] { VisitType.New, VisitType.FollowUp })
+        //JJQR - AI (Nov 21, 2026) - one-row segmented switch instead of two buttons that wrapped
+        VisitTypeBar.Children.Add(ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(["New visit", "Follow-up visit"], D.VisitType == VisitType.FollowUp ? 1 : 0, i =>
         {
-            var v = vt;
-            var b = Pill(v == VisitType.New ? "New visit" : "Follow-up visit", D.VisitType == v, () =>
-            {
-                D.VisitType = v;
-                FollowTotal();
-                RenderVisitTypeBar();
-                if (_section == ConsultSteps.FeeSectionIndex) RenderSection(); else Changed();
-            });
-            VisitTypeBar.Children.Add(b);
-        }
+            D.VisitType = i == 1 ? VisitType.FollowUp : VisitType.New;
+            FollowTotal();
+            RenderVisitTypeBar();
+            if (_section == ConsultSteps.FeeSectionIndex) RenderSection(); else Changed();
+        }));
+        //JJQR - END
         if (D.VisitType != _bookedVisitType)
             VisitTypeBar.Children.Add(ClinicTheme.Text($"(staff tagged this {(_bookedVisitType == VisitType.FollowUp ? "Follow-up" : "New")} at check-in)", "MutedSm")); //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - web wording //JJQR - END
     }
@@ -384,7 +402,7 @@ public partial class ConsultationPage : ContentPage
     View StepRow(string mark, string text, bool active, Action tap, bool muted = false)
     {
         var markColor = mark.StartsWith("✓") ? ClinicTheme.Color("StatusSuccess") : mark.StartsWith("⚠") ? ClinicTheme.Color("StatusWarning") : ClinicTheme.Color("Outline");
-        var markLbl = new Label { Text = mark.Trim(), FontSize = 14, WidthRequest = 18, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center, TextColor = active ? Colors.White : markColor };
+        var markLbl = new Label { Text = mark.Trim(), FontSize = 13, MinimumWidthRequest = 22, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center, TextColor = active ? Colors.White : markColor };
         var lbl = new Label
         {
             Text = text, FontSize = 14, LineBreakMode = LineBreakMode.TailTruncation, VerticalOptions = LayoutOptions.Center,
@@ -476,7 +494,7 @@ public partial class ConsultationPage : ContentPage
             case 8: RenderFee(); break;
         }
         SectionHost.IsEnabled = !ReadOnly;
-        FeePreview.Text = PreviewFee().Summary;
+        SetFeePreview();
         UpdateFooter();
     }
 
@@ -571,14 +589,21 @@ public partial class ConsultationPage : ContentPage
         var name = ConsultRules.SoapLabels[i];
         if (outcome is not (SoapFieldOutcome.Filled or SoapFieldOutcome.Replaced or SoapFieldOutcome.Appended))
         {
-            // nothing changes in this field: one quiet line
-            var quiet = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
-            quiet.Add(new Label { Text = name, FontSize = 14, TextColor = ClinicTheme.Color("OnSurfaceVariant") }, 0, 0);
-            quiet.Add(new Label { Text = ConsultRules.OutcomeLabel(outcome), FontSize = 12, TextColor = ClinicTheme.Color("OnSurfaceVariant") }, 1, 0);
+            // nothing changes in this field: still show the CURRENT text (grey) so the doctor always sees what is there, tagged "No change"
+            var noChip = new Border
+            {
+                StrokeThickness = 0, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 }, BackgroundColor = ClinicTheme.Color("SurfaceContainer"), Padding = new Thickness(8, 3), VerticalOptions = LayoutOptions.Center,
+                Content = new Label { Text = outcome == SoapFieldOutcome.KeptTemplateBlank ? "TEMPLATE BLANK · YOURS KEPT" : "NO CHANGE", FontSize = 11, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurfaceVariant") },
+            };
+            var qhead = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+            qhead.Add(new Label { Text = name, FontFamily = ClinicTheme.FontSemiBold, FontSize = 15, VerticalOptions = LayoutOptions.Center }, 0, 0);
+            qhead.Add(noChip, 1, 0);
+            var qcol = new VerticalStackLayout { Spacing = 8, Children = { qhead } };
+            qcol.Children.Add(new Label { Text = string.IsNullOrWhiteSpace(cur) ? "(empty)" : cur, FontSize = 13, TextColor = ClinicTheme.Color("OnSurfaceVariant") });
             return new Border
             {
-                StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
-                Padding = new Thickness(14, 9), BackgroundColor = Colors.Transparent, Content = quiet,
+                StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+                Padding = new Thickness(14, 12), BackgroundColor = ClinicTheme.Color("SurfaceContainerLowest"), Content = qcol,
             };
         }
         var replaced = outcome == SoapFieldOutcome.Replaced;
@@ -1113,24 +1138,45 @@ public partial class ConsultationPage : ContentPage
         }, "PrimaryButton"));
     }
 
+    //JJQR - AI (Nov 21, 2026) - search box on the prescription Templates tab: filters live by template name or any medicine in it
+    string _tplSearch = "";
     void RenderRxTemplates()
     {
         if (_rxTemplates.Count == 0) { SectionHost.Children.Add(ClinicTheme.Text("No prescription templates yet.", "MutedBody")); return; }
-        foreach (var t in _rxTemplates)
+        var search = new Entry { Text = _tplSearch, Placeholder = "Search templates or medicines…", HorizontalOptions = LayoutOptions.Fill };
+        var count = ClinicTheme.Text("", "MutedSm");
+        var list = new VerticalStackLayout { Spacing = 8 };
+        void Fill()
         {
-            var tpl = t;
-            var lines = string.Join("\n", t.Lines.Select(l => $"{l.GenericName} {l.Dosage} #{l.Quantity}".Trim()));
-            SectionHost.Children.Add(Card(ClinicTheme.Text(t.Title, "LabelLg"), ClinicTheme.Text(lines, "MutedSm"),
-                Btn("Use template", () =>
-                {
-                    //JJQR - AI (21 Nov 2026) - web handleTemplateAddAll: skip allergy / safety-block / duplicate lines and report the result
-                    ApplyRxTemplateSafely(tpl.Title, tpl.Lines.ToList());
-                    //JJQR - END
-                    _rxTab = "new";
-                    RenderSection(); Changed();
-                })));
+            list.Children.Clear();
+            var q = (_tplSearch ?? "").Trim();
+            var hits = _rxTemplates.Where(t => q.Length == 0
+                || t.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || t.Lines.Any(l => l.GenericName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+            count.Text = q.Length == 0 ? $"{_rxTemplates.Count} templates" : $"{hits.Count} of {_rxTemplates.Count} templates";
+            if (hits.Count == 0) { list.Children.Add(ClinicTheme.Text("No templates match your search.", "MutedBody")); return; }
+            foreach (var t in hits)
+            {
+                var tpl = t;
+                var lines = string.Join("\n", t.Lines.Select(l => $"{l.GenericName} {l.Dosage} #{l.Quantity}".Trim()));
+                list.Children.Add(Card(ClinicTheme.Text(t.Title, "LabelLg"), ClinicTheme.Text(lines, "MutedSm"),
+                    Btn("Use template", () =>
+                    {
+                        //JJQR - AI (21 Nov 2026) - web handleTemplateAddAll: skip allergy / safety-block / duplicate lines and report the result
+                        ApplyRxTemplateSafely(tpl.Title, tpl.Lines.ToList());
+                        //JJQR - END
+                        _rxTab = "new";
+                        RenderSection(); Changed();
+                    })));
+            }
         }
+        search.TextChanged += (_, e) => { _tplSearch = e.NewTextValue ?? ""; Fill(); };
+        SectionHost.Children.Add(search);
+        SectionHost.Children.Add(count);
+        SectionHost.Children.Add(list);
+        Fill();
     }
+    //JJQR - END
 
     static RxLine Clone(RxLine l) => new()
     {
@@ -1151,22 +1197,44 @@ public partial class ConsultationPage : ContentPage
         if (_labTests.Count > 0)
         {
             SectionHost.Children.Add(new Label { Text = "Standard tests", FontFamily = ClinicTheme.FontSemiBold, FontSize = 15, TextColor = ClinicTheme.Color("OnSurface"), Margin = new Thickness(0, 6, 0, 0) }); //JJQR - AI (Nov 21, 2026) - group title //JJQR - END
-            var flex = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
+            //JJQR - AI (Nov 21, 2026) - lab tests in an ALIGNED grid: 4 equal columns, each test one cell that is the whole click target; ticked cells are highlighted
+            const int labColumns = 4;
+            var labGrid = new Grid { ColumnSpacing = 10, RowSpacing = 10 };
+            for (var ci = 0; ci < labColumns; ci++) labGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            var labIndex = 0;
             foreach (var t in _labTests)
             {
                 var test = t;
-                var box = new CheckBox { IsChecked = D.LabOrders.Any(l => l.LabTestId == test.Id || l.TestName.Equals(test.Name, StringComparison.OrdinalIgnoreCase)) };
+                var box = new CheckBox { IsChecked = D.LabOrders.Any(l => l.LabTestId == test.Id || l.TestName.Equals(test.Name, StringComparison.OrdinalIgnoreCase)), InputTransparent = true, VerticalOptions = LayoutOptions.Center };
+                var name = new Label { Text = test.Name, FontSize = 14, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.TailTruncation };
+                var inner = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
+                inner.Add(box, 0, 0);
+                inner.Add(name, 1, 0);
+                var cell = new Border { StrokeThickness = 1, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 }, Padding = new Thickness(10, 6), Content = inner };
+                void Paint(bool on, bool hover = false)
+                {
+                    cell.BackgroundColor = on ? ClinicTheme.Color("PrimarySubtle") : hover ? ClinicTheme.Color("SurfaceContainerLow") : ClinicTheme.Color("SurfaceContainerLowest");
+                    cell.Stroke = on ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OutlineVariant");
+                    name.FontFamily = on ? ClinicTheme.FontSemiBold : ClinicTheme.Font;
+                }
+                Paint(box.IsChecked);
                 box.CheckedChanged += (_, e) =>
                 {
+                    Paint(e.Value);
                     if (e.Value) { if (!D.LabOrders.Any(l => l.LabTestId == test.Id)) D.LabOrders.Add(new LabLine { LabTestId = test.Id, TestName = test.Name }); }
                     else D.LabOrders.RemoveAll(l => l.LabTestId == test.Id || (l.LabTestId is null && l.TestName.Equals(test.Name, StringComparison.OrdinalIgnoreCase)));
                     Changed();
                 };
-                var c = WrapCheck(box, test.Name);
-                c.Margin = new Thickness(0, 0, 16, 4);
-                flex.Children.Add(c);
+                cell.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => box.IsChecked = !box.IsChecked) });
+                var hv = new PointerGestureRecognizer();
+                hv.PointerEntered += (_, _) => { if (!box.IsChecked) Paint(false, true); };
+                hv.PointerExited += (_, _) => Paint(box.IsChecked);
+                cell.GestureRecognizers.Add(hv);
+                labGrid.Add(cell, labIndex % labColumns, labIndex / labColumns);
+                labIndex++;
             }
-            SectionHost.Children.Add(flex);
+            SectionHost.Children.Add(labGrid);
+            //JJQR - END
         }
         var catalogIds = _labTests.Select(t => t.Id).ToHashSet();
         var extra = D.LabOrders.Where(l => l.LabTestId is null || !catalogIds.Contains(l.LabTestId.Value)).ToList();
@@ -1305,35 +1373,68 @@ public partial class ConsultationPage : ContentPage
     void RenderCertificate()
     {
         var w = _workspace!;
-        SectionHost.Children.Add(ClinicTheme.Text($"§16.8 Form 2. Blank fields fall back to the SOAP Assessment / Plan and the follow-up date. Issuing marks “medical certificate” on the fee (+{FeeCalculator.FormatPeso(_settings.FeeMedCert)}).", "MutedSm"));
         var age = w.PatientDateOfBirth is { } dob ? $", {AgeOn(dob, ClinicClock.Today)}y" : "";
-        SectionHost.Children.Add(ClinicTheme.Text($"{w.PatientName}{age}{(string.IsNullOrWhiteSpace(w.PatientSex) ? "" : ", " + w.PatientSex)}", "BodyMd"));
         var docName = string.IsNullOrWhiteSpace(w.DoctorName) || w.DoctorName == "Doctor" ? (_doctor?.FullName is { Length: > 0 } f ? f : "Doctor") : w.DoctorName;
-        SectionHost.Children.Add(ClinicTheme.Text($"{docName} · License No. {(_doctor?.LicenseNumber?.Trim() is { Length: > 0 } l ? l : "—")} · PTR No. {(_doctor?.PtrNumber?.Trim() is { Length: > 0 } p ? p : "—")}", "MutedSm"));
-
-        var actions = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center };
-        if (_certTemplates.Count > 0)
+        //JJQR - AI (Nov 21, 2026) - top action bar: who the certificate is for (left) and the main actions (right), so it is obvious what to press
+        var who = new VerticalStackLayout
         {
-            //JJQR - AI (Nov 21, 2026) - button + list instead of the Mac wheel picker
-            var tpl = PickButton("Use Template…", _certTemplates.Select(t => t.Title).ToList(), async i => await ApplyCertTemplateAsync(_certTemplates[i]));
-            //JJQR - END
-            actions.Children.Add(tpl);
+            Spacing = 2,
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label { Text = $"{w.PatientName}{age}{(string.IsNullOrWhiteSpace(w.PatientSex) ? "" : ", " + w.PatientSex)}", FontFamily = ClinicTheme.FontSemiBold, FontSize = 15 },
+                ClinicTheme.Text($"{docName} · License No. {(_doctor?.LicenseNumber?.Trim() is { Length: > 0 } l ? l : "—")} · PTR No. {(_doctor?.PtrNumber?.Trim() is { Length: > 0 } p ? p : "—")}", "MutedSm"),
+            },
+        };
+        var bar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        bar.Add(who, 0, 0);
+        var barActions = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center };
+        // Issue & print / Save certificate are in the top bar; here only the quiet "Remove certificate" when one exists
+        if (MedCertRequested())
+        {
+            var rm = Btn("Remove certificate", async () => await RemoveCertificateAsync(), "GhostButton");
+            rm.Margin = new Thickness(0);
+            barActions.Children.Add(rm);
         }
-        var saveTpl = Btn("Save as Template", async () => await SaveCertTemplateAsync());
-        saveTpl.IsEnabled = !string.IsNullOrWhiteSpace(D.McDiagnosis) || !string.IsNullOrWhiteSpace(D.McRecommendations) || !string.IsNullOrWhiteSpace(D.McPurposeException);
-        actions.Children.Add(saveTpl);
-        //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
-        actions.Children.Add(ManageLink());
+        bar.Add(barActions, 1, 0);
+        SectionHost.Children.Add(new Border
+        {
+            BackgroundColor = Color.FromArgb("#E7F6F2"),
+            Stroke = ClinicTheme.Color("Primary").WithAlpha(0.45f),
+            StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+            Padding = new Thickness(16, 12),
+            Content = bar,
+        });
+        SectionHost.Children.Add(ClinicTheme.Text($"§16.8 Form 2. Blank fields fall back to the SOAP Assessment / Plan and the follow-up date. Issuing marks “medical certificate” on the fee (+{FeeCalculator.FormatPeso(_settings.FeeMedCert)}).", "MutedSm"));
         //JJQR - END
-        actions.Children.Add(Btn(D.CertificateExists ? "Update & Print Certificate" : "Issue & Print Certificate", () => ConfirmCertificate(print: true)));
-        actions.Children.Add(Btn("Save without printing", () => ConfirmCertificate(print: false)));
-        if (MedCertRequested()) actions.Children.Add(Btn("Remove certificate", async () => await RemoveCertificateAsync(), "GhostButton"));
-        SectionHost.Children.Add(actions);
 
+        //JJQR - AI (Nov 21, 2026) - template tools in their own quiet panel
+        var tools = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center };
+        if (_certTemplates.Count > 0)
+            tools.Children.Add(PickButton("Use template…", _certTemplates.Select(t => t.Title).ToList(), async i => await ApplyCertTemplateAsync(_certTemplates[i])));
+        var saveTpl = Btn("Save as template", async () => await SaveCertTemplateAsync());
+        saveTpl.IsEnabled = !string.IsNullOrWhiteSpace(D.McDiagnosis) || !string.IsNullOrWhiteSpace(D.McRecommendations) || !string.IsNullOrWhiteSpace(D.McPurposeException);
+        tools.Children.Add(saveTpl);
+        tools.Children.Add(ManageLink());
+        SectionHost.Children.Add(new Border
+        {
+            BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
+            Stroke = ClinicTheme.Color("OutlineVariant"),
+            StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Padding = new Thickness(14, 10, 14, 2),
+            Content = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("TEMPLATES", "LabelSm"), tools } },
+        });
+        //JJQR - END
+
+        var gAddr = SectionHost.Children.Count; //JJQR - AI (Nov 21, 2026) //JJQR - END
         var addr = AddEntry("Patient address", D.McAddress);
         if (string.IsNullOrWhiteSpace(D.McAddress)) addr.Placeholder = "No address on file";
         Bind(addr, v => D.McAddress = v);
         Bind(AddEntry("Examined at", D.McExaminedAt), v => D.McExaminedAt = v);
+        GroupColumns(gAddr, 2, 2); //JJQR - AI (Nov 21, 2026) //JJQR - END
+        var gDates = SectionHost.Children.Count; //JJQR - AI (Nov 21, 2026) //JJQR - END
         SectionHost.Children.Add(ClinicTheme.Text("Examination from", "FieldLabel"));
         var from = new DatePicker { Date = D.McExamFrom?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today };
         from.DateSelected += (_, e) => { D.McExamFrom = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = true; RenderSection(); Changed(); };
@@ -1342,6 +1443,8 @@ public partial class ConsultationPage : ContentPage
         var until = new DatePicker { Date = D.McExamTo?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today };
         until.DateSelected += (_, e) => { D.McExamTo = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = true; RenderSection(); Changed(); };
         SectionHost.Children.Add(DateBox(until)); //JJQR - AI (Nov 21, 2026) //JJQR - END
+        GroupColumns(gDates, 2, 2); //JJQR - AI (Nov 21, 2026) //JJQR - END
+        var gDx = SectionHost.Children.Count; //JJQR - AI (Nov 21, 2026) //JJQR - END
 
         var dxField = AddEditor("Diagnosis / Impressions", _mcDxDirty || !string.IsNullOrWhiteSpace(D.McDiagnosis) ? D.McDiagnosis : McDiagnosisDefault());
         dxField.Placeholder = string.IsNullOrWhiteSpace(D.Assessment) ? "Diagnosis / Impressions" : $"Diagnosis / Impressions (default: “{D.Assessment}”)";
@@ -1349,6 +1452,7 @@ public partial class ConsultationPage : ContentPage
         var recs = AddEditor("Recommendations", D.McRecommendations);
         recs.Placeholder = string.IsNullOrWhiteSpace(D.Plan) ? "Recommendations" : $"Recommendations (default: “{D.Plan}”)";
         Bind(recs, v => D.McRecommendations = v);
+        GroupColumns(gDx, 2, 2); //JJQR - AI (Nov 21, 2026) //JJQR - END
         Bind(AddEntry("Purpose exception (the “except ___” blank)", D.McPurposeException), v => D.McPurposeException = v);
 
         SectionHost.Children.Add(ClinicTheme.Text("Please come back on", "FieldLabel"));
@@ -1473,53 +1577,58 @@ public partial class ConsultationPage : ContentPage
     private Label? _feeBanner, _feeSummary, _pfDiffers;
     private Button? _pfUseTotal;
 
+    //JJQR - AI (Nov 21, 2026) - Professional Fee Decision, laid out professionally: big amount banner on top; LEFT = visit details (type, discount, certificate); RIGHT = the decision (Charge / Waive, amount, note).
+    // Presentation only: every state field and handler (pfEdited / pfOverrideBase / followTotal / medCertManual) is unchanged.
+    Label? _feeBig;
     void RenderFee()
     {
-        var banner = new VerticalStackLayout { Spacing = 4 };
-        banner.Children.Add(ClinicTheme.Text("Final step — decide the professional fee for this visit.", "LabelLg"));
-        _feeBanner = ClinicTheme.Text("", "BodyMd");
-        banner.Children.Add(_feeBanner);
-        SectionHost.Children.Add(new Border { Style = ClinicTheme.Style("Card"), BackgroundColor = ClinicTheme.Color("PrimarySubtle"), Content = banner });
-
-        var box = new VerticalStackLayout { Spacing = 8 };
-        var appt = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center };
-        appt.Children.Add(ClinicTheme.Text("Appointment type", "LabelMd").Also(l => l.Margin = new Thickness(0, 0, 8, 0)));
-        foreach (var vt in new[] { VisitType.New, VisitType.FollowUp })
+        static View Labeled(string label, View v) => new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text(label, "FieldLabel"), v } };
+        static Label CardTitle(string t) => new() { Text = t, FontFamily = ClinicTheme.FontSemiBold, FontSize = 16 };
+        static Border Panel(View content) => new()
         {
-            var v = vt;
-            appt.Children.Add(Pill(v == VisitType.New ? "New" : "Follow-up", D.VisitType == v, () => { D.VisitType = v; FollowTotal(); RenderVisitTypeBar(); RenderSection(); Changed(); }));
-        }
-        box.Children.Add(appt);
-        var discount = new Picker { Title = "Discount", ItemsSource = new[] { "None", "Senior citizen", "PWD" } };
-        discount.SelectedIndex = D.DiscountCategory == "PWD" ? 2 : D.DiscountCategory == "Senior" ? 1 : 0;
-        discount.SelectedIndexChanged += (_, _) =>
-        {
-            D.DiscountCategory = discount.SelectedIndex switch { 1 => "Senior", 2 => "PWD", _ => null };
-            FollowTotal(); RenderSection(); Changed();
+            BackgroundColor = ClinicTheme.Color("SurfaceContainerLowest"), Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 }, Padding = new Thickness(20, 18), VerticalOptions = LayoutOptions.Start, Content = content,
         };
-        box.Children.Add(Row(ClinicTheme.Text("Discount", "LabelMd"), discount));
+
+        // ---- banner: the amount is the hero ----
+        _feeBig = new Label { FontFamily = ClinicTheme.FontSemiBold, FontSize = 34, TextColor = ClinicTheme.Color("Primary") };
+        _feeBanner = ClinicTheme.Text("", "BodyMd");
+        SectionHost.Children.Add(new Border
+        {
+            BackgroundColor = Color.FromArgb("#E7F6F2"), Stroke = ClinicTheme.Color("Primary").WithAlpha(0.4f), StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 }, Padding = new Thickness(22, 16),
+            Content = new VerticalStackLayout { Spacing = 2, Children = { ClinicTheme.Text("FINAL STEP · PROFESSIONAL FEE", "LabelSm"), _feeBig, _feeBanner } },
+        });
+
+        // ---- left: visit details ----
+        var visit = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(["New", "Follow-up"], D.VisitType == VisitType.FollowUp ? 1 : 0,
+            i => { D.VisitType = i == 1 ? VisitType.FollowUp : VisitType.New; FollowTotal(); RenderVisitTypeBar(); RenderSection(); Changed(); });
+        visit.HorizontalOptions = LayoutOptions.Start;
+        var discount = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(["None", "Senior citizen", "PWD"], D.DiscountCategory == "PWD" ? 2 : D.DiscountCategory == "Senior" ? 1 : 0,
+            i => { D.DiscountCategory = i switch { 1 => "Senior", 2 => "PWD", _ => null }; FollowTotal(); RenderSection(); Changed(); });
+        discount.HorizontalOptions = LayoutOptions.Start;
         var medCert = new CheckBox { IsChecked = MedCertRequested() };
         medCert.CheckedChanged += (_, e) => { _medCertManual = e.Value; FollowTotal(); RenderSection(); Changed(); };
-        box.Children.Add(WrapCheck(medCert, $"Medical certificate +{FeeCalculator.FormatPeso(_settings.FeeMedCert)}"));
-        var hint = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center };
-        hint.Children.Add(ClinicTheme.Text("Ticks by itself when you fill in and save the", "MutedSm"));
-        hint.Children.Add(Btn("Medical Certificate", () => GoTo(7), "GhostButton"));
-        hint.Children.Add(ClinicTheme.Text("section; the amount updates automatically and you can still change it before completing.", "MutedSm"));
-        box.Children.Add(hint);
-        _feeSummary = ClinicTheme.Text("", "LabelMd");
-        box.Children.Add(_feeSummary);
-        SectionHost.Children.Add(new Border { Style = ClinicTheme.Style("Card"), BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"), Content = box });
+        var certRow = ClinicPickers.CheckRow(medCert, $"Medical certificate  +{FeeCalculator.FormatPeso(_settings.FeeMedCert)}", "Ticks by itself when you save the Medical Certificate step. You can still change it here.");
+        var toCert = Btn("Open the Medical Certificate step", () => GoTo(7), "GhostButton");
+        toCert.Margin = new Thickness(0);
+        var left = Panel(new VerticalStackLayout
+        {
+            Spacing = 18,
+            Children = { CardTitle("Visit details"), Labeled("Appointment type", visit), Labeled("Discount", discount), Labeled("Extras", new VerticalStackLayout { Spacing = 2, Children = { certRow, toCert } }) },
+        });
 
-        var tabs = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
-        tabs.Children.Add(Pill("Charge", D.PfDecision == "Charge", () => { D.PfDecision = "Charge"; RenderSection(); Changed(); }));
-        tabs.Children.Add(Pill("Waive", D.PfDecision == "Waive", () => { D.PfDecision = "Waive"; RenderSection(); Changed(); }));
-        SectionHost.Children.Add(tabs);
-
+        // ---- right: the decision ----
+        var decision = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(["Charge", "Waive"], D.PfDecision == "Charge" ? 0 : D.PfDecision == "Waive" ? 1 : -1,
+            i => { D.PfDecision = i == 0 ? "Charge" : "Waive"; RenderSection(); Changed(); });
+        decision.HorizontalOptions = LayoutOptions.Start;
+        var rightCol = new VerticalStackLayout { Spacing = 18 };
+        rightCol.Children.Add(CardTitle("Decision"));
+        rightCol.Children.Add(Labeled("Professional fee", decision));
+        _feeSummary = ClinicTheme.Text("", "MutedBody");
         if (D.PfDecision == "Charge")
         {
-            var amount = AddEntry("Amount", PfShown()?.ToString("0.##", CultureInfo.InvariantCulture));
-            amount.Placeholder = "Amount*";
-            amount.Keyboard = Keyboard.Numeric;
+            var amount = new Entry { Text = PfShown()?.ToString("0.##", CultureInfo.InvariantCulture), Placeholder = "0", Keyboard = Keyboard.Numeric, FontSize = 18, HorizontalOptions = LayoutOptions.Fill };
             amount.TextChanged += (_, e) =>
             {
                 _pfTyped = e.NewTextValue ?? "";
@@ -1527,29 +1636,44 @@ public partial class ConsultationPage : ContentPage
                 _pfOverrideBase = PreviewFee().Total;
                 RefreshFeeLabels(); Changed();
             };
-            var differs = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center };
+            var amountRow = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
+            amountRow.Add(new Label { Text = "₱", FontFamily = ClinicTheme.FontSemiBold, FontSize = 20, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") }, 0, 0);
+            amountRow.Add(amount, 1, 0);
+            rightCol.Children.Add(Labeled("Amount to charge", amountRow));
+            var differs = new VerticalStackLayout { Spacing = 4 };
             _pfDiffers = ClinicTheme.Text("", "BodyMd");
             _pfDiffers.TextColor = ClinicTheme.Color("StatusWarning");
-            _pfUseTotal = Btn("", () => { FollowTotal(); RenderSection(); Changed(); }, "GhostButton");
+            _pfUseTotal = Btn("", () => { FollowTotal(); RenderSection(); Changed(); }, "SecondaryButton");
+            _pfUseTotal.Margin = new Thickness(0);
             differs.Children.Add(_pfDiffers);
             differs.Children.Add(_pfUseTotal);
-            SectionHost.Children.Add(differs);
-            SectionHost.Children.Add(new Picker { Title = "Payment", ItemsSource = new[] { "Pay at Clinic", "Online" }, SelectedIndex = 0 });
+            rightCol.Children.Add(differs);
+            rightCol.Children.Add(_feeSummary);
+            rightCol.Children.Add(Labeled("Payment", ClinicTheme.Text("Pay at clinic. Collected at the front desk.", "BodyMd")));
         }
         else if (D.PfDecision == "Waive")
         {
-            var reason = AddEditor("Reason (minimum 5 characters)", D.PfWaiveReason);
-            reason.Placeholder = "Reason (minimum 5 characters)*";
+            var reason = new Editor { Text = D.PfWaiveReason, HeightRequest = 100, Placeholder = "Why is the fee waived? (minimum 5 characters)", AutoSize = EditorAutoSizeOption.Disabled };
             reason.TextChanged += (_, e) => { D.PfWaiveReason = e.NewTextValue; RefreshFeeLabels(); Changed(); };
+            rightCol.Children.Add(Labeled("Reason for waiving *", reason));
+            rightCol.Children.Add(ClinicTheme.Text("The front desk will see this visit as ₱0 and confirm the waiver.", "MutedSm"));
         }
-        else SectionHost.Children.Add(ClinicTheme.Text("Choose Charge or Waive to continue.", "MutedSm"));
+        else rightCol.Children.Add(ClinicTheme.Text("Choose Charge or Waive to continue.", "MutedBody"));
+        var right = Panel(rightCol);
+
+        var cols = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        cols.Add(left, 0, 0);
+        cols.Add(right, 1, 0);
+        SectionHost.Children.Add(cols);
         RefreshFeeLabels();
     }
+    //JJQR - END
 
     void RefreshFeeLabels()
     {
         var preview = PreviewFee();
         if (_feeBanner is not null) _feeBanner.Text = ConsultRules.FeeBannerLine(D.PfDecision, PfShown(), D.PfWaiveReason);
+        if (_feeBig is not null) _feeBig.Text = D.PfDecision == "Waive" ? "Waived" : D.PfDecision == "Charge" ? FeeCalculator.FormatPeso(PfShown() ?? 0m) : FeeCalculator.FormatPeso(preview.Total); //JJQR - AI (Nov 21, 2026) //JJQR - END
         if (_feeSummary is not null) _feeSummary.Text = preview.Summary;
         if (_pfDiffers is not null && _pfUseTotal is not null)
         {
@@ -1576,8 +1700,12 @@ public partial class ConsultationPage : ContentPage
         PrintRxButton.IsVisible = PrintLabsButton.IsVisible = hasRx || hasLabs;
         PrintRxButton.IsEnabled = hasRx;
         PrintLabsButton.IsEnabled = hasLabs;
-        PrintCertButton.IsVisible = false;
+        //JJQR - AI (Nov 21, 2026) - "Print medical certificate" is always at the top while a certificate is relevant: on the certificate step, or once one exists
+        PrintCertButton.IsVisible = _section == 7 || D.CertificateExists;
+        PrintCertButton.Text = D.CertificateExists ? "Print medical certificate" : "Issue & print certificate";
         PrintSlipButton.IsVisible = false;
+        SaveCertButton.IsVisible = _section == 7 && _mode != "view"; //JJQR - AI (Nov 21, 2026) - "Save without printing" lives in the top bar next to Issue & print //JJQR - END
+        //JJQR - END
         //JJQR - END
         HistoryButton.IsVisible = true;
         HelpButton.IsVisible = _mode != "view"; //JJQR - AI (21 Nov 2026) - web: "?" only while editing //JJQR - END
@@ -1721,20 +1849,38 @@ public partial class ConsultationPage : ContentPage
     void HideOverlay() => Overlay.IsVisible = false;
     void OnOverlayClose(object? sender, EventArgs e) => HideOverlay(); //JJQR - AI (Nov 21, 2026) - title-bar close //JJQR - END
 
-    void OnHistory(object? sender, EventArgs e)
+    //JJQR - AI (Nov 21, 2026) - Patient history is built from the LIVE chart (the local copy only held the visits this computer had synced) and shows every earlier visit with its full detail
+    async void OnHistory(object? sender, EventArgs e)
     {
-        var body = new List<View>();
-        if (_history.Count == 0) body.Add(ClinicTheme.Text("No earlier visits for this patient.", "MutedBody"));
+        var body = new List<View> { ClinicTheme.Text("Loading earlier visits…", "MutedBody") };
+        ShowOverlay($"Patient history — {_workspace?.PatientName}", body, ("Close", HideOverlay, "SecondaryButton"));
+        try
+        {
+            var doctorId = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.DoctorId(_serviceProvider);
+            var chart = doctorId is null ? null : await _serviceProvider.GetRequiredService<ClinicNode.Core.DoctorExtra.IDoctorPatientsService>().GetChartAsync(doctorId.Value, D.PatientId);
+            if (chart is not null)
+            {
+                var cards = ClinicNode.App.Views.Doctor.Extra.ChartVisitCards.Build(chart, D.BookingId);
+                ShowOverlay($"Patient history — {_workspace?.PatientName}",
+                    cards.Count == 0 ? [ClinicTheme.Text("No earlier visits for this patient.", "MutedBody")] : cards,
+                    ("Close", HideOverlay, "SecondaryButton"));
+                return;
+            }
+        }
+        catch { /* fall back to the copy on this computer below */ }
+        var fallback = new List<View>();
+        if (_history.Count == 0) fallback.Add(ClinicTheme.Text("No earlier visits for this patient.", "MutedBody"));
         foreach (var h in _history)
         {
             var lines = new List<View> { ClinicTheme.Text($"{h.Date:MMM d, yyyy} · {h.Status}", "LabelLg") };
             void Add(string label, string? v) { if (!string.IsNullOrWhiteSpace(v)) lines.Add(ClinicTheme.Text($"{label}: {v}", "BodyMd")); }
             Add("Chief complaint", h.ChiefComplaint); Add("Subjective", h.Subjective); Add("Objective", h.Objective); Add("Assessment", h.Assessment); Add("Plan", h.Plan);
             Add("Diagnoses", h.Diagnoses); Add("Vitals", h.Vitals); Add("Prescription", h.Prescriptions); Add("Labs", h.Labs);
-            body.Add(Card(lines.ToArray()));
+            fallback.Add(Card(lines.ToArray()));
         }
-        ShowOverlay($"Patient History — {_workspace?.PatientName}", body, ("Close", HideOverlay, "SecondaryButton"));
+        ShowOverlay($"Patient history — {_workspace?.PatientName}", fallback, ("Close", HideOverlay, "SecondaryButton"));
     }
+    //JJQR - END
 
     // Completion Checklist: each visible section with its indicator and what was entered
     void OnComplete(object? sender, EventArgs e)
@@ -1744,19 +1890,18 @@ public partial class ConsultationPage : ContentPage
         RebuildSteps();
         ErrorLabel.IsVisible = false;
         var shown = PfShown();
-        var body = new List<View>();
+        var body = new List<View> { ClinicTheme.Text("Review what was entered before you complete this visit.", "MutedBody") };
+        //JJQR - AI (Nov 21, 2026) - one row per section: LEFT = status badge + section name, RIGHT = what was entered, with a hairline between rows (title and content no longer look alike)
+        var first = true;
         foreach (var i in ConsultRules.VisibleOrder(_showMore, _section))
         {
             var required = ConsultRules.RequiredSections.Contains(i);
             var ok = ConsultRules.SectionSatisfied(i, D, shown);
-            //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - web checklist rows: indicator + name, summary indented 26px, no "Go to" buttons
-            var mark = StepMark(i);
-            var text = ClinicTheme.Text($"{mark}  {ConsultSteps.Sections[i]}", ok || !required ? "LabelLg" : "ErrorText");
-            var summary = ClinicTheme.Text(ConsultRules.SectionSummary(i, D, shown), "MutedSm");
-            summary.Margin = new Thickness(26, 0, 0, 0);
-            body.Add(new VerticalStackLayout { Spacing = 2, Children = { text, summary } });
-            //JJQR - END
+            if (!first) body.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant") });
+            first = false;
+            body.Add(ChecklistRow(i, ok, required, ConsultRules.SectionSummary(i, D, shown)));
         }
+        //JJQR - END
         if (!ConsultRules.SectionSatisfied(3, D, shown)) body.Add(Warning(ConsultRules.ChecklistRxWarning));
         if (!ConsultRules.SectionSatisfied(6, D, shown)) body.Add(Warning(ConsultRules.ChecklistFollowUpWarning));
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - a failed Complete shows its error inside the checklist
@@ -1768,6 +1913,78 @@ public partial class ConsultationPage : ContentPage
             ("Go Back", HideOverlay, "SecondaryButton"),
             ("Confirm & Complete", () => _ = CompleteAsync(), "PrimaryButton"));
     }
+
+    //JJQR - AI (Nov 21, 2026)
+    View ChecklistRow(int section, bool ok, bool required, string summary)
+    {
+        var good = ok;
+        var bad = !ok && required;
+        var badgeBg = good ? ClinicTheme.Color("StatusSuccessSurface") : bad ? ClinicTheme.Color("StatusDangerSurface") : ClinicTheme.Color("SurfaceContainer");
+        var badgeFg = good ? ClinicTheme.Color("StatusSuccess") : bad ? ClinicTheme.Color("StatusDanger") : ClinicTheme.Color("OnSurfaceVariant");
+        var badge = new Border
+        {
+            WidthRequest = 24, HeightRequest = 24, StrokeThickness = 0, BackgroundColor = badgeBg, VerticalOptions = LayoutOptions.Start,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 },
+            Content = new Label { Text = good ? "✓" : bad ? "!" : "–", FontFamily = ClinicTheme.FontSemiBold, FontSize = 13, TextColor = badgeFg, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+        };
+        var name = new Label { Text = ConsultSteps.Sections[section], FontFamily = ClinicTheme.FontSemiBold, FontSize = 15, TextColor = bad ? ClinicTheme.Color("StatusDanger") : ClinicTheme.Color("OnSurface"), VerticalOptions = LayoutOptions.Start, LineBreakMode = LineBreakMode.WordWrap };
+        var left = new Grid { ColumnSpacing = 10, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
+        left.Add(badge, 0, 0);
+        left.Add(name, 1, 0);
+
+        var right = new VerticalStackLayout { Spacing = 6 };
+        if (string.IsNullOrWhiteSpace(summary))
+            right.Children.Add(new Label { Text = "Nothing entered.", FontSize = 13, TextColor = ClinicTheme.Color("OnSurfaceVariant") });
+        else if (section == 1)
+        {
+            // vital signs: one chip per reading
+            var chips = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
+            foreach (var part in summary.Split(" · ", StringSplitOptions.RemoveEmptyEntries))
+            {
+                // label (grey, small caps) + value (dark, bold) inside one chip; the chip never shrinks, so the value is never cut off
+                var t = part.Trim();
+                var firstDigit = t.IndexOfAny("0123456789".ToCharArray());
+                var label = firstDigit > 0 ? t[..firstDigit].Trim() : t;
+                var value = firstDigit > 0 ? t[firstDigit..].Trim() : "";
+                var chip = new Border
+                {
+                    StrokeThickness = 0, BackgroundColor = ClinicTheme.Color("SurfaceContainer"), Padding = new Thickness(12, 7), Margin = new Thickness(0, 0, 8, 8),
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 1,
+                        Children =
+                        {
+                            new Label { Text = label.ToUpperInvariant(), FontSize = 10.5, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurfaceVariant"), LineBreakMode = LineBreakMode.NoWrap },
+                            new Label { Text = value.Length > 0 ? value : "—", FontSize = 15, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurface"), LineBreakMode = LineBreakMode.NoWrap },
+                        },
+                    },
+                };
+                Microsoft.Maui.Controls.FlexLayout.SetShrink(chip, 0f);
+                chips.Children.Add(chip);
+            }
+            right.Children.Add(chips);
+        }
+        else
+        {
+            foreach (var line in summary.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var colon = line.IndexOf(':');
+                if (colon is > 0 and < 24)
+                {
+                    var lbl = new Label { Text = line[..colon].ToUpperInvariant(), FontSize = 11, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurfaceVariant"), CharacterSpacing = 0.4 };
+                    var val = new Label { Text = line[(colon + 1)..].Trim(), FontSize = 14, TextColor = ClinicTheme.Color("OnSurface") };
+                    right.Children.Add(new VerticalStackLayout { Spacing = 1, Children = { lbl, val } });
+                }
+                else right.Children.Add(new Label { Text = line.Trim(), FontSize = 14, TextColor = ClinicTheme.Color("OnSurface") });
+            }
+        }
+        var row = new Grid { ColumnSpacing = 20, Padding = new Thickness(0, 14), ColumnDefinitions = { new ColumnDefinition(new GridLength(230)), new ColumnDefinition(GridLength.Star) } };
+        row.Add(left, 0, 0);
+        row.Add(right, 1, 0);
+        return row;
+    }
+    //JJQR - END
 
     static View Warning(string text)
     {
@@ -1835,7 +2052,15 @@ public partial class ConsultationPage : ContentPage
     // ---------- print (IPrinter only) ----------
     async void OnPrintRx(object? sender, EventArgs e) => await PrintAsync("Print Prescription", id => _printDocs.PrescriptionAsync(id));
     async void OnPrintLabs(object? sender, EventArgs e) => await PrintAsync("Print Lab Orders", id => _printDocs.LabRequestAsync(id));
-    async void OnPrintCert(object? sender, EventArgs e) => await PrintAsync("Print Certificate", id => _printDocs.MedicalCertificateAsync(id));
+    void OnSaveCert(object? sender, EventArgs e) => ConfirmCertificate(print: false); //JJQR - AI (Nov 21, 2026) //JJQR - END
+
+    //JJQR - AI (Nov 21, 2026) - one button: prints the certificate, or issues it first when there is none yet
+    async void OnPrintCert(object? sender, EventArgs e)
+    {
+        if (!D.CertificateExists) { ConfirmCertificate(print: true); return; }
+        await PrintAsync("Print Certificate", id => _printDocs.MedicalCertificateAsync(id));
+    }
+    //JJQR - END
     async void OnPrintSlip(object? sender, EventArgs e) => await PrintAsync("Print queue slip", id => _printDocs.QueueSlipAsync(id));
 
     async Task PrintAsync(string title, Func<Guid, Task<PrintDocument>> build, bool saveFirst = true)
@@ -1996,6 +2221,25 @@ public partial class ConsultationPage : ContentPage
         SectionHost.Children.Add(entry);
         return entry;
     }
+
+    //JJQR - AI (Nov 21, 2026) - re-flows the children added since <start> (each <perCell> children = one field) into a grid with <columns> columns
+    void GroupColumns(int start, int perCell, int columns)
+    {
+        var kids = SectionHost.Children.Skip(start).Cast<View>().ToList();
+        if (kids.Count == 0) return;
+        while (SectionHost.Children.Count > start) SectionHost.Children.RemoveAt(start);
+        var grid = new Grid { ColumnSpacing = 16, RowSpacing = 12 };
+        for (var i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        var cells = (kids.Count + perCell - 1) / perCell;
+        for (var cell = 0; cell < cells; cell++)
+        {
+            var stack = new VerticalStackLayout { Spacing = 6 };
+            foreach (var k in kids.Skip(cell * perCell).Take(perCell)) stack.Children.Add(k);
+            grid.Add(stack, cell % columns, cell / columns);
+        }
+        SectionHost.Children.Add(grid);
+    }
+    //JJQR - END
 
     //JJQR - AI (Nov 21, 2026) - the WHOLE row (circle + name) is the click target, with a hover highlight
     static View WrapCheck(CheckBox box, string label)

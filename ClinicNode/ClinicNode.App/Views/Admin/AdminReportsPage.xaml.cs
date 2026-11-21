@@ -55,8 +55,8 @@ public partial class AdminReportsPage : ContentPage
             Spacing = 16,
             Children =
             {
-                new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("From", "FieldLabel"), fromPicker } },
-                new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("To", "FieldLabel"), toPicker } },
+                new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("From", "FieldLabel"), ClinicPickers.DateBox(null, fromPicker) } },
+                new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("To", "FieldLabel"), ClinicPickers.DateBox(null, toPicker) } },
             },
         };
         var rangeCard = new VerticalStackLayout { Spacing = 12, Children = { range } };

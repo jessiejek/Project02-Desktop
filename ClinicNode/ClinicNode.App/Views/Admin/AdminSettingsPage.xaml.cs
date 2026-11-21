@@ -189,7 +189,7 @@ public partial class AdminSettingsPage : ContentPage
                 open.TimeSelected += (_, e) => { if (e.NewTime is { } t) h.Open = t; Check(); };
                 close.TimeSelected += (_, e) => { if (e.NewTime is { } t) h.Close = t; Check(); };
                 var dash = ClinicTheme.Text("–", "MutedBody"); dash.VerticalOptions = LayoutOptions.Center;
-                middle.Content = new HorizontalStackLayout { Spacing = 8, Children = { open, dash, close } };
+                middle.Content = new HorizontalStackLayout { Spacing = 8, Children = { ClinicPickers.TimeBox(null, open), dash, ClinicPickers.TimeBox(null, close) } };
             }
             Middle();
             row.Add(middle, 1, 0);
@@ -250,7 +250,7 @@ public partial class AdminSettingsPage : ContentPage
     {
         var mode = new Picker { ItemsSource = _vm.PaymentModeOptions.ToList(), SelectedItem = _vm.DefaultPaymentMode };
         mode.SelectedIndexChanged += (_, _) => { if (mode.SelectedItem is string s) _vm.DefaultPaymentMode = s; };
-        body.Children.Add(ClinicUi.Field("Default payment mode", mode));
+        body.Children.Add(ClinicUi.Field("Default payment mode", ClinicPickers.PickerBox(null, mode, 260)));
 
         var methods = new Grid { ColumnSpacing = 16 };
         var col = 0;

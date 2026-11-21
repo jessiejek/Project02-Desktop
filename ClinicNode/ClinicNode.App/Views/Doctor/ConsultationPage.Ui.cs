@@ -134,10 +134,20 @@ public partial class ConsultationPage
         }
         row.Children.Add(chip);
         if (canEdit && needsReview)
-            row.Children.Add(Btn("Record allergies / NKDA", () => { _allergyEditorOpen = true; RenderBanner(); }, "PrimaryButton").Also(b => b.Margin = new Thickness(0, 0, 8, 4)));
+            row.Children.Add(Btn("Record allergies / NKDA", () => { _allergyEditorOpen = true; RenderBanner(); }, "SecondaryButton").Also(b => b.Margin = new Thickness(0, 0, 8, 4)));
         //JJQR - AI (21 Nov 2026) - ALL-1: "Payment: {status || Not recorded}" last on the row; OB strip under the banner (web lg+ only — the desktop is always wide)
-        row.Children.Add(ClinicTheme.Text($"Payment: {(string.IsNullOrWhiteSpace(_paymentDisplay) ? "Not recorded" : _paymentDisplay)}", "LabelSm")
-            .Also(p => { p.TextColor = ClinicTheme.Color("OnSurfaceVariant"); p.VerticalOptions = LayoutOptions.Center; }));
+        //JJQR - AI (Nov 21, 2026) - payment status as a small coloured pill
+        var payText = string.IsNullOrWhiteSpace(_paymentDisplay) ? "Not recorded" : _paymentDisplay;
+        var paid = payText.Contains("Paid", StringComparison.OrdinalIgnoreCase) && !payText.Contains("Unpaid", StringComparison.OrdinalIgnoreCase);
+        var payBg = paid ? "StatusSuccessSurface" : payText.Contains("Unpaid", StringComparison.OrdinalIgnoreCase) ? "StatusWarningSurface" : "StatusNeutralSurface";
+        var payFg = paid ? "StatusSuccess" : payText.Contains("Unpaid", StringComparison.OrdinalIgnoreCase) ? "StatusWarning" : "StatusNeutral";
+        row.Children.Add(new Border
+        {
+            StrokeThickness = 0, BackgroundColor = ClinicTheme.Color(payBg), Padding = new Thickness(12, 8), Margin = new Thickness(0, 0, 8, 4), VerticalOptions = LayoutOptions.Center,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Content = new Label { Text = $"Payment: {payText}", FontFamily = ClinicTheme.FontSemiBold, FontSize = 13, TextColor = ClinicTheme.Color(payFg) },
+        });
+        //JJQR - END
         AllergyBar.Children.Add(row);
         if (showOb)
         {
@@ -164,8 +174,23 @@ public partial class ConsultationPage
 
     View AllergyEditor(bool nkda, List<PatientAllergy> active)
     {
-        var col = new VerticalStackLayout { Spacing = 8, Padding = new Thickness(0, 4) };
-        col.Children.Add(new HorizontalStackLayout { HorizontalOptions = LayoutOptions.End, Children = { Btn("Done", () => { _allergyEditorOpen = false; RenderBanner(); }, "GhostButton") } });
+        //JJQR - AI (Nov 21, 2026) - allergy editor laid out for the narrow side panel: stacked, full-width controls, clickable NKDA row
+        var col = new VerticalStackLayout { Spacing = 12 };
+        var done = new Border
+        {
+            StrokeThickness = 0, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 6 }, Padding = new Thickness(10, 5), BackgroundColor = Colors.Transparent,
+            Content = new Label { Text = "Done", FontFamily = ClinicTheme.FontSemiBold, FontSize = 13, TextColor = ClinicTheme.Color("Primary") },
+        };
+        done.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { _allergyEditorOpen = false; RenderBanner(); }) });
+        var doneHover = new PointerGestureRecognizer();
+        doneHover.PointerEntered += (_, _) => done.BackgroundColor = ClinicTheme.Color("PrimarySubtle");
+        doneHover.PointerExited += (_, _) => done.BackgroundColor = Colors.Transparent;
+        done.GestureRecognizers.Add(doneHover);
+        var head = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        head.Add(new Label { Text = "Allergies", FontFamily = ClinicTheme.FontSemiBold, FontSize = 15, VerticalOptions = LayoutOptions.Center }, 0, 0);
+        head.Add(done, 1, 0);
+        col.Children.Add(head);
+        //JJQR - END
         var box = new CheckBox { IsChecked = nkda };
         box.CheckedChanged += async (_, e) =>
         {
@@ -180,10 +205,13 @@ public partial class ConsultationPage
             _allergyEditorOpen = false;
             await SaveAllergiesAsync(new[] { new AllergyInput("NKDA", IsNkda: true) });
         };
-        col.Children.Add(WrapCheck(box, "NKDA"));
-        var draft = new Entry { Placeholder = "Add allergy (e.g. Penicillin)", MinimumWidthRequest = 192, HorizontalOptions = LayoutOptions.Fill };
-        var add = Btn("Add allergy", () => { }, "SecondaryButton");
+        col.Children.Add(ClinicPickers.CheckRow(box, "No known drug allergies (NKDA)")); //JJQR - AI (Nov 21, 2026) //JJQR - END
+        col.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant") });
+        var draft = new Entry { Placeholder = "e.g. Penicillin", HorizontalOptions = LayoutOptions.Fill };
+        var add = Btn("Add allergy", () => { }, "PrimaryButton");
         add.IsEnabled = false;
+        add.HorizontalOptions = LayoutOptions.Fill;
+        add.Margin = new Thickness(0);
         draft.TextChanged += (_, e) => add.IsEnabled = !string.IsNullOrWhiteSpace(e.NewTextValue);
         async Task Submit()
         {
@@ -196,29 +224,25 @@ public partial class ConsultationPage
         }
         add.Clicked += async (_, _) => await Submit();
         draft.Completed += async (_, _) => await Submit();
-        var addRow = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 8 };
-        addRow.Add(ClinicTheme.Text("Allergies", "FieldLabel").Also(l => l.VerticalOptions = LayoutOptions.Center), 0);
-        addRow.Add(draft, 1);
-        addRow.Add(add, 2);
-        col.Children.Add(addRow);
+        col.Children.Add(new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Add an allergy", "FieldLabel"), draft, add } });
         if (!nkda && active.Count > 0)
         {
             var chips = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
             foreach (var a in active)
             {
                 var keep = active.Where(x => !ReferenceEquals(x, a)).Select(ToInput).ToList();
-                var chipRow = new HorizontalStackLayout { Spacing = 4, Children = { ClinicTheme.Text(FormatAllergen(a.Allergen), "LabelSm").Also(l => l.VerticalOptions = LayoutOptions.Center) } };
-                var x = Btn("×", () => { _allergyEditorOpen = false; _ = SaveAllergiesAsync(keep); }, "GhostButton");
-                chipRow.Children.Add(x);
+                var remove = new Label { Text = "✕", FontSize = 12, TextColor = ClinicTheme.Color("OnSurfaceVariant"), VerticalOptions = LayoutOptions.Center, Padding = new Thickness(4, 0) };
+                remove.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { _allergyEditorOpen = false; _ = SaveAllergiesAsync(keep); }) });
+                var chipRow = new HorizontalStackLayout { Spacing = 6, Children = { ClinicTheme.Text(FormatAllergen(a.Allergen), "LabelSm").Also(l => l.VerticalOptions = LayoutOptions.Center), remove } };
                 chips.Children.Add(new Border
                 {
-                    BackgroundColor = ClinicTheme.Color("SurfaceContainerHigh"), StrokeThickness = 0, Padding = new Thickness(10, 0), Margin = new Thickness(0, 0, 6, 6),
+                    BackgroundColor = ClinicTheme.Color("SurfaceContainerHigh"), StrokeThickness = 0, Padding = new Thickness(12, 6), Margin = new Thickness(0, 0, 6, 6),
                     StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 16 }, Content = chipRow,
                 });
             }
             col.Children.Add(chips);
         }
-        return new Border { Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, BackgroundColor = ClinicTheme.Color("Surface"), Padding = 12, Content = col };
+        return new Border { Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, BackgroundColor = ClinicTheme.Color("SurfaceContainerLowest"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 }, Padding = new Thickness(14, 12), Content = col }; //JJQR - AI (Nov 21, 2026) //JJQR - END
     }
 
     // ---------- section indicator (web renderSectionIndicator) ----------

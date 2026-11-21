@@ -75,6 +75,9 @@ public static class ClinicModal
         };
         var scrim = new Grid { BackgroundColor = Backdrop };
         scrim.Children.Add(card);
+        //JJQR - AI (Nov 21, 2026) - dialogs take a proper width (up to maxWidth) instead of shrinking to their content; on narrow windows they leave a margin on each side
+        scrim.SizeChanged += (_, _) => { if (scrim.Width > 0) card.WidthRequest = Math.Max(320, Math.Min(maxWidth, scrim.Width - 56)); };
+        //JJQR - END
         return scrim;
     }
 

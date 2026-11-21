@@ -24,23 +24,68 @@ public static class DoctorExtraUi
 
     public static string Pht(DateTimeOffset t) => t.ToOffset(TimeSpan.FromHours(8)).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>Plain tab strip: one button per tab, the selected one uses the primary style.</summary>
-    public static FlexLayout Tabs((string Id, string Label)[] tabs, Func<string> selected, Action<string> select)
+    //JJQR - AI (Nov 21, 2026) - underline tabs: the selected tab has a teal label and a teal bar; the strip sits on one hairline
+    public static VerticalStackLayout Tabs((string Id, string Label)[] tabs, Func<string> selected, Action<string> select)
     {
-        var row = StaffUi.Wrap();
+        var strip = new HorizontalStackLayout { Spacing = 2 };
         void Render()
         {
-            row.Children.Clear();
+            strip.Children.Clear();
             foreach (var (id, label) in tabs)
             {
-                var b = StaffUi.Btn(label, () => { select(id); Render(); return Task.CompletedTask; }, id == selected() ? "SegmentedButtonSelected" : "SegmentedButton");
-                b.Margin = new Thickness(0, 0, 8, 8);
-                row.Children.Add(b);
+                var on = id == selected();
+                var text = new Label
+                {
+                    Text = label, FontSize = 14, Padding = new Thickness(14, 10, 14, 9),
+                    FontFamily = on ? ClinicTheme.FontSemiBold : ClinicTheme.FontMedium,
+                    TextColor = on ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OnSurfaceVariant"),
+                };
+                var bar = new BoxView { HeightRequest = 3, Color = on ? ClinicTheme.Color("Primary") : Colors.Transparent, CornerRadius = 2 };
+                var tab = new VerticalStackLayout { Spacing = 0, Children = { text, bar } };
+                tab.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { select(id); Render(); }) });
+                if (!on)
+                {
+                    var hover = new PointerGestureRecognizer();
+                    hover.PointerEntered += (_, _) => { text.TextColor = ClinicTheme.Color("OnSurface"); bar.Color = ClinicTheme.Color("OutlineVariant"); };
+                    hover.PointerExited += (_, _) => { text.TextColor = ClinicTheme.Color("OnSurfaceVariant"); bar.Color = Colors.Transparent; };
+                    tab.GestureRecognizers.Add(hover);
+                }
+                strip.Children.Add(tab);
             }
         }
         Render();
-        return row;
+        var line = new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant"), Margin = new Thickness(0, -1, 0, 0) };
+        return new VerticalStackLayout { Spacing = 0, Children = { strip, line } };
     }
+    //JJQR - END
+
+    //JJQR - AI (Nov 21, 2026) - segmented control: one grey pill holding the options; the selected option is a white raised segment
+    public static View Segmented(string[] labels, int selected, Action<int> onSelect)
+    {
+        var row = new HorizontalStackLayout { Spacing = 2 };
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var idx = i;
+            var on = i == selected;
+            var seg = new Border
+            {
+                StrokeThickness = on ? 1 : 0, Stroke = ClinicTheme.Color("OutlineVariant"),
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 6 },
+                Padding = new Thickness(14, 6),
+                BackgroundColor = on ? ClinicTheme.Color("SurfaceContainerLowest") : Colors.Transparent,
+                Content = new Label { Text = labels[i], FontSize = 13, FontFamily = on ? ClinicTheme.FontSemiBold : ClinicTheme.FontMedium, TextColor = on ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OnSurfaceVariant") },
+            };
+            seg.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => onSelect(idx)) });
+            row.Children.Add(seg);
+        }
+        return new Border
+        {
+            BackgroundColor = ClinicTheme.Color("SurfaceContainer"), StrokeThickness = 0, Padding = new Thickness(3),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 9 },
+            VerticalOptions = LayoutOptions.Center, Content = row,
+        };
+    }
+    //JJQR - END
 
     //JJQR - AI (21 Nov 2026) - editing helpers for the overflow screens
     /// <summary>Modal confirm (web Modal with Cancel + action). Returns true when confirmed.</summary>

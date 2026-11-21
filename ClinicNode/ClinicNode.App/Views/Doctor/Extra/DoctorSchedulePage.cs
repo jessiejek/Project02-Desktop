@@ -50,48 +50,77 @@ public sealed class DoctorSchedulePage : StaffLivePage
         }
         //JJQR - END
 
-        _body.Children.Add(StaffUi.Card(ClinicTheme.Text("The clinic runs a walk-in FCFS queue — there are no appointment slots. These hours are informational (shown to patients); day-to-day availability is set from the dashboard status toggle.", "MutedBody")));
+        //JJQR - AI (Nov 21, 2026) - desktop layout: info bar on top; LEFT = weekly hours as a clear table with on/off toggles and time fields; RIGHT = daily limit + blocked dates; Save below
+        _body.Children.Add(new Border
+        {
+            BackgroundColor = ClinicTheme.Color("StatusInfoSurface"), Stroke = ClinicTheme.Color("StatusInfoBorder"), StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 }, Padding = new Thickness(16, 12),
+            Content = new Label { Text = "The clinic runs a walk-in first-come queue, so there are no appointment slots. These hours are informational; day-to-day availability is set from the dashboard status toggle.", FontSize = 13, TextColor = ClinicTheme.Color("StatusInfo") },
+        });
 
         _days.Clear();
-        var hours = StaffUi.Column(8);
-        hours.Children.Add(ClinicTheme.Text("Weekly Hours", "HeadlineSm"));
+        var hours = new VerticalStackLayout { Spacing = 0 };
+        hours.Children.Add(new Label { Text = "Weekly hours", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17, Margin = new Thickness(0, 0, 0, 10) });
         foreach (var d in a.Days)
         {
-            var active = new CheckBox { IsChecked = d.IsActive, VerticalOptions = LayoutOptions.Center };
+            var active = new CheckBox { IsChecked = d.IsActive, IsVisible = false }; // value holder; the visible control is the toggle below
             var start = new TimePicker { Time = d.StartTime.ToTimeSpan(), IsEnabled = d.IsActive };
             var end = new TimePicker { Time = d.EndTime.ToTimeSpan(), IsEnabled = d.IsActive };
-            active.CheckedChanged += (_, e) => { start.IsEnabled = e.Value; end.IsEnabled = e.Value; };
-            _days.Add((d.DayOfWeek, active, start, end));
-            hours.Children.Add(new HorizontalStackLayout
+            var toggle = new Switch { IsToggled = d.IsActive, OnColor = ClinicTheme.Color("Primary"), VerticalOptions = LayoutOptions.Center };
+            var closed = new Label { Text = "Closed", FontSize = 13, TextColor = ClinicTheme.Color("OnSurfaceVariant"), VerticalOptions = LayoutOptions.Center, IsVisible = !d.IsActive };
+            var dayName = new Label { Text = DoctorExtraRules.DayNames[d.DayOfWeek], FontFamily = ClinicTheme.FontMedium, FontSize = 14, VerticalOptions = LayoutOptions.Center, TextColor = d.IsActive ? ClinicTheme.Color("OnSurface") : ClinicTheme.Color("OnSurfaceVariant") };
+            toggle.Toggled += (_, e) =>
             {
-                Spacing = 12,
-                Children = { active, new Label { Text = DoctorExtraRules.DayNames[d.DayOfWeek], WidthRequest = 110, VerticalOptions = LayoutOptions.Center, Style = ClinicTheme.Style("BodyMd") }, start, ClinicTheme.Text("–", "MutedSm") //JJQR - AI (21 Nov 2026) web separator is an en dash //JJQR - END
-, end },
-            });
+                active.IsChecked = e.Value; start.IsEnabled = e.Value; end.IsEnabled = e.Value;
+                closed.IsVisible = !e.Value;
+                dayName.TextColor = e.Value ? ClinicTheme.Color("OnSurface") : ClinicTheme.Color("OnSurfaceVariant");
+            };
+            _days.Add((d.DayOfWeek, active, start, end));
+            var row = new Grid
+            {
+                ColumnSpacing = 14, Padding = new Thickness(4, 10),
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(new GridLength(56)), new ColumnDefinition(new GridLength(120)),
+                    new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star),
+                },
+            };
+            row.Add(toggle, 0, 0);
+            row.Add(dayName, 1, 0);
+            row.Add(ClinicNode.App.Controls.ClinicPickers.TimeBox(this, start), 2, 0);
+            row.Add(new Label { Text = "to", FontSize = 13, TextColor = ClinicTheme.Color("OnSurfaceVariant"), VerticalOptions = LayoutOptions.Center }, 3, 0);
+            row.Add(ClinicNode.App.Controls.ClinicPickers.TimeBox(this, end), 4, 0);
+            row.Add(closed, 5, 0);
+            row.Add(active, 5, 0);
+            hours.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.6f) });
+            hours.Children.Add(row);
         }
-        _body.Children.Add(StaffUi.Card(hours));
+        var hoursCard = StaffUi.Card(hours);
 
-        //JJQR - AI (21 Nov 2026) - web: "Daily patient limit" is its own card (heading + "Leave blank for no limit." + input). Read-only here: the API keeps it Admin-only.
+        // daily patient limit: shown as a plain value (it is changed by the clinic admin), not as a box that looks editable
         _limit.Text = a.DailyPatientLimit?.ToString() ?? "";
         _limit.IsReadOnly = true;
-        _body.Children.Add(StaffUi.Card(
-            ClinicTheme.Text("Daily patient limit", "HeadlineSm"),
-            ClinicTheme.Text("Leave blank for no limit.", "MutedBody"),
-            _limit));
-        //JJQR - END
+        var limitValue = new Label { Text = string.IsNullOrWhiteSpace(_limit.Text) ? "No limit" : $"{_limit.Text} patients per day", FontFamily = ClinicTheme.FontSemiBold, FontSize = 20 };
+        var limitCard = StaffUi.Card(
+            new Label { Text = "Daily patient limit", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17 },
+            limitValue,
+            ClinicTheme.Text("Set by the clinic admin. Ask them to change it.", "MutedSm"));
 
         var blocked = StaffUi.Column(8);
-        blocked.Children.Add(ClinicTheme.Text("Blocked Dates", "HeadlineSm"));
+        blocked.Children.Add(new Label { Text = "Blocked dates", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17 });
         if (a.BlockedDates.Count == 0) blocked.Children.Add(ClinicTheme.Text("No blocked dates. Your weekly hours apply.", "MutedBody"));
         foreach (var b in a.BlockedDates)
-            //JJQR - AI (21 Nov 2026) - web row: "{yyyy-MM-dd} — {reason}" + a delete action
             blocked.Children.Add(StaffUi.Row(
                 ClinicTheme.Text($"{b.Date:yyyy-MM-dd} — {b.Reason}", "BodyMd"),
                 StaffUi.DangerGhost("Remove", () => RemoveAsync(b))));
-            //JJQR - END
         blocked.Children.Add(StaffUi.Btn("Block a date", () => Navigation.PushModalAsync(new BlockDateDialog(this)), "SecondaryButton"));
-        _body.Children.Add(StaffUi.Card(blocked));
-        //JJQR - AI (21 Nov 2026) - web: the Save button sits below the three cards
+        var blockedCard = StaffUi.Card(blocked);
+
+        var right = new VerticalStackLayout { Spacing = 16, Children = { limitCard, blockedCard } };
+        var cols = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(new GridLength(3, GridUnitType.Star)), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) } };
+        cols.Add(hoursCard, 0, 0);
+        cols.Add(right, 1, 0);
+        _body.Children.Add(cols);
         _body.Children.Add(StaffUi.Btn("Save availability", SaveAsync));
         //JJQR - END
     }
@@ -124,7 +153,7 @@ public sealed class DoctorSchedulePage : StaffLivePage
         public BlockDateDialog(DoctorSchedulePage owner)
         {
             Title = "Add Blocked Date";
-            BackgroundColor = ClinicTheme.Color("Background");
+            BackgroundColor = Colors.Transparent;
             var svc = StaffUi.Get<IDoctorScheduleService>(owner.Sp);
             var error = StaffUi.Error();
             //JJQR - AI (21 Nov 2026) - web modal: no field labels, date starts unpicked, Reason placeholder "Reason", "Block this date" disabled until a date is picked and the booking check finished without error
@@ -155,19 +184,20 @@ public sealed class DoctorSchedulePage : StaffLivePage
             }
             date.DateSelected += async (_, _) => await CheckAsync();
             Sync();
-            Content = new ScrollView
+            ControlTemplate = null;
+            var body = new VerticalStackLayout
             {
-                Content = new VerticalStackLayout
+                Spacing = 14,
+                Children =
                 {
-                    Spacing = 12, Padding = 24, MaximumWidthRequest = 520,
-                    Children =
-                    {
-                        ClinicTheme.Text("Add Blocked Date", "HeadlineMd"), error,
-                        date, reason, affected,
-                        StaffUi.Wrap(StaffUi.Btn("Cancel", () => Navigation.PopModalAsync(), "SecondaryButton"), block),
-                    },
+                    error,
+                    StaffUi.Field("Date to block", ClinicPickers.DateBox(null, date, null, true)),
+                    StaffUi.Field("Reason (optional)", reason),
+                    new Border { Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(12, 9), Content = affected },
                 },
             };
+            var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { StaffUi.Btn("Cancel", () => Navigation.PopModalAsync(), "SecondaryButton"), block } };
+            Content = ClinicModal.Build("Block a date", body, footer, () => Navigation.PopModalAsync(), 480);
             //JJQR - END
         }
     }

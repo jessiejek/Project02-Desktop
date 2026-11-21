@@ -146,7 +146,7 @@ public static class DoctorRxFields
         var route = new Picker { ItemsSource = Routes.ToList() };
         route.SelectedItem = Routes.Contains(d.Route) ? d.Route : null;
         route.SelectedIndexChanged += (_, _) => d.Route = route.SelectedItem as string ?? "";
-        col.Children.Add(StaffUi.Field("Route", route));
+        col.Children.Add(StaffUi.Field("Route", ClinicPickers.PickerBox(null, route)));
         col.Children.Add(Timing(d, "Meals", "Timing"));
         col.Children.Add(Duration(d));
         col.Children.Add(StaffUi.Field("Indication", Input(d.Indication, "e.g. for fever", v => d.Indication = v)));

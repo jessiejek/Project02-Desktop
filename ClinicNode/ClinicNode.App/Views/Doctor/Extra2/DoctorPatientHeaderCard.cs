@@ -34,6 +34,8 @@ public static class DoctorPatientHeaderCard
         var grid = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
         grid.Add(avatar, 0);
         grid.Add(text, 1);
+        //JJQR - AI (Nov 21, 2026) - actions (phone chip + print card) sit together on the right of the header instead of wrapping under the name
+        var actions = new HorizontalStackLayout { Spacing = 10, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.End };
         if (!string.IsNullOrWhiteSpace(p.ContactNumber))
         {
             var number = p.ContactNumber!;
@@ -47,11 +49,13 @@ public static class DoctorPatientHeaderCard
             {
                 Command = new Command(async () => { try { await Launcher.Default.OpenAsync("tel:" + number); } catch { /* no dialer on this computer: nothing to do */ } }),
             });
-            grid.Add(chip, 2);
+            actions.Children.Add(chip);
         }
+        foreach (var a in extraActions) actions.Children.Add(a);
+        grid.Add(actions, 2);
         var col = new VerticalStackLayout { Spacing = 8 };
         col.Children.Add(grid);
-        foreach (var a in extraActions) col.Children.Add(a);
+        //JJQR - END
         return StaffUi.Card(col);
     }
 }

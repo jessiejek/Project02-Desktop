@@ -116,8 +116,8 @@ public partial class AdminPatientsPage : ContentPage
         for (var i = 0; i < 3; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         grid.Add(ClinicUi.Field("First name", first), 0, 0);
         grid.Add(ClinicUi.Field("Last name", last), 1, 0);
-        grid.Add(ClinicUi.Field("Date of birth", dob), 0, 1);
-        grid.Add(ClinicUi.Field("Sex", sex), 1, 1);
+        grid.Add(ClinicUi.Field("Date of birth", ClinicPickers.DateBox(null, dob, new DateTime(1990,1,1), true)), 0, 1);
+        grid.Add(ClinicUi.Field("Sex", ClinicPickers.PickerBox(null, sex)), 1, 1);
         var contactLabel = new Label
         {
             Style = ClinicTheme.Style("FieldLabel"),

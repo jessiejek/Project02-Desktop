@@ -187,8 +187,8 @@ public partial class AdminPatientDetailPage : ContentPage
         for (var i = 0; i < 3; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         grid.Add(ClinicUi.Field("First name", first), 0, 0);
         grid.Add(ClinicUi.Field("Last name", last), 1, 0);
-        grid.Add(ClinicUi.Field("Date of birth", dob), 0, 1);
-        grid.Add(ClinicUi.Field("Sex", sex), 1, 1);
+        grid.Add(ClinicUi.Field("Date of birth", ClinicPickers.DateBox(null, dob, null, true)), 0, 1);
+        grid.Add(ClinicUi.Field("Sex", ClinicPickers.PickerBox(null, sex)), 1, 1);
         grid.Add(ClinicUi.Field("Contact number", contact), 0, 2);
         grid.Add(ClinicUi.Field("Email", email), 1, 2);
         var saved = await AdminDialog.ShowSubmitAsync(this, "Edit patient details", grid, "Save changes",

@@ -9,20 +9,31 @@
              Title="Log in"
              Shell.FlyoutBehavior="Disabled"
              Shell.NavBarIsVisible="False"
+             ControlTemplate="{x:Null}"
              BackgroundColor="{StaticResource SurfaceContainerLow}">
-    <ScrollView>
-        <VerticalStackLayout Padding="24,32"
+    <Grid ColumnDefinitions="4*,5*">
+        <!-- JJQR - AI (Nov 21, 2026) - desktop split layout: brand panel on the left, sign-in form on the right (fills the screen instead of a small card in empty space) -->
+        <Grid BackgroundColor="{StaticResource SidebarBg}" Padding="64,0">
+            <VerticalStackLayout VerticalOptions="Center" Spacing="18">
+                <Label Text="CLINIC NODE" FontSize="13" FontAttributes="Bold" CharacterSpacing="3" TextColor="{StaticResource SidebarAccent}" />
+                <Label Text="Dr. Grace Gavino Medical Clinic" FontSize="38" FontAttributes="Bold" TextColor="White" LineBreakMode="WordWrap" />
+                <Label Text="Queue, consultations, prescriptions, certificates and payments in one place — and it keeps working when the internet doesn't."
+                       FontSize="16" LineHeight="1.4" TextColor="{StaticResource SidebarText}" LineBreakMode="WordWrap" MaximumWidthRequest="460" HorizontalOptions="Start" />
+                <VerticalStackLayout Spacing="10" Margin="0,18,0,0">
+                    <Label Text="✓  Walk-in queue with priority lanes" FontSize="14" TextColor="{StaticResource SidebarText}" />
+                    <Label Text="✓  SOAP notes, e-prescriptions and lab orders" FontSize="14" TextColor="{StaticResource SidebarText}" />
+                    <Label Text="✓  Print-ready certificates and receipts" FontSize="14" TextColor="{StaticResource SidebarText}" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </Grid>
+    <ScrollView Grid.Column="1">
+        <VerticalStackLayout Padding="40,32"
                              Spacing="0"
-                             WidthRequest="416"
-                             MaximumWidthRequest="416"
+                             WidthRequest="600"
+                             MaximumWidthRequest="600"
                              HorizontalOptions="Center"
                              VerticalOptions="Center">
-            <Label Text="Dr. Grace Gavino Medical Clinic"
-                   Style="{StaticResource BrandLink}"
-                   MinimumHeightRequest="44"
-                   VerticalTextAlignment="Center"
-                   HorizontalOptions="Start" />
-            <Border Style="{StaticResource AuthCard}" Padding="32">
+            <Border Style="{StaticResource AuthCard}" Padding="36">
                 <VerticalStackLayout Spacing="0">
                     <VerticalStackLayout Spacing="4" Margin="0,0,0,24">
                         <Label Text="Log in to your account" Style="{StaticResource HeadlineLgMobile}" SemanticProperties.HeadingLevel="Level1" />
@@ -107,5 +118,6 @@
             </Border>
         </VerticalStackLayout>
     </ScrollView>
+    </Grid>
 </ContentPage>
 <!-- JJQR - END -->

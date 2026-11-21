@@ -291,23 +291,15 @@ public sealed class WalkInWizardView : ContentView
             },
         };
 
-        // Visit type: segmented New visit / Follow-up (web role="radiogroup")
-        var visit = new HorizontalStackLayout { Spacing = 4 };
-        void RenderVisit()
-        {
-            visit.Children.Clear();
-            foreach (var vt in new[] { VisitType.New, VisitType.FollowUp })
-            {
-                var v = vt;
-                visit.Children.Add(StaffUi.Btn(StaffRules.VisitTypeLongLabel(v), () => { Vm.VisitType = v; RenderVisit(); return Task.CompletedTask; },
-                    Vm.VisitType == v ? "SegmentedButtonSelected" : "SegmentedButton"));
-            }
-        }
+        //JJQR - AI (Nov 21, 2026) - "Confirm the visit" as a proper two-panel layout: LEFT = who + payment note, RIGHT = the visit options; buttons normal-sized at the bottom
+        var visitHost = new ContentView();
+        void RenderVisit() => visitHost.Content = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(
+            [StaffRules.VisitTypeLongLabel(VisitType.New), StaffRules.VisitTypeLongLabel(VisitType.FollowUp)],
+            Vm.VisitType == VisitType.FollowUp ? 1 : 0,
+            i => { Vm.VisitType = i == 1 ? VisitType.FollowUp : VisitType.New; RenderVisit(); });
         RenderVisit();
-        var visitBox = new Border { Style = ClinicTheme.Style("SegmentedControl"), HorizontalOptions = LayoutOptions.Start, Content = visit };
+        visitHost.HorizontalOptions = LayoutOptions.Start;
 
-        // Discount: None / Senior citizen / PWD + the two hints
-        var discount = new Picker { ItemsSource = new[] { "None", "Senior citizen", "PWD" }, SelectedIndex = Vm.Discount switch { "Senior" => 1, "PWD" => 2, _ => 0 }, MinimumWidthRequest = 192 };
         var autoHint = ClinicTheme.Text("", "FieldHint");
         var laneHint = ClinicTheme.Text("", "FieldHint");
         void Hints()
@@ -315,58 +307,80 @@ public sealed class WalkInWizardView : ContentView
             StaffUi.Show(autoHint, Vm.DiscountAutoHint);
             laneHint.Text = Vm.DiscountLaneHint;
         }
-        discount.SelectedIndexChanged += (_, _) =>
-        {
-            Vm.Discount = discount.SelectedIndex switch { 1 => "Senior", 2 => "PWD", _ => null };
-            Hints();
-        };
+        var discountHost = new ContentView { HorizontalOptions = LayoutOptions.Start };
+        void RenderDiscount() => discountHost.Content = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.Segmented(
+            ["None", "Senior citizen", "PWD"],
+            Vm.Discount switch { "Senior" => 1, "PWD" => 2, _ => 0 },
+            i => { Vm.Discount = i switch { 1 => "Senior", 2 => "PWD", _ => null }; RenderDiscount(); Hints(); });
+        RenderDiscount();
         Hints();
-        var discountRow = StaffUi.Wrap(discount, autoHint, laneHint);
-        foreach (var c in discountRow.Children.OfType<View>()) c.Margin = new Thickness(0, 0, 8, 4);
 
-        // "Medical certificate requested": bordered row, checkbox on the right
-        var cert = new CheckBox { IsChecked = Vm.MedCertRequested, VerticalOptions = LayoutOptions.Center };
+        var cert = new CheckBox { IsChecked = Vm.MedCertRequested };
         cert.CheckedChanged += (_, e) => Vm.MedCertRequested = e.Value;
-        var certGrid = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 12 };
-        certGrid.Add(new Label { Text = "🗎  Medical certificate requested", Style = ClinicTheme.Style("BodyMd"), VerticalOptions = LayoutOptions.Center }, 0);
-        certGrid.Add(cert, 1);
-        certGrid.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => cert.IsChecked = !cert.IsChecked) });
-        var certRow = new Border { Style = ClinicTheme.Style("ListCard"), Content = certGrid };
+        var certRow = ClinicPickers.CheckRow(cert, "Medical certificate requested", "Adds the certificate fee to this visit.");
 
-        var pay = new Border
+        var initials = string.Concat(p.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+        var avatar = new Border
         {
-            Style = ClinicTheme.Style("ListCard"),
-            BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
-            StrokeThickness = 0,
+            WidthRequest = 64, HeightRequest = 64, StrokeThickness = 0, BackgroundColor = ClinicTheme.Color("PrimarySubtle"), HorizontalOptions = LayoutOptions.Start,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 32 },
+            Content = new Label { Text = initials, FontFamily = ClinicTheme.FontSemiBold, FontSize = 22, TextColor = ClinicTheme.Color("Primary"), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+        };
+        var who = new Border
+        {
+            BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"), Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 }, Padding = new Thickness(22),
+            VerticalOptions = LayoutOptions.Start,
             Content = new VerticalStackLayout
             {
-                Spacing = 2,
-                Children = { ClinicTheme.Text("Pay at clinic", "LabelMd"), ClinicTheme.Text("Provisional fee computed at check-in, finalised at consultation.", "MutedSm") },
+                Spacing = 8,
+                Children =
+                {
+                    avatar,
+                    new Label { Text = p.FullName, FontFamily = ClinicTheme.FontSemiBold, FontSize = 20, LineBreakMode = LineBreakMode.WordWrap },
+                    ClinicTheme.Text($"{p.PatientCode} · {p.Sex} · {Vm.PatientAge} yrs", "MutedBody"),
+                    new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant"), Margin = new Thickness(0, 8) },
+                    ClinicTheme.Text("PAYMENT", "LabelSm"),
+                    new Label { Text = "Pay at clinic", FontFamily = ClinicTheme.FontSemiBold, FontSize = 15 },
+                    ClinicTheme.Text("The fee is estimated now and finalised at the consultation.", "MutedSm"),
+                },
             },
         };
 
-        var buttons = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) }, ColumnSpacing = 16 };
+        var options = new VerticalStackLayout
+        {
+            Spacing = 20,
+            Children =
+            {
+                StaffUi.Field("Visit type", visitHost),
+                StaffUi.Field("Discount", new VerticalStackLayout { Spacing = 6, Children = { discountHost, autoHint, laneHint } }),
+                StaffUi.Field("Extras", certRow),
+            },
+        };
+        var cols = new Grid { ColumnSpacing = 28, ColumnDefinitions = { new ColumnDefinition(new GridLength(2, GridUnitType.Star)), new ColumnDefinition(new GridLength(3, GridUnitType.Star)) } };
+        cols.Add(who, 0, 0);
+        cols.Add(options, 1, 0);
+
         var back = StaffUi.Btn("‹ Back", () => { Vm.Back(); return Task.CompletedTask; }, "SecondaryButton");
         back.IsEnabled = !Vm.Busy;
-        back.HorizontalOptions = LayoutOptions.Fill;
         var checkIn = StaffUi.Btn(Vm.Busy ? "Checking in…" : "Check in and get queue number", () => Vm.CheckInAsync());
         checkIn.IsEnabled = !Vm.Busy;
-        checkIn.HorizontalOptions = LayoutOptions.Fill;
-        buttons.Add(back, 0);
-        buttons.Add(checkIn, 1);
+        var footer = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        footer.Add(back, 0, 0);
+        footer.Add(checkIn, 2, 0);
 
         var items = new List<View>
         {
-            ClinicTheme.Text("Confirm the visit", "HeadlineMd"),
-            identity,
-            StaffUi.Field("Visit type", visitBox),
-            StaffUi.Field("Discount", discountRow),
-            certRow,
-            pay,
+            new Label { Text = "Confirm the visit", FontFamily = ClinicTheme.FontSemiBold, FontSize = 20 },
+            cols,
         };
         if (Vm.Error is { } err) items.Add(ClinicUi.Alert(err, success: false));
-        items.Add(buttons);
-        return StaffUi.Card(items.ToArray());
+        items.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant") });
+        items.Add(footer);
+        var card = StaffUi.Card(items.ToArray());
+        card.HorizontalOptions = LayoutOptions.Center;
+        card.WidthRequest = 920;
+        return card;
         //JJQR - END
     }
 

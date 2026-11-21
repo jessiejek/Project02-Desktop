@@ -172,22 +172,24 @@ public sealed class TodayPage : ContentPage
         _greeting.Text = nameDate;
         _syncLabel.Text = _sync.Current.Banner;
 
-        _body.Children.Add(new VerticalStackLayout
+        //JJQR - AI (Nov 21, 2026) - header: title, date and sync status stacked on the left; the three actions on the right (no more overlap)
+        _syncLabel.FontSize = 12;
+        var headLeft = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center, Children = { TitleWithStatus(), _greeting, _syncLabel } };
+        var headActions = new HorizontalStackLayout
         {
-            Spacing = 4,
+            Spacing = 8, VerticalOptions = LayoutOptions.Center,
             Children =
             {
-                //JJQR - AI (21 Nov 2026) - web roleBadge: the day status pill, only once it is known
-                TitleWithStatus(),
-                //JJQR - END
-                _greeting,
-                StaffUi.Wrap(
-                    Margin(StaffUi.Btn("Your performance", () => GoAsync("//performance"), "SecondaryButton")),
-                    Margin(StaffUi.Btn("Open appointments", () => GoAsync("//appointments"))),
-                    Margin(StaffUi.Btn("New walk-in consult", () => GoAsync("walkin"), "SecondaryButton"))),
-                _syncLabel,
+                StaffUi.Btn("Your performance", () => GoAsync("//performance"), "SecondaryButton"),
+                StaffUi.Btn("New walk-in consult", () => GoAsync("walkin"), "SecondaryButton"),
+                StaffUi.Btn("Open appointments", () => GoAsync("//appointments")),
             },
-        });
+        };
+        var head = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        head.Add(headLeft, 0, 0);
+        head.Add(headActions, 1, 0);
+        _body.Children.Add(head);
+        //JJQR - END
         if (_dayStatusError is not null) { StaffUi.Show(_statusError, _dayStatusError); _body.Children.Add(_statusError); }
         // JJQR - AI (Nov 21, 2026)
         else if (_actionError is not null) { StaffUi.Show(_statusError, _actionError); _body.Children.Add(_statusError); }
@@ -208,6 +210,29 @@ public sealed class TodayPage : ContentPage
         var cols = new Grid { ColumnSpacing = 20, ColumnDefinitions = { new ColumnDefinition(new GridLength(3, GridUnitType.Star)), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) } };
         cols.Add(left, 0, 0);
         cols.Add(right, 1, 0);
+        //JJQR - AI (Nov 21, 2026) - narrow windows: the dashboard stacks to ONE column (queue first, side cards below) so the queue table never gets squeezed
+        var stacked = false;
+        cols.SizeChanged += (_, _) =>
+        {
+            var narrow = cols.Width > 0 && cols.Width < 1080;
+            if (narrow == stacked) return;
+            stacked = narrow;
+            cols.ColumnDefinitions.Clear(); cols.RowDefinitions.Clear();
+            if (narrow)
+            {
+                cols.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+                cols.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); cols.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                cols.RowSpacing = 20;
+                Grid.SetColumn(left, 0); Grid.SetRow(left, 0); Grid.SetColumn(right, 0); Grid.SetRow(right, 1);
+            }
+            else
+            {
+                cols.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(3, GridUnitType.Star))); cols.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
+                cols.RowSpacing = 0;
+                Grid.SetColumn(left, 0); Grid.SetRow(left, 0); Grid.SetColumn(right, 1); Grid.SetRow(right, 0);
+            }
+        };
+        //JJQR - END
         _body.Children.Add(cols);
         //JJQR - END
     }
@@ -312,15 +337,31 @@ public sealed class TodayPage : ContentPage
         var col = new VerticalStackLayout { Spacing = 12 };
         var d = _data;
         string Num(int n) => _loadError || d is null ? "—" : n.ToString();
-        col.Children.Add(new Grid
+        //JJQR - AI (Nov 21, 2026) - queue header: title on the left; on the right three count chips and the "Call next" action
+        View CountChip(string label, string value, string bg, string fg) => new Border
         {
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
-            Children =
+            StrokeThickness = 0, BackgroundColor = ClinicTheme.Color(bg), Padding = new Thickness(12, 6), VerticalOptions = LayoutOptions.Center,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Content = new HorizontalStackLayout
             {
-                ClinicTheme.Text("Your patient queue", "LabelLg"),
-                Place(ClinicTheme.Text($"{Num(d?.Waiting ?? 0)} waiting    {Num(d?.InProgress ?? 0)} in progress    {Num(d?.CompletedToday ?? 0)} completed today", "LabelSm"), 1),
+                Spacing = 6,
+                Children =
+                {
+                    new Label { Text = value, FontFamily = ClinicTheme.FontSemiBold, FontSize = 15, TextColor = ClinicTheme.Color(fg) },
+                    new Label { Text = label, FontSize = 13, TextColor = ClinicTheme.Color(fg), VerticalOptions = LayoutOptions.Center },
+                },
             },
-        });
+        };
+        var topRight = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center };
+        topRight.Children.Add(CountChip("waiting", Num(d?.Waiting ?? 0), "StatusWarningSurface", "StatusWarning"));
+        topRight.Children.Add(CountChip("in progress", Num(d?.InProgress ?? 0), "StatusInfoSurface", "StatusInfo"));
+        topRight.Children.Add(CountChip("completed", Num(d?.CompletedToday ?? 0), "StatusSuccessSurface", "StatusSuccess"));
+        if (!_loadError && d is { Waiting: > 0 }) topRight.Children.Add(StaffUi.Btn("Call next", CallNextAsync));
+        var topRow = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        topRow.Add(new Label { Text = "Your patient queue", FontFamily = ClinicTheme.FontSemiBold, FontSize = 18, VerticalOptions = LayoutOptions.Center }, 0, 0);
+        topRow.Add(topRight, 1, 0);
+        col.Children.Add(topRow);
+        //JJQR - END
 
         if (_loadError || d is null)
         {
@@ -331,18 +372,60 @@ public sealed class TodayPage : ContentPage
 
         if (d.UpNext.Count == 0)
             col.Children.Add(ClinicTheme.Text(d.TotalToday == 0 ? "No one's checked in yet today." : $"Queue's clear — {d.CompletedToday} seen today.", "MutedSm"));
-        // JJQR - AI (Nov 21, 2026) - Call next (first waiting, priority lane), start consult, compact print when Rx/labs exist.
-        if (d.Waiting > 0)
-            col.Children.Add(StaffUi.Btn("Call next", CallNextAsync));
-        foreach (var u in d.UpNext)
+        // JJQR - AI (Nov 21, 2026) - start consult, compact print when Rx/labs exist.
+        //JJQR - AI (Nov 21, 2026) - the queue as a compact TABLE: queue no. | patient | visit | status | action (one row per patient, easy to scan)
+        if (d.UpNext.Count > 0)
         {
-            var id = u.BookingId;
-            var resume = u.InProgress;
-            col.Children.Add(StaffUi.Row(
-                ClinicTheme.Text(u.Title, "LabelLg"),
-                ClinicTheme.Text(u.Subtitle, "LabelSm"),
-                StaffUi.Btn(u.ActionLabel, () => StartConsultAsync(id, resume), "SecondaryButton"),
-                PrintButtons(id, u.HasPrescription, u.HasLabOrders)));
+            var cols = new[] { new GridLength(92), GridLength.Star, new GridLength(110), new GridLength(150), new GridLength(170) }; //JJQR - AI (Nov 21, 2026) fixed action column so every row lines up //JJQR - END
+            Grid RowGrid(Thickness pad)
+            {
+                var g = new Grid { ColumnSpacing = 16, Padding = pad };
+                foreach (var w in cols) g.ColumnDefinitions.Add(new ColumnDefinition(w));
+                return g;
+            }
+            var head = RowGrid(new Thickness(14, 8));
+            head.BackgroundColor = ClinicTheme.Color("SurfaceContainerLow");
+            string[] heads = ["QUEUE", "PATIENT", "VISIT", "STATUS", ""];
+            for (var h = 0; h < heads.Length; h++) head.Add(ClinicTheme.Text(heads[h], "LabelSm"), h, 0);
+            var table = new VerticalStackLayout { Spacing = 0 };
+            table.Children.Add(head);
+            foreach (var u in d.UpNext)
+            {
+                var id = u.BookingId;
+                var resume = u.InProgress;
+                var row = RowGrid(new Thickness(14, 12));
+                row.BackgroundColor = resume ? ClinicTheme.Color("PrimarySubtle") : ClinicTheme.Color("SurfaceContainerLowest");
+                // queue number: priority lane (S-) gets an amber tag, regular (R-) a neutral one
+                var num = new Border
+                {
+                    StrokeThickness = 0, Padding = new Thickness(10, 5), HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center,
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 6 },
+                    BackgroundColor = ClinicTheme.Color(u.IsPriority ? "StatusWarningSurface" : "SurfaceContainer"),
+                    Content = new Label { Text = u.QueueNumber, FontFamily = ClinicTheme.FontSemiBold, FontSize = 14, TextColor = ClinicTheme.Color(u.IsPriority ? "StatusWarning" : "OnSurface") },
+                };
+                var who = new VerticalStackLayout { Spacing = 1, VerticalOptions = LayoutOptions.Center, Children = { new Label { Text = u.PatientName, FontFamily = ClinicTheme.FontSemiBold, FontSize = 15 } } };
+                if (u.IsPriority) who.Children.Add(new Label { Text = "Priority · Senior / PWD", FontSize = 12, TextColor = ClinicTheme.Color("StatusWarning") });
+                var visit = new Label { Text = u.VisitType == ClinicApp.Domain.Enums.VisitType.FollowUp ? "Follow-up" : "New visit", FontSize = 14, TextColor = ClinicTheme.Color("OnSurfaceVariant"), VerticalOptions = LayoutOptions.Center };
+                var status = new Border
+                {
+                    StrokeThickness = 0, Padding = new Thickness(10, 5), HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center,
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 },
+                    BackgroundColor = ClinicTheme.Color(resume ? "StatusInfoSurface" : "StatusNeutralSurface"),
+                    Content = new Label { Text = resume ? "In progress" : $"Waiting {u.WaitMinutes}m", FontFamily = ClinicTheme.FontMedium, FontSize = 12, TextColor = ClinicTheme.Color(resume ? "StatusInfo" : "StatusNeutral") },
+                };
+                var act = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.End };
+                var print = PrintButtons(id, u.HasPrescription, u.HasLabOrders);
+                if (print is not null) act.Children.Add(print);
+                act.Children.Add(StaffUi.Btn(resume ? "Resume" : "Start", () => StartConsultAsync(id, resume), resume ? "PrimaryButton" : "SecondaryButton"));
+                row.Add(num, 0, 0); row.Add(who, 1, 0); row.Add(visit, 2, 0); row.Add(status, 3, 0); row.Add(act, 4, 0);
+                table.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.6f) });
+                table.Children.Add(row);
+            }
+            col.Children.Add(new Border
+            {
+                StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+                Padding = 0, Content = table,
+            });
         }
         // JJQR - END
 
@@ -539,7 +622,7 @@ public sealed class TodayPage : ContentPage
             }
             from.DateSelected += async (_, e) => { _customFrom = e.NewDate; await Picked(); };
             to.DateSelected += async (_, e) => { _customTo = e.NewDate; await Picked(); };
-            col.Children.Add(StaffUi.Wrap(Margin(from), Margin(ClinicTheme.Text("to", "MutedSm")), Margin(to)));
+            col.Children.Add(StaffUi.Wrap(Margin(ClinicPickers.DateBox(null, from)), Margin(ClinicTheme.Text("to", "MutedSm")), Margin(ClinicPickers.DateBox(null, to))));
         }
         //JJQR - END
 
