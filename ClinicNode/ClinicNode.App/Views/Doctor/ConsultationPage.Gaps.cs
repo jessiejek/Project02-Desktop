@@ -110,6 +110,8 @@ public partial class ConsultationPage
             catch { /* keep what is on screen */ }
             return;
         }
+        //JJQR - AI (Nov 22, 2026) - the doctor's own Complete/Save raises this event; the "updated at the front desk" notice made no sense on the just-saved card //JJQR - END
+        if (_mode == "view") return;
         // documenting / amending: never replace what the doctor is typing
         ShowToast("This visit was updated at the front desk (queue or payment). Your notes are unchanged.", null, ++_noticeSeq);
     }
@@ -240,7 +242,7 @@ public partial class ConsultationPage
                 var cell = new VerticalStackLayout { Spacing = 2, WidthRequest = 200, Margin = new Thickness(0, 0, 12, 8) };
                 cell.Children.Add(ClinicTheme.Text(v.Description, "MutedSm"));
                 cell.Children.Add(ClinicTheme.Text(string.IsNullOrWhiteSpace(v.Value) ? "Not recorded" : v.Value + (string.IsNullOrEmpty(v.Unit) ? "" : " " + v.Unit), "BodyMd"));
-                if (VitalRanges.OutOfRange(v.FormKey, v.Value))
+                if (VitalRanges.OutOfRange(v.FormKey, v.Value, AgeYears()))
                 {
                     var warn = ClinicTheme.Text("⚠ Out of range", "LabelSm");
                     warn.TextColor = ClinicTheme.Color("StatusWarning");
@@ -254,13 +256,15 @@ public partial class ConsultationPage
         SectionHost.Children.Add(Card(vit.ToArray()));
         //JJQR - END
 
-        SectionHost.Children.Add(Card(ClinicTheme.Text("Diagnoses", "HeadlineSm"), ClinicTheme.Text(D.Diagnoses.Count > 0
+        //JJQR - AI (Nov 21, 2026) - the Diagnosis step is hidden, so the doctor's Assessment IS the diagnosis: show it instead of "No diagnoses recorded"
+        SectionHost.Children.Add(Card(ClinicTheme.Text(D.Diagnoses.Count > 0 || string.IsNullOrWhiteSpace(D.Assessment) ? "Diagnoses" : "Diagnosis (assessment)", "HeadlineSm"), ClinicTheme.Text(D.Diagnoses.Count > 0
             ? string.Join(", ", D.Diagnoses.Select(d => $"{DxText(d)} ({d.Type})"))
-            : "No diagnoses recorded.", "MutedBody")));
+            : !string.IsNullOrWhiteSpace(D.Assessment) ? D.Assessment!.Trim() : "No diagnoses recorded.", "MutedBody")));
+        //JJQR - END
 
         var rx = new List<View> { ClinicTheme.Text("Prescriptions", "HeadlineSm") };
         if (D.Prescriptions.Count > 0)
-            rx.AddRange(D.Prescriptions.Select((r, i) => (View)ClinicTheme.Text($"{i + 1}. {r.GenericName} #{r.Quantity} — Sig. {r.Dosage} {r.Instruction}".TrimEnd(), "MutedBody")));
+            rx.AddRange(D.Prescriptions.Select((r, i) => (View)ClinicTheme.Text($"{i + 1}. {r.GenericName}{(string.IsNullOrWhiteSpace(r.Dosage) ? "" : " " + r.Dosage)} #{r.Quantity} — {string.Join(" ", new[] { ConsultRules.DirectionsLine(r), r.Instruction }.Where(x => !string.IsNullOrWhiteSpace(x)))}".TrimEnd(' ', '—', ' '), "MutedBody"))); //JJQR - AI (Nov 21, 2026) - directions = the sig built from meal / times / duration (it used to print the dose) //JJQR - END
         else rx.Add(ClinicTheme.Text("No prescriptions recorded.", "MutedBody"));
         SectionHost.Children.Add(Card(rx.ToArray()));
 
@@ -326,7 +330,13 @@ public partial class ConsultationPage
             l.TextColor = ClinicTheme.Color("Primary");
             SectionHost.Children.Add(l);
         }
-        if (AgeYears() is < 18 && AgeMonthsNow() is { } mo) SectionHost.Children.Add(GrowthChartView(mo));
+        //JJQR - AI (Nov 21, 2026) - the centile chart only covers 0-60 months: for an older child it would plot nothing meaningful, so it is shown for under-fives only
+        if (AgeYears() is < 18 && AgeMonthsNow() is { } mo)
+        {
+            if (mo <= 60) SectionHost.Children.Add(GrowthChartView(mo));
+            else SectionHost.Children.Add(ClinicTheme.Text("The growth centile chart covers children up to 5 years. Record height and weight below.", "MutedSm"));
+        }
+        //JJQR - END
     }
 
     View GrowthChartView(int ageMonths)

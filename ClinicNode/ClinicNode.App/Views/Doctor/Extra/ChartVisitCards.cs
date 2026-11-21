@@ -8,6 +8,17 @@ namespace ClinicNode.App.Views.Doctor.Extra;
 
 public static class ChartVisitCards
 {
+    /// <summary>The visit's diagnoses; the Diagnosis step is hidden in a consultation, so when none were entered the doctor's Assessment (first line, clipped) stands in for it.</summary>
+    public static IReadOnlyList<string> DiagnosisOrAssessment(ChartConsultation? c)
+    {
+        if (c is null) return [];
+        if (c.Diagnoses.Count > 0) return c.Diagnoses;
+        var a = (c.Assessment ?? "").Trim();
+        if (a.Length == 0) return [];
+        var line = a.Split('\n')[0].Trim();
+        return [line.Length > 90 ? line[..87].TrimEnd() + "…" : line];
+    }
+
     static string Iso(DateOnly d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     static View Block(string title, View body) =>
@@ -37,7 +48,7 @@ public static class ChartVisitCards
 
             var title = !string.IsNullOrWhiteSpace(consult?.ChiefComplaint) ? consult!.ChiefComplaint! : b.ServiceNames.Count == 0 ? "Consultation" : string.Join(", ", b.ServiceNames);
             var what = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center, Children = { new Label { Text = title, Style = ClinicTheme.Style("LabelLg") } } };
-            if (consult is { Diagnoses.Count: > 0 }) what.Children.Add(new Label { Text = string.Join(" · ", consult.Diagnoses), Style = ClinicTheme.Style("MutedSm") });
+            if (DiagnosisOrAssessment(consult) is { Count: > 0 } dxs) what.Children.Add(new Label { Text = string.Join(" · ", dxs), Style = ClinicTheme.Style("MutedSm") });
             var tags = new List<string>();
             if (rx.Count > 0) tags.Add($"Rx {rx.Sum(g => g.Lines.Count)}");
             if (ex is { LabOrders.Count: > 0 }) tags.Add($"Labs {ex.LabOrders.Count}");

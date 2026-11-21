@@ -69,7 +69,21 @@ public static class DrugSafety
         return n.Contains(t, StringComparison.Ordinal) || t.Contains(n, StringComparison.Ordinal);
     }
 
-    public static IReadOnlyList<DrugSafetyAlert> Check(IEnumerable<string?> genericNames, bool pregnant = false, int? trimester = null)
+    //JJQR - AI (Nov 21, 2026) - child cautions (a warning, never a block: the doctor decides). Template doses are ADULT doses, so any medicine for a child also gets a dose reminder.
+    public static readonly (string Match, int UnderYears, string Note)[] ChildCautions =
+    [
+        ("loperamide", 12, "Loperamide is not recommended under 12 (contraindicated under 2). Check this is appropriate for this child."),
+        ("aspirin", 16, "Aspirin under 16: risk of Reye syndrome. Use paracetamol unless there is a specific indication."),
+        ("codeine", 12, "Codeine is not recommended under 12."),
+        ("tramadol", 12, "Tramadol is not recommended under 12."),
+        ("doxycycline", 8, "Tetracyclines under 8: tooth discolouration. Consider an alternative."),
+        ("tetracycline", 8, "Tetracyclines under 8: tooth discolouration. Consider an alternative."),
+        ("ciprofloxacin", 18, "Fluoroquinolone in a child: joint/tendon risk. Use only if no alternative."),
+        ("levofloxacin", 18, "Fluoroquinolone in a child: joint/tendon risk. Use only if no alternative."),
+        ("ofloxacin", 18, "Fluoroquinolone in a child: joint/tendon risk. Use only if no alternative."),
+    ];
+
+    public static IReadOnlyList<DrugSafetyAlert> Check(IEnumerable<string?> genericNames, bool pregnant = false, int? trimester = null, int? ageYears = null)
     {
         var names = genericNames.Select(Norm).Where(n => n.Length > 0).ToList();
         var outList = new List<DrugSafetyAlert>();
@@ -90,6 +104,15 @@ public static class DrugSafety
         foreach (var pair in InteractionPairs)
             if (names.Any(n => DrugMatches(n, pair.A)) && names.Any(n => DrugMatches(n, pair.B)))
                 Push("warn", pair.Note);
+
+        //JJQR - AI (Nov 21, 2026) - child cautions + dose reminder
+        if (ageYears is < 18)
+        {
+            foreach (var c in ChildCautions)
+                if (ageYears < c.UnderYears && names.Any(n => DrugMatches(n, c.Match))) Push("warn", c.Note);
+            if (names.Count > 0) Push("warn", $"Child patient ({ageYears} y): confirm each dose by weight. Template doses are adult doses.");
+        }
+        //JJQR - END
 
         if (pregnant)
         {
@@ -112,6 +135,17 @@ public static class DrugSafety
 public static class RxAllergy
 {
     /// <summary>web allergyBlockReason: the matching allergen (trimmed) when the generic name and an allergen contain each other.</summary>
+    //JJQR - AI (Nov 22, 2026) - an allergy to a drug CLASS must block its members ("Penicillin" allergy vs "Amoxicillin" was not caught: names never contain each other) //JJQR - END
+    static readonly (string Class, string[] Members)[] Classes =
+    [
+        ("penicillin", ["penicillin", "amoxicillin", "ampicillin", "cloxacillin", "dicloxacillin", "flucloxacillin", "oxacillin", "piperacillin", "amoxiclav", "co-amoxiclav", "clavulan"]),
+        ("cephalosporin", ["cef", "ceph"]),
+        ("sulfa", ["sulfa", "sulfonamide", "cotrimoxazole", "co-trimoxazole", "trimethoprim"]),
+        ("nsaid", ["ibuprofen", "mefenamic", "diclofenac", "naproxen", "ketorolac", "celecoxib", "etoricoxib", "aspirin", "indomethacin", "meloxicam"]),
+        ("macrolide", ["azithromycin", "clarithromycin", "erythromycin"]),
+        ("quinolone", ["ciprofloxacin", "levofloxacin", "moxifloxacin", "ofloxacin", "floxacin"]),
+    ];
+
     public static string? BlockReason(string? genericName, IEnumerable<string?> patientAllergies)
     {
         var g = (genericName ?? "").Trim().ToLowerInvariant();
@@ -121,6 +155,11 @@ public static class RxAllergy
             var al = (raw ?? "").Trim().ToLowerInvariant();
             if (al.Length == 0) continue;
             if (g.Contains(al, StringComparison.Ordinal) || al.Contains(g, StringComparison.Ordinal)) return raw!.Trim();
+            foreach (var (cls, members) in Classes)
+            {
+                var allergyInClass = al.Contains(cls, StringComparison.Ordinal) || members.Any(m => al.Contains(m, StringComparison.Ordinal));
+                if (allergyInClass && members.Any(m => g.Contains(m, StringComparison.Ordinal))) return raw!.Trim();
+            }
         }
         return null;
     }
@@ -217,6 +256,36 @@ public static class VitalRanges
     }
 
     static bool Within(double n, (double Min, double Max) r) => n >= r.Min && n <= r.Max;
+
+    //JJQR - AI (Nov 21, 2026) - child ranges (under 18): adult limits flagged normal children (weight 26 kg, breathing 24/min). Weight and height are judged on the growth chart, not here.
+    static readonly Dictionary<string, (double Min, double Max)> ChildRanges = new()
+    {
+        ["pulse_rate"] = (70, 120),
+        ["respiratory_rate"] = (18, 30),
+        ["temperature"] = (36.1, 37.5),
+        ["o2_saturation"] = (95, 100),
+        ["oxygen_saturation"] = (95, 100),
+        ["spo2"] = (95, 100),
+    };
+
+    public static bool OutOfRange(string? formKey, string? value, int? ageYears)
+    {
+        if (ageYears is not < 18) return OutOfRange(formKey, value);
+        var trimmed = (value ?? "").Trim();
+        if (trimmed.Length == 0) return false;
+        var key = (formKey ?? "").ToLowerInvariant();
+        if (key is "weight" or "height" or "head_circumference" or "length") return false;
+        if (key == "blood_pressure")
+        {
+            var parts = trimmed.Split('/').Select(p => p.Trim()).ToArray();
+            if (parts.Length >= 2)
+                return (Num(parts[0]) is { } sys && !Within(sys, (80, 125))) || (Num(parts[1]) is { } dia && !Within(dia, (45, 85)));
+            return Num(trimmed) is { } lone && !Within(lone, (80, 125));
+        }
+        if (ChildRanges.TryGetValue(key, out var r)) return Num(trimmed) is { } n && !Within(n, r);
+        return OutOfRange(formKey, value);
+    }
+    //JJQR - END
 
     public static bool OutOfRange(string? formKey, string? value)
     {

@@ -23,11 +23,9 @@ public partial class ConsultationPage
         if (_workspace is null) return;
         try { _clinicalFlags = await _lib.GetPatientClinicalFlagsAsync(D.PatientId); } catch { _clinicalFlags = null; }
         try { _priorRxItems = (await _lib.GetPriorVisitAsync(D.PatientId, D.BookingId))?.RxItems ?? []; } catch { _priorRxItems = []; }
-        try
-        {
-            if (await _lib.GetDoctorSpecializationAsync(D.DoctorId) is { Length: > 0 } spec) _soapSpecialty = TemplateSpecialty.DefaultFromDoctor(spec);
-        }
-        catch { /* keep "All" */ }
+        //JJQR - AI (Nov 21, 2026) - family medicine: the template group follows the PATIENT (a child opens on Pedia, an adult on Adult), not the doctor's specialty
+        _soapSpecialty = AgeYears() is < 18 ? "Peds" : "General";
+        //JJQR - END
     }
 
     // ---------- renal cue ----------
@@ -47,7 +45,7 @@ public partial class ConsultationPage
 
     IReadOnlyList<DrugSafetyAlert> SafetyAlerts(string? extraGeneric = null) =>
         DrugSafety.Check(extraGeneric is null ? D.Prescriptions.Select(r => r.GenericName) : D.Prescriptions.Select(r => r.GenericName).Append(extraGeneric),
-            pregnant: _clinicalFlags?.IsPregnant == true || _isPregnant);
+            pregnant: _clinicalFlags?.IsPregnant == true || _isPregnant, ageYears: AgeYears());
 
     /// <summary>web allergy check + applySafetyBeforeAdd: false (and an error toast) when the medicine must not be added; a warning toast otherwise.</summary>
     bool RxSafeToAdd(string genericName)

@@ -46,10 +46,15 @@ public static class ClinicPopup
         AbsoluteLayout.SetLayoutBounds(scrim, new Rect(0, 0, 1, 1));
         AbsoluteLayout.SetLayoutFlags(scrim, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.All);
         layer.Children.Add(scrim);
+        //JJQR - AI (Nov 21, 2026) - limits measured against the popup layer, not the page root (the layer can be inset), so the panel never runs off the edge
         var pos = PositionIn(root, anchor);
-        var x = Math.Max(8, Math.Min(pos.X, Math.Max(8, root.Width - width - 12)));
-        var below = pos.Y + anchor.Height + 4;
-        var y = below + estimatedHeight > root.Height ? Math.Max(8, pos.Y - estimatedHeight - 4) : below;
+        var layerW = layer.Width > 0 ? layer.Width : root.Width;
+        var layerH = layer.Height > 0 ? layer.Height : root.Height;
+        var px = pos.X - layer.X; var py = pos.Y - layer.Y;
+        var x = Math.Max(8, Math.Min(px, Math.Max(8, layerW - width - 16)));
+        var below = py + anchor.Height + 4;
+        var y = below + estimatedHeight > layerH ? Math.Max(8, py - estimatedHeight - 4) : below;
+        //JJQR - END
         AbsoluteLayout.SetLayoutBounds(panel, new Rect(x, y, width, AbsoluteLayout.AutoSize));
         AbsoluteLayout.SetLayoutFlags(panel, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.None);
         layer.Children.Add(panel);

@@ -362,7 +362,7 @@ public partial class ConsultationPage
             Card(
                 Strong("Patient", (string.IsNullOrWhiteSpace(w.PatientName) ? "—" : w.PatientName) + (ident.Count > 0 ? " · " + string.Join(" · ", ident) : "")),
                 Strong("Chief Complaint", string.IsNullOrWhiteSpace(D.ChiefComplaint) ? "—" : D.ChiefComplaint),
-                Strong("Diagnoses", D.Diagnoses.Count > 0 ? string.Join(", ", D.Diagnoses.Select(DxText)) : "—"),
+                Strong(D.Diagnoses.Count == 0 && !string.IsNullOrWhiteSpace(D.Assessment) ? "Assessment" : "Diagnoses", D.Diagnoses.Count > 0 ? string.Join(", ", D.Diagnoses.Select(DxText)) : !string.IsNullOrWhiteSpace(D.Assessment) ? ConsultRules.ClipText(D.Assessment, 90) : "—"), //JJQR - AI (Nov 21, 2026) - assessment stands in for the hidden Diagnosis step //JJQR - END
                 Strong("Prescriptions", $"{rxCount} line{(rxCount == 1 ? "" : "s")}"),
                 Strong("Lab orders", labCount.ToString(CultureInfo.InvariantCulture)),
                 Strong("Follow-up", followUp)),
@@ -374,7 +374,7 @@ public partial class ConsultationPage
         var actions = new List<(string, Action, string)>();
         if (rxCount > 0) actions.Add(("Print Prescription", () => OnPrintRx(null, EventArgs.Empty), "SecondaryButton"));
         if (labCount > 0) actions.Add(("Print Lab Orders", () => OnPrintLabs(null, EventArgs.Empty), "SecondaryButton"));
-        actions.Add(("Back to Queue", async () => { HideOverlay(); await Shell.Current.GoToAsync(".."); }, "SecondaryButton"));
+        actions.Add(("View record", () => { HideOverlay(); RenderAll(); }, "SecondaryButton")); //JJQR - AI (Nov 21, 2026) - one way back to the queue; "View record" refreshes the read-only record (the form no longer lingers after completing) //JJQR - END
         actions.Add(("Return to patient queue", async () => { HideOverlay(); await Shell.Current.GoToAsync(".."); }, "PrimaryButton"));
         ShowOverlay("", body, actions.ToArray());
     }

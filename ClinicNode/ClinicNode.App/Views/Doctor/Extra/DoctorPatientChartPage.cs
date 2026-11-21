@@ -175,16 +175,16 @@ public sealed class DoctorPatientChartPage : StaffLivePage
                     Content = new Label { Text = Iso(last.Date), FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Colors.White } }, 1, 0);
                 var box = new VerticalStackLayout { Spacing = 10, Children = { head } };
                 var what = !string.IsNullOrWhiteSpace(consult?.ChiefComplaint) ? consult!.ChiefComplaint! : "Consultation";
-                var sub = string.Join(" · ", new[] { booking?.QueueNumber, consult is { Diagnoses.Count: > 0 } ? string.Join(", ", consult.Diagnoses) : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                var sub = string.Join(" · ", new[] { booking?.QueueNumber, ChartVisitCards.DiagnosisOrAssessment(consult) is { Count: > 0 } dxl ? string.Join(", ", dxl) : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
                 box.Children.Add(new VerticalStackLayout { Spacing = 1, Children = { new Label { Text = what, Style = ClinicTheme.Style("LabelLg") }, new Label { Text = sub, Style = ClinicTheme.Style("MutedSm"), IsVisible = sub.Length > 0 } } });
                 box.Children.Add(new Label { Text = "VITALS", Style = ClinicTheme.Style("TableHeader"), Margin = new Thickness(0, 4, 0, -4) });
                 box.Children.Add(tiles);
                 // diagnosis + medicines of THIS visit
-                if (consult is { Diagnoses.Count: > 0 })
+                if (ChartVisitCards.DiagnosisOrAssessment(consult) is { Count: > 0 } dxAll)
                 {
                     box.Children.Add(new Label { Text = "DIAGNOSIS", Style = ClinicTheme.Style("TableHeader"), Margin = new Thickness(0, 4, 0, -4) });
                     var dxPills = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
-                    foreach (var d in consult.Diagnoses)
+                    foreach (var d in dxAll)
                         dxPills.Children.Add(new Border { BackgroundColor = Colors.White, Stroke = ClinicTheme.Color("Primary").WithAlpha(0.5f), StrokeThickness = 1, Padding = new Thickness(10, 5), Margin = new Thickness(0, 0, 6, 6),
                             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 }, Content = new Label { Text = d, FontSize = 12, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("Primary"), LineBreakMode = LineBreakMode.WordWrap } });
                     box.Children.Add(dxPills);
@@ -254,7 +254,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
             if (ex?.FollowUpDate is { } fd) tags.Add("Follow-up " + Iso(fd));
             if (ex is { HasCertificate: true }) tags.Add("Med cert issued"); else if (ex is { MedCertRequested: true }) tags.Add("Med cert requested");
             var what = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center, Children = { new Label { Text = title, Style = ClinicTheme.Style("LabelLg") } } };
-            if (consult is { Diagnoses.Count: > 0 }) what.Children.Add(new Label { Text = string.Join(" · ", consult.Diagnoses), Style = ClinicTheme.Style("MutedSm") });
+            if (ChartVisitCards.DiagnosisOrAssessment(consult) is { Count: > 0 } dxs) what.Children.Add(new Label { Text = string.Join(" · ", dxs), Style = ClinicTheme.Style("MutedSm") });
             if (tags.Count > 0)
             {
                 var chips = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };

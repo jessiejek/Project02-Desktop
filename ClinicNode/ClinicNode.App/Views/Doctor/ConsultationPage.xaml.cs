@@ -111,6 +111,10 @@ public partial class ConsultationPage : ContentPage
         if (_workspace is not null) { await GapReturnAsync(); GapAppearing(); StartAutosave(); return; }
         //JJQR - END
         if (!Guid.TryParse(BookingIdText, out var bookingId)) { Error("Missing booking id."); return; }
+        //JJQR - AI (Nov 22, 2026) - while the consultation loads (~1 s) the screen showed empty panels and every Print button; hide them and say what is happening //JJQR - END
+        foreach (var b in new[] { PrintRxButton, PrintLabsButton, PrintCertButton, PrintSlipButton }) b.IsVisible = false;
+        SectionHost.Children.Clear();
+        SectionHost.Children.Add(new Label { Text = "Loading consultation…", Margin = new Thickness(8, 24), TextColor = ClinicTheme.Color("OnSurfaceVariant") });
         try
         {
             _workspace = await _consults.LoadByBookingAsync(bookingId);
@@ -159,7 +163,7 @@ public partial class ConsultationPage : ContentPage
         await Try(async () => _labTests = await _lib.ListLabTestsAsync());
         await Try(async () => _doctor = await _lib.GetDoctorCredentialsAsync(doctorId));
         await Try(async () => _allergies = await _lib.ListAllergiesAsync(D.PatientId));
-        await Try(async () => _history = await _catalog.GetHistoryAsync(D.PatientId, D.BookingId));
+        await Try(async () => _history = await LoadLiveHistoryAsync()); //JJQR - AI (Nov 21, 2026) - earlier visits come from the LIVE records (the local copy only has what this computer synced) //JJQR - END
         await Try(async () =>
         {
             var addr = await _lib.GetPatientAddressAsync(D.PatientId);
@@ -205,6 +209,14 @@ public partial class ConsultationPage : ContentPage
     void SetFeePreview()
     {
         var f = PreviewFee();
+        //JJQR - AI (Nov 21, 2026) - a waived visit shows "Waived" in the header, not the computed fee
+        if (D.PfDecision == "Waive")
+        {
+            FeeTotal.Text = "Waived";
+            FeePreview.Text = (D.PfWaiveReason ?? "").Trim() is { Length: > 0 } wr ? ConsultRules.ClipText(wr, 40) : "Add a reason";
+            return;
+        }
+        //JJQR - END
         FeeTotal.Text = FeeCalculator.FormatPeso(f.Total);
         //JJQR - AI (Nov 21, 2026) - plain-language breakdown: "Follow-up ₱350 + PWD rate adjustment ₱50" instead of "− PWD discount ₱-50" when the Senior/PWD rate is above the visit fee
         FeePreview.Text = string.Concat(f.Parts.Select((part, i) =>
@@ -302,6 +314,7 @@ public partial class ConsultationPage : ContentPage
         //JJQR - END
         SetFeePreview();
         CancelAmendButton.IsVisible = _mode == "amend";
+        CancelAmendButton.Text = Dirty ? "Cancel amendment" : "Done"; //JJQR - AI (Nov 21, 2026) - nothing unsaved: it is just "Done" //JJQR - END
         RenderVisitTypeBar();
     }
 
@@ -477,6 +490,8 @@ public partial class ConsultationPage : ContentPage
         PrevButton.IsVisible = true;
         NextButton.IsVisible = true;
         //JJQR - END
+        if (_section != 3 && _rxEditOriginal is not null) { RestoreRxEdit(); Changed(); } //JJQR - AI (Nov 21, 2026) - left the step mid-edit: the medicine comes back //JJQR - END
+        _soapTagSpans.Clear();
         SectionHost.Children.Clear();
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - card title "{indicator} {n}. {Section}"
         SectionHost.Children.Add(SectionTitle(_section));
@@ -542,6 +557,16 @@ public partial class ConsultationPage : ContentPage
     //JJQR - AI (Nov 21, 2026)
     readonly HashSet<int> _flashSoap = new();
     readonly Dictionary<int, Border> _soapFrames = new();
+    readonly List<Span> _soapTagSpans = new();
+    //JJQR - AI (Nov 21, 2026) - one fade routine: removes the tint AND the "added from template" tag (also used by Undo)
+    void FadeSoapFlash()
+    {
+        _flashSoap.Clear();
+        foreach (var f in _soapFrames.Values) ApplyFlash(f, false);
+        foreach (var sp in _soapTagSpans) sp.Text = "";
+        _soapTagSpans.Clear();
+    }
+    //JJQR - END
     static void ApplyFlash(Border f, bool on)
     {
         f.BackgroundColor = on ? Color.FromArgb("#E7F6F2") : Colors.Transparent;
@@ -665,10 +690,10 @@ public partial class ConsultationPage : ContentPage
         RenderSection();
         Changed();
         //JJQR - AI (Nov 21, 2026) - the highlight fades after 10 seconds
+        var flashSeq = _noticeSeq;
         Dispatcher.StartTimer(TimeSpan.FromSeconds(10), () =>
         {
-            foreach (var f in _soapFrames.Values) ApplyFlash(f, false);
-            _flashSoap.Clear();
+            if (flashSeq == _noticeSeq) FadeSoapFlash();
             return false;
         });
         //JJQR - END
@@ -677,7 +702,7 @@ public partial class ConsultationPage : ContentPage
     void OnToastAction(object? sender, EventArgs e)
     {
         // Undo only while the notes are exactly what the template produced — never overwrites later typing.
-        if (_undo is { } u && CurrentSoap() == u.Applied) { WriteSoap(u.Before); RenderSection(); Changed(); }
+        if (_undo is { } u && CurrentSoap() == u.Applied) { FadeSoapFlash(); WriteSoap(u.Before); RenderSection(); Changed(); }
         _undo = null;
         ToastBar.IsVisible = false;
     }
@@ -765,7 +790,9 @@ public partial class ConsultationPage : ContentPage
         if (_flashSoap.Contains(index))
         {
             ApplyFlash(frame, true);
-            label.FormattedText.Spans.Add(new Span { Text = "   ✓ added from template", FontSize = 11, FontFamily = ClinicTheme.FontMedium, TextColor = ClinicTheme.Color("StatusSuccess") });
+            var tagSpan = new Span { Text = "   ✓ added from template", FontSize = 11, FontFamily = ClinicTheme.FontMedium, TextColor = ClinicTheme.Color("StatusSuccess") };
+            label.FormattedText.Spans.Add(tagSpan);
+            _soapTagSpans.Add(tagSpan);
         }
         SectionHost.Children.Add(frame);
         //JJQR - END
@@ -819,7 +846,7 @@ public partial class ConsultationPage : ContentPage
             card.Children.Add(ClinicTheme.Text(v.Description, "LabelMd").Also(l => l.TextColor = ClinicTheme.Color("OnSurfaceVariant")));
             var warn = ClinicTheme.Text("⚠ Out of range", "LabelSm");
             warn.TextColor = ClinicTheme.Color("StatusWarning");
-            warn.IsVisible = VitalRanges.OutOfRange(v.FormKey, v.Value);
+            warn.IsVisible = VitalRanges.OutOfRange(v.FormKey, v.Value, AgeYears());
             if (locked)
                 card.Children.Add(ClinicTheme.Text(string.IsNullOrWhiteSpace(v.Value) ? "Not recorded" : v.Value + (string.IsNullOrEmpty(v.Unit) ? "" : " " + v.Unit), "BodyMd"));
             else
@@ -829,7 +856,7 @@ public partial class ConsultationPage : ContentPage
                     Text = v.Value, HorizontalOptions = LayoutOptions.Fill,
                     Placeholder = string.IsNullOrEmpty(v.Unit) ? "Enter value" : $"Enter {v.Description.ToLowerInvariant()}",
                 };
-                entry.TextChanged += (_, e) => { vital.Value = e.NewTextValue; warn.IsVisible = VitalRanges.OutOfRange(vital.FormKey, vital.Value); Changed(); };
+                entry.TextChanged += (_, e) => { vital.Value = e.NewTextValue; warn.IsVisible = VitalRanges.OutOfRange(vital.FormKey, vital.Value, AgeYears()); Changed(); };
                 var line = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 8 };
                 line.Add(entry, 0);
                 if (!string.IsNullOrEmpty(v.Unit)) line.Add(ClinicTheme.Text(v.Unit, "LabelSm").Also(l => { l.VerticalOptions = LayoutOptions.Center; l.TextColor = ClinicTheme.Color("OnSurfaceVariant"); }), 1);
@@ -918,6 +945,16 @@ public partial class ConsultationPage : ContentPage
 
     // Prescription (web PrescriptionForm, New Prescription + Templates tabs)
     private RxLine _rxNew = NewRx();
+    //JJQR - AI (Nov 21, 2026) - editing a medicine: the original is remembered so Cancel (or leaving the step) puts it back exactly where it was
+    private RxLine? _rxEditOriginal;
+    private int _rxEditIndex;
+    void RestoreRxEdit()
+    {
+        if (_rxEditOriginal is null) return;
+        D.Prescriptions.Insert(Math.Min(Math.Max(0, _rxEditIndex), D.Prescriptions.Count), _rxEditOriginal);
+        _rxEditOriginal = null; _rxNew = NewRx();
+    }
+    //JJQR - END
     private string _rxTab = "new";
     static RxLine NewRx() => new() { Route = "PO" };
 
@@ -989,7 +1026,7 @@ public partial class ConsultationPage : ContentPage
             var head = $"{rx.GenericName}{(string.IsNullOrWhiteSpace(rx.Dosage) ? "" : " " + rx.Dosage)}  #{rx.Quantity}";
             var detail = string.Join(" · ", new[] { ConsultRules.DirectionsLine(rx), rx.Route, rx.Indication, rx.Instruction }.Where(s => !string.IsNullOrWhiteSpace(s)));
             var actions = new HorizontalStackLayout();
-            actions.Children.Add(Btn("Edit", () => { _rxNew = Clone(line); D.Prescriptions.Remove(line); _rxTab = "new"; RenderSection(); Changed(); }));
+            actions.Children.Add(Btn("Edit", () => { RestoreRxEdit(); _rxEditIndex = D.Prescriptions.IndexOf(line); _rxEditOriginal = line; _rxNew = Clone(line); D.Prescriptions.Remove(line); _rxTab = "new"; RenderSection(); Changed(); }));
             actions.Children.Add(Btn("Remove", () => { D.Prescriptions.Remove(line); RenderSection(); Changed(); }));
             //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs) - Select / Select All for bulk delete
             //JJQR - AI (Nov 21, 2026) - each medicine is its own small card: bold name line, muted directions, Edit / Remove underneath (the old side-by-side row overlapped in a narrow pane)
@@ -1114,7 +1151,15 @@ public partial class ConsultationPage : ContentPage
         //JJQR - END
         var err = new Label { Style = ClinicTheme.Style("ErrorText"), IsVisible = false };
         SectionHost.Children.Add(err);
-        SectionHost.Children.Add(Btn("Add Item", () =>
+        var editing = _rxEditOriginal is not null;
+        //JJQR - AI (Nov 21, 2026) - while editing: a clear notice and a Cancel that restores the original
+        if (editing)
+        {
+            SectionHost.Children.Add(Warning($"Editing “{_rxEditOriginal!.GenericName}”. Press Update item to save your changes, or Cancel to keep the original."));
+            SectionHost.Children.Add(Btn("Cancel edit", () => { RestoreRxEdit(); RenderSection(); Changed(); return; }, "SecondaryButton"));
+        }
+        //JJQR - END
+        SectionHost.Children.Add(Btn(editing ? "Update item" : "Add Item", () =>
         {
             if (!ConsultRules.RxCanAdd(rxNew.GenericName, rxNew.Quantity)) { err.Text = "Enter the medication and the quantity."; err.IsVisible = true; return; }
             //JJQR - AI (21 Nov 2026) - web handleNewRxAdd order: allergy → drug safety → duplicate (ConsultationPage.Safety.cs)
@@ -1128,7 +1173,7 @@ public partial class ConsultationPage : ContentPage
             rxNew.Dosage = (rxNew.Dosage ?? "").Trim();
             if (string.IsNullOrWhiteSpace(rxNew.Route)) rxNew.Route = "PO";
             if (rxNew.MedicineId is null && _medicines.FirstOrDefault(m => m.GenericName.Equals(rxNew.GenericName, StringComparison.OrdinalIgnoreCase)) is { } m) rxNew.MedicineId = m.MedicineId;
-            D.Prescriptions.Add(rxNew);
+            if (_rxEditOriginal is not null) { D.Prescriptions.Insert(Math.Min(Math.Max(0, _rxEditIndex), D.Prescriptions.Count), rxNew); _rxEditOriginal = null; } else D.Prescriptions.Add(rxNew); //JJQR - AI (Nov 21, 2026) - an edited medicine goes back where it was //JJQR - END
             //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
             if (_rxAddToFav) _ = AddFavoriteAsync(rxNew);
             //JJQR - END
@@ -1726,11 +1771,11 @@ public partial class ConsultationPage : ContentPage
         {
             SaveNextButton.Text = next is null ? "Save draft" : "Save & next";
             SaveNextButton.IsEnabled = !_busy;
-            CompleteButton.IsEnabled = missing.Count == 0 && !_busy;
+            CompleteButton.IsEnabled = !_busy; //JJQR - AI (Nov 21, 2026) - always clickable: with steps missing it opens the checklist that shows exactly which ones //JJQR - END
             //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - web: Save is secondary once Review & complete is available; Review & complete is primary only when it can complete
             SaveNextButton.Style = ClinicTheme.Style(missing.Count == 0 ? "SecondaryButton" : "PrimaryButton");
             CompleteButton.Style = ClinicTheme.Style(missing.Count == 0 ? "PrimaryButton" : "SecondaryButton");
-            StatusLabel.Text = SaveStatusText();
+            StatusLabel.Text = missing.Count == 0 ? SaveStatusText() : $"{SaveStatusText()}  ·  Still needed to complete: {missingNames}"; //JJQR - AI (Nov 21, 2026) //JJQR - END
             //JJQR - END
         }
         else StatusLabel.Text = "Viewing a completed visit (read-only).";
@@ -1849,6 +1894,38 @@ public partial class ConsultationPage : ContentPage
     void HideOverlay() => Overlay.IsVisible = false;
     void OnOverlayClose(object? sender, EventArgs e) => HideOverlay(); //JJQR - AI (Nov 21, 2026) - title-bar close //JJQR - END
 
+    //JJQR - AI (Nov 21, 2026) - earlier visits for this patient, newest first, from the live chart (falls back to this computer's copy when the live records can't be reached)
+    async Task<IReadOnlyList<PastVisit>> LoadLiveHistoryAsync()
+    {
+        try
+        {
+            var doctorId = ClinicNode.App.Views.Doctor.Extra.DoctorExtraUi.DoctorId(_serviceProvider);
+            var chart = doctorId is null ? null : await _serviceProvider.GetRequiredService<ClinicNode.Core.DoctorExtra.IDoctorPatientsService>().GetChartAsync(doctorId.Value, D.PatientId);
+            if (chart is not null)
+            {
+                var queue = chart.Bookings.ToDictionary(b => b.BookingId, b => b.QueueNumber);
+                int Seq(Guid id) => ClinicNode.App.Views.Doctor.Extra.DoctorPatientChartPage.Seq(queue.GetValueOrDefault(id));
+                var names = chart.VitalTemplates.ToDictionary(t => t.TemplateId);
+                return chart.Consultations.Where(c => c.BookingId != D.BookingId)
+                    .OrderByDescending(c => c.AppointmentDate).ThenByDescending(c => Seq(c.BookingId)).Take(30)
+                    .Select(c =>
+                    {
+                        var ex = chart.VisitExtras?.FirstOrDefault(e => e.BookingId == c.BookingId);
+                        var vit = chart.VitalVisits.FirstOrDefault(v => v.BookingId == c.BookingId)?.Values
+                            .Where(kv => !string.IsNullOrWhiteSpace(kv.Value) && names.ContainsKey(kv.Key))
+                            .OrderBy(kv => chart.VitalTemplates.ToList().IndexOf(names[kv.Key]))
+                            .Select(kv => $"{names[kv.Key].Description} {kv.Value}{(string.IsNullOrEmpty(names[kv.Key].Unit) ? "" : " " + names[kv.Key].Unit)}") ?? [];
+                        var rx = chart.Prescriptions.Where(g => g.BookingId == c.BookingId).SelectMany(g => g.Lines).Select(l => $"{l.GenericName} {l.Dosage} #{l.Quantity}");
+                        return new PastVisit(c.BookingId, c.AppointmentDate, c.Status.ToString(), c.ChiefComplaint, c.Subjective, c.Objective, c.Assessment, c.Plan, null,
+                            string.Join("; ", c.Diagnoses), string.Join(", ", vit), string.Join("; ", rx), string.Join(", ", ex?.LabOrders ?? []));
+                    }).ToList();
+            }
+        }
+        catch { /* fall back below */ }
+        return await _catalog.GetHistoryAsync(D.PatientId, D.BookingId);
+    }
+    //JJQR - END
+
     //JJQR - AI (Nov 21, 2026) - Patient history is built from the LIVE chart (the local copy only held the visits this computer had synced) and shows every earlier visit with its full detail
     async void OnHistory(object? sender, EventArgs e)
     {
@@ -1886,6 +1963,7 @@ public partial class ConsultationPage : ContentPage
     void OnComplete(object? sender, EventArgs e)
     {
         if (_busy || _workspace is null) return;
+        if (_rxEditOriginal is not null) { RestoreRxEdit(); RenderSection(); } //JJQR - AI (Nov 21, 2026) - never complete while a medicine is half-edited //JJQR - END
         _completeAttempted = true;
         RebuildSteps();
         ErrorLabel.IsVisible = false;
@@ -1902,16 +1980,22 @@ public partial class ConsultationPage : ContentPage
             body.Add(ChecklistRow(i, ok, required, ConsultRules.SectionSummary(i, D, shown)));
         }
         //JJQR - END
+        //JJQR - AI (Nov 21, 2026) - what still blocks completion, in plain words; the Confirm button stays off until it is done
+        var stillMissing = ConsultRules.MissingRequired(D, shown);
+        if (stillMissing.Count > 0)
+            body.Insert(1, Warning($"Not ready to complete yet. Still needed: {string.Join(", ", stillMissing.Select(i => ConsultSteps.Sections[i]))}. Go back and finish the steps marked !."));
+        //JJQR - END
         if (!ConsultRules.SectionSatisfied(3, D, shown)) body.Add(Warning(ConsultRules.ChecklistRxWarning));
         if (!ConsultRules.SectionSatisfied(6, D, shown)) body.Add(Warning(ConsultRules.ChecklistFollowUpWarning));
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - a failed Complete shows its error inside the checklist
         _checklistError = ClinicTheme.Text("", "ErrorText");
         _checklistError.IsVisible = false;
-        body.Add(_checklistError);
+        body.Insert(1, _checklistError); //JJQR - AI (Nov 21, 2026) - at the top, where it is seen without scrolling
         //JJQR - END
         ShowOverlay("Completion Checklist", body,
             ("Go Back", HideOverlay, "SecondaryButton"),
             ("Confirm & Complete", () => _ = CompleteAsync(), "PrimaryButton"));
+        if (stillMissing.Count > 0 && OverlayActions.Children.LastOrDefault() is Button confirmBtn) { confirmBtn.IsEnabled = false; confirmBtn.Opacity = 0.4; } //JJQR - AI (Nov 21, 2026) //JJQR - END
     }
 
     //JJQR - AI (Nov 21, 2026)
@@ -1943,7 +2027,9 @@ public partial class ConsultationPage : ContentPage
             {
                 // label (grey, small caps) + value (dark, bold) inside one chip; the chip never shrinks, so the value is never cut off
                 var t = part.Trim();
-                var firstDigit = t.IndexOfAny("0123456789".ToCharArray());
+                //JJQR - AI (Nov 21, 2026) - the value starts at the first digit that follows a space ("O2 SATURATION 97 %": the "2" inside O2 is part of the label)
+                var firstDigit = System.Text.RegularExpressions.Regex.Match(t, @"\s\d") is { Success: true } dm ? dm.Index + 1 : t.IndexOfAny("0123456789".ToCharArray());
+                //JJQR - END
                 var label = firstDigit > 0 ? t[..firstDigit].Trim() : t;
                 var value = firstDigit > 0 ? t[firstDigit..].Trim() : "";
                 var chip = new Border
@@ -2167,10 +2253,15 @@ public partial class ConsultationPage : ContentPage
         AbsoluteLayout.SetLayoutBounds(scrim, new Rect(0, 0, 1, 1));
         AbsoluteLayout.SetLayoutFlags(scrim, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.All);
         PopupLayer.Children.Add(scrim);
+        //JJQR - AI (Nov 21, 2026) - position and limits are measured against the popup layer itself (it sits inside the page padding), so the panel can never run off the window edge
         var pos = PositionInRoot(anchor);
-        var x = Math.Max(8, Math.Min(pos.X, Math.Max(8, Root.Width - width - 12)));
-        var below = pos.Y + anchor.Height + 4;
-        var y = below + 340 > Root.Height ? Math.Max(8, pos.Y - 340 - 4) : below;
+        var layerW = PopupLayer.Width > 0 ? PopupLayer.Width : Root.Width;
+        var layerH = PopupLayer.Height > 0 ? PopupLayer.Height : Root.Height;
+        var px = pos.X - PopupLayer.X; var py = pos.Y - PopupLayer.Y;
+        var x = Math.Max(8, Math.Min(px, Math.Max(8, layerW - width - 16)));
+        var below = py + anchor.Height + 4;
+        var y = below + 340 > layerH ? Math.Max(8, py - 340 - 4) : below;
+        //JJQR - END
         AbsoluteLayout.SetLayoutBounds(panel, new Rect(x, y, width, AbsoluteLayout.AutoSize));
         AbsoluteLayout.SetLayoutFlags(panel, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.None);
         PopupLayer.Children.Add(panel);

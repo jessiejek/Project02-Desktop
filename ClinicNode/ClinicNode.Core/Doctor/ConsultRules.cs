@@ -76,7 +76,9 @@ public static class ConsultRules
     /// <summary>Banner sentence under "Final step — decide the professional fee for this visit."</summary>
     public static string FeeBannerLine(string? decision, decimal? shown, string? waiveReason) => decision switch
     {
-        "Charge" => shown is null ? "This patient will be charged — enter the amount below." : $"This patient will be charged {FeeCalculator.FormatPeso(shown.Value)}.",
+        "Charge" => shown is null ? "This patient will be charged — enter the amount below."
+            : !FeeCalculator.IsValidChargeAmount(shown.Value) ? "Enter an amount above ₱0 and up to ₱100,000 (or choose Waive)." //JJQR - AI (Nov 21, 2026) - never say "charged ₱0" //JJQR - END
+            : $"This patient will be charged {FeeCalculator.FormatPeso(shown.Value)}.",
         "Waive" => (waiveReason ?? "").Trim().Length >= WaiveReasonMinLength
             ? $"The professional fee will be waived: {waiveReason!.Trim()}"
             : "The professional fee will be waived — add a reason (at least 5 characters).",
