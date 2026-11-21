@@ -2156,16 +2156,17 @@ public partial class ConsultationPage : ContentPage
     async void OnPrintCert(object? sender, EventArgs e)
     {
         if (!D.CertificateExists) { ConfirmCertificate(print: true); return; }
-        await PrintAsync("Print Certificate", id => _printDocs.MedicalCertificateAsync(id));
+        //JJQR - AI (Nov 22, 2026) - the screen said "issued" but the saved copy had no certificate ("No medical certificate has been issued"): save the visit again first so they match //JJQR - END
+        await PrintAsync("Print Certificate", id => _printDocs.MedicalCertificateAsync(id), forceSave: true);
     }
     //JJQR - END
     async void OnPrintSlip(object? sender, EventArgs e) => await PrintAsync("Print queue slip", id => _printDocs.QueueSlipAsync(id));
 
-    async Task PrintAsync(string title, Func<Guid, Task<PrintDocument>> build, bool saveFirst = true)
+    async Task PrintAsync(string title, Func<Guid, Task<PrintDocument>> build, bool saveFirst = true, bool forceSave = false)
     {
         if (_workspace is null) return;
         // Persist live form lines first so the print document matches what is on screen (web does the same).
-        if (saveFirst && _mode != "view" && Dirty && !await SaveAsync(goNext: false, silent: true)) return;
+        if (saveFirst && _mode != "view" && (Dirty || forceSave) && !await SaveAsync(goNext: false, silent: true)) return;
         if (_busy) return;
         _busy = true;
         try

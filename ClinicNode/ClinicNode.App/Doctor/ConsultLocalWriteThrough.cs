@@ -93,7 +93,9 @@ public static class ConsultLocalWriteThrough
 
             await using var db = await factory.CreateDbContextAsync(t);
             await SyncLocalStore.EnsureSchemaAsync(db, t);
-            if (await SyncLocalStore.HasPendingAsync(db, Aggregates.Consultation, cid.ToString(), t)) return; // never overwrite unpushed local work
+            //JJQR - AI (Nov 22, 2026) - on a computer that is NOT registered for sync, "unpushed" local work can never be pushed (a save made while the server was unreachable stays pending forever) and then every print read that stale copy instead of what the doctor saved: the server copy wins there //JJQR - END
+            var canSync = sp.GetService<ISyncStatus>()?.Phase is not SyncPhase.NotRegistered;
+            if (canSync && await SyncLocalStore.HasPendingAsync(db, Aggregates.Consultation, cid.ToString(), t)) return; // never overwrite unpushed local work
             await AggregateDocuments.ApplyAsync(db, new PulledChange(Aggregates.Consultation, cid.ToString(), false, doc), ApplyMode.ServerResult, t);
 
             foreach (var v in vitals.OfType<JsonObject>())

@@ -99,7 +99,14 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         var dir = DownloadsFolder();
         var safe = string.Concat(document.Title.Select(c => char.IsLetterOrDigit(c) ? c : '-')).Trim('-');
         var path = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{(safe.Length == 0 ? "document" : safe)}.html");
-        const string auto = "<script>window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print();},500);});</script>";
+        //JJQR - AI (Nov 22, 2026) - the page opens as a BACKGROUND tab (Safari ignores print() there, so nothing appeared): print as soon as the tab is visible, and keep a Print / Save as PDF button on screen (hidden when printing) //JJQR - END
+        const string auto =
+            "<style>@media print{#cn-print-bar{display:none!important}}#cn-print-bar{position:fixed;top:12px;right:12px;z-index:99999;font:14px -apple-system,Segoe UI,sans-serif}" +
+            "#cn-print-bar button{background:#0b5d4b;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}</style>" +
+            "<div id=\"cn-print-bar\"><button onclick=\"window.print()\">Print / Save as PDF</button></div>" +
+            "<script>(function(){var done=false;function go(){if(done)return;done=true;setTimeout(function(){window.focus();window.print();},300);}" +
+            "function ready(){if(document.visibilityState==='visible')go();}" +
+            "window.addEventListener('load',ready);document.addEventListener('visibilitychange',ready);window.addEventListener('focus',go);})();</script>";
         var html = document.Html;
         var i = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
         html = i >= 0 ? html.Insert(i, auto) : html + auto;
