@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicNode.Core.DoctorExtra;
 
-public sealed record TplSoap(Guid Id, string Title, bool IsSystem, string? ChiefComplaint, string? Subjective, string? Objective, string? Assessment, string? Plan);
+public sealed record TplSoap(Guid Id, string Title, bool IsSystem, string? ChiefComplaint, string? Subjective, string? Objective, string? Assessment, string? Plan, string? Category = null);
 /// <summary>Field is the DB enum name: ChiefComplaint / Subjective / Objective / Assessment / Plan.</summary>
 public sealed record TplPhrase(Guid Id, string Field, string Label, string Body, int SortOrder);
 public sealed record TplCert(Guid Id, string Title, bool IsSystem, string? DiagnosisText, string? Recommendations, string? PurposeException);
@@ -50,7 +50,7 @@ public sealed class DoctorTemplatesWorkspaceService(IDbContextFactory<ClinicAppD
         var phrases = await db.SoapPhrases.AsNoTracking().Where(p => p.DoctorId == doctorId).ToListAsync(ct);
         var certs = await db.MedicalCertificateTemplates.AsNoTracking().Where(t => t.DoctorId == doctorId).ToListAsync(ct);
         return new TemplatesWorkspace(
-            soap.OrderBy(t => t.Title, StringComparer.CurrentCulture).Select(t => new TplSoap(t.Id, t.Title, t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan)).ToList(),
+            soap.OrderBy(t => t.Title, StringComparer.CurrentCulture).Select(t => new TplSoap(t.Id, t.Title, t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan, t.Category)).ToList(),
             phrases.Select(p => new TplPhrase(p.Id, p.Field.ToString(), p.Label, p.Body, p.SortOrder)).ToList(),
             await LocalTpl.RxSetsAsync(factory, doctorId, ct),
             await LocalTpl.FavoritesAsync(factory, doctorId, ct),

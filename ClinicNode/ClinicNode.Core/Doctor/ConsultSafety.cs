@@ -159,6 +159,17 @@ public static class TemplateSpecialty
     }
 
     public static bool MatchesSoap(string? title, string filter) => filter == All || SoapTags(title).Contains(filter);
+
+    /// <summary>The saved group wins (Adult = "General" chip, Pedia = "Peds" chip); a template without one is grouped from its title as before.</summary>
+    public static bool MatchesSoap(string? title, string? category, string filter) => category switch
+    {
+        "Adult" => filter is All or "General",
+        "Pedia" => filter is All or "Peds",
+        _ => filter == All || (DefaultCategory(title) == "Pedia" ? filter == "Peds" : filter == "General"),
+    };
+
+    /// <summary>What the editor pre-selects for a template that has no group yet.</summary>
+    public static string DefaultCategory(string? title) => new Regex(@"pediatric|\bpeds?\b|child|infant|newborn|toddler", RegexOptions.IgnoreCase).IsMatch(title ?? "") ? "Pedia" : "Adult";
 }
 
 public static class RenalCue

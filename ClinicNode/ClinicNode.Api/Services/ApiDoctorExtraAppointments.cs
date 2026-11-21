@@ -89,7 +89,9 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
         {
             if (b.Patients is null || byPatient.ContainsKey(b.PatientId)) continue;
             byPatient[b.PatientId] = new DoctorPatientRow(b.PatientId, DoctorExtraRules.PatientName(b.Patients.FirstName, b.Patients.LastName),
-                b.Patients.PatientCode ?? "", b.AppointmentDate, b.BookingId);
+                b.Patients.PatientCode ?? "", b.AppointmentDate, b.BookingId,
+                b.Patients.Sex?.ToString(), b.Patients.DateOfBirth is { } dob ? DoctorExtraRules.AgeOn(dob, ClinicClock.Today) : null, b.Patients.ContactNumber,
+                bookings.Count(x => x.DoctorId == doctorId && x.PatientId == b.PatientId));
         }
         return byPatient.Values.ToList();
     }

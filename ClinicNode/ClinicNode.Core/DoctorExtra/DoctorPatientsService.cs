@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicNode.Core.DoctorExtra;
 
-public sealed record DoctorPatientRow(Guid PatientId, string FullName, string PatientCode, DateOnly LatestVisitDate, Guid LatestBookingId);
+public sealed record DoctorPatientRow(Guid PatientId, string FullName, string PatientCode, DateOnly LatestVisitDate, Guid LatestBookingId,
+    string? Sex = null, int? Age = null, string? Phone = null, int VisitCount = 0);
 
 public sealed record ChartPatient(Guid PatientId, string FullName, string PatientCode, SexType Sex, DateOnly DateOfBirth, int Age, string? ContactNumber);
 public sealed record ChartBooking(Guid BookingId, DateOnly AppointmentDate, IReadOnlyList<string> ServiceNames, BookingStatus Status, string? QueueNumber);
@@ -70,7 +71,9 @@ public sealed class DoctorPatientsService : IDoctorPatientsService
         {
             if (b.Patient is null || byPatient.ContainsKey(b.PatientId)) continue;
             byPatient[b.PatientId] = new DoctorPatientRow(b.PatientId, DoctorExtraRules.PatientName(b.Patient.FirstName, b.Patient.LastName),
-                b.Patient.PatientCode ?? "", b.AppointmentDate, b.BookingId);
+                b.Patient.PatientCode ?? "", b.AppointmentDate, b.BookingId,
+                b.Patient.Sex.ToString(), DoctorExtraRules.AgeOn(b.Patient.DateOfBirth, ClinicClock.Today), b.Patient.ContactNumber,
+                bookings.Count(x => x.PatientId == b.PatientId));
         }
         return byPatient.Values.ToList();
     }

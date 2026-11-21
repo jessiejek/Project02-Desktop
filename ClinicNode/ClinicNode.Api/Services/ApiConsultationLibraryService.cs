@@ -21,7 +21,7 @@ public sealed class ApiConsultationLibraryService(IApiClient api) : IConsultatio
     public async Task<IReadOnlyList<SoapTemplateItem>> ListSoapTemplatesAsync(Guid doctorId, CancellationToken ct = default) =>
         (await api.GetAsync<List<SoapTemplate>>("/api/soap-templates", Doc(doctorId), ct) ?? [])
             .OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
-            .Select(t => new SoapTemplateItem(t.Id, t.Title, t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan)).ToList();
+            .Select(t => new SoapTemplateItem(t.Id, t.Title, t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan, t.Category)).ToList();
 
     public async Task<IReadOnlyList<SoapPhraseItem>> ListSoapPhrasesAsync(Guid doctorId, CancellationToken ct = default) =>
         (await api.GetAsync<List<SoapPhrase>>("/api/soap-phrases", Doc(doctorId), ct) ?? [])

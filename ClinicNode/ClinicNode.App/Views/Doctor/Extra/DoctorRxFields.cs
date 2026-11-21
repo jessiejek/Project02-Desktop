@@ -138,23 +138,38 @@ public static class DoctorRxFields
     /// <summary>Templates "Prescription set" medicine block (web RxTab fieldset body).</summary>
     public static View TemplateLine(RxDraft d, IReadOnlyList<TplMedicine> catalog)
     {
-        var col = StaffUi.Column(8);
-        col.Children.Add(StaffUi.Field("Medicine", Input(d.GenericName, "Generic name", v => { d.GenericName = v; d.MedicineId = MatchMedicine(catalog, v); })));
-        col.Children.Add(StaffUi.Wrap(
-            DoctorExtraUi.Spaced(StaffUi.Field("Dosage", Input(d.Dosage, "500 mg", v => d.Dosage = v))),
-            DoctorExtraUi.Spaced(StaffUi.Field("Quantity", Input(d.Quantity, "21 tabs", v => d.Quantity = v)))));
+        //JJQR - AI (Nov 21, 2026) - one tidy block per medicine: name on top, dose / quantity / route in a row, then timing on the left and duration + notes on the right
         var route = new Picker { ItemsSource = Routes.ToList() };
         route.SelectedItem = Routes.Contains(d.Route) ? d.Route : null;
         route.SelectedIndexChanged += (_, _) => d.Route = route.SelectedItem as string ?? "";
-        col.Children.Add(StaffUi.Field("Route", ClinicPickers.PickerBox(null, route)));
-        col.Children.Add(Timing(d, "Meals", "Timing"));
-        col.Children.Add(Duration(d));
-        col.Children.Add(StaffUi.Field("Indication", Input(d.Indication, "e.g. for fever", v => d.Indication = v)));
-        col.Children.Add(StaffUi.Field("Directions", Input(d.Instruction, "e.g. with water", v => d.Instruction = v)));
+
+        // medicine name on its own full-width row, then dosage | quantity | route in three equal columns
+        var name = StaffUi.Field("Medicine", Input(d.GenericName, "Generic name", v => { d.GenericName = v; d.MedicineId = MatchMedicine(catalog, v); }));
+        var dose = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        dose.Add(StaffUi.Field("Dosage", Input(d.Dosage, "500 mg", v => d.Dosage = v)), 0, 0);
+        dose.Add(StaffUi.Field("Quantity", Input(d.Quantity, "21 tabs", v => d.Quantity = v)), 1, 0);
+        dose.Add(StaffUi.Field("Route", ClinicNode.App.Controls.ClinicPickers.PickerBox(null, route)), 2, 0);
+        var top = new VerticalStackLayout { Spacing = 12, Children = { name, dose } };
+
+        var left = StaffUi.Column(10);
+        left.Children.Add(Timing(d, "Meals", "Timing"));
+
+        var right = StaffUi.Column(10);
+        right.Children.Add(Duration(d));
+        right.Children.Add(StaffUi.Field("Indication", Input(d.Indication, "e.g. for fever", v => d.Indication = v)));
+        right.Children.Add(StaffUi.Field("Directions", Input(d.Instruction, "e.g. with water", v => d.Instruction = v)));
+
+        var lower = new Grid { ColumnSpacing = 24, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        lower.Add(left, 0, 0); lower.Add(right, 1, 0);
+
         var controlled = new CheckBox { IsChecked = d.IsControlled };
         controlled.CheckedChanged += (_, a) => d.IsControlled = a.Value;
-        col.Children.Add(new HorizontalStackLayout { Spacing = 8, Children = { controlled, ClinicTheme.Text("Controlled substance", "BodyMd") } });
+        var col = StaffUi.Column(14);
+        col.Children.Add(top);
+        col.Children.Add(lower);
+        col.Children.Add(ClinicNode.App.Controls.ClinicPickers.CheckRow(controlled, "Controlled substance", "Marks this medicine as a controlled drug on the printed prescription."));
         return col;
+        //JJQR - END
     }
 
     /// <summary>Prescription form fields after the medication box (web NewRxTab / EditLineItemModal).</summary>

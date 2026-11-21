@@ -467,30 +467,41 @@ public sealed class DoctorPatientChartPage : StaffLivePage
                 RenderVisits(c);
                 break;
             case "labs":
-                Files(c.LabResults, "No lab results yet.");
+                Files(c.LabResults, "No lab results yet", "Results uploaded for this patient (from the lab or the front desk) will be listed here.");
                 break;
             case "documents":
-                Files(c.Documents, "No documents yet.");
+                Files(c.Documents, "No documents yet", "Referral letters, scans and other files added to this patient's record will be listed here.");
                 break;
-            //JJQR - AI (21 Nov 2026) - web Vaccinations: table Vaccine | Dose # | Date | Status ("—" when empty; Administered = success, anything else = warning)
+            //JJQR - AI (Nov 21, 2026) - Vaccinations as the shared aligned table (Vaccine | Dose | Date | Status)
             case "vaccinations":
-                if (c.Vaccinations.Count == 0) { Empty("No vaccinations recorded yet."); break; }
-                _tab.Children.Add(Table(["Vaccine", "Dose #", "Date", "Status"],
-                    c.Vaccinations.Select(v => new View[]
-                    {
-                        Cell(v.VaccineName), Cell(v.DoseNumber?.ToString() ?? "—"), Cell(v.Date is { } d ? Iso(d) : "—"),
-                        StaffUi.Wrap(ClinicTheme.MakeStatusPill(v.Status.ToString())),
-                    }).ToList()));
+                if (c.Vaccinations.Count == 0) { EmptyCard("No vaccinations recorded yet", "Vaccines given or scheduled for this patient will be listed here with their dose and date."); break; }
+                _tab.Children.Add(ClinicUi.Table(
+                    [
+                        new TableColumn("Vaccine", GridLength.Star, o => ClinicTheme.Text(((ChartVaccination)o).VaccineName, "LabelLg")),
+                        new TableColumn("Dose", new GridLength(90), o => ClinicTheme.Text(((ChartVaccination)o).DoseNumber?.ToString() ?? "—", "BodyMd")),
+                        new TableColumn("Date", new GridLength(140), o => ClinicTheme.Text(((ChartVaccination)o).Date is { } d ? Iso(d) : "—", "BodyMd")),
+                        new TableColumn("Status", new GridLength(140), o => new HorizontalStackLayout { Children = { ClinicTheme.MakeStatusPill(((ChartVaccination)o).Status.ToString()) } }),
+                    ],
+                    c.Vaccinations.Cast<object>()));
                 break;
             //JJQR - END
         }
     }
 
     //JJQR - AI (21 Nov 2026) - web Lab Results / Documents rows show the title only (no upload line)
-    private void Files(IReadOnlyList<ChartFile> files, string empty)
+    //JJQR - AI (Nov 21, 2026) - empty state: a card with a heading and a hint about what will appear; files as an aligned table (name | uploaded)
+    private void EmptyCard(string title, string hint) =>
+        _tab.Children.Add(StaffUi.Card(new VerticalStackLayout { Spacing = 4, Padding = new Thickness(0, 14), Children = { ClinicTheme.Text(title, "HeadlineSm"), ClinicTheme.Text(hint, "MutedBody") } }));
+
+    private void Files(IReadOnlyList<ChartFile> files, string emptyTitle, string emptyHint)
     {
-        if (files.Count == 0) Empty(empty);
-        foreach (var f in files) _tab.Children.Add(StaffUi.Row(ClinicTheme.Text(f.Title, "BodyMd")));
+        if (files.Count == 0) { EmptyCard(emptyTitle, emptyHint); return; }
+        _tab.Children.Add(ClinicUi.Table(
+            [
+                new TableColumn("Name", GridLength.Star, o => ClinicTheme.Text(((ChartFile)o).Title, "LabelLg")),
+                new TableColumn("Uploaded", new GridLength(160), o => ClinicTheme.Text(((ChartFile)o).UploadedAt.ToLocalTime().ToString("yyyy-MM-dd"), "BodyMd")),
+            ],
+            files.Cast<object>()));
     }
     //JJQR - END
 

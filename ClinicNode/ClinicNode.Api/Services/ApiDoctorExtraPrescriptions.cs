@@ -20,7 +20,7 @@ namespace ClinicNode.Api.Services;
 
 internal static class ApiTplWire
 {
-    internal sealed record SoapDto(Guid Id, string? Title, bool IsSystemTemplate, string? ChiefComplaint, string? Subjective, string? Objective, string? Assessment, string? Plan);
+    internal sealed record SoapDto(Guid Id, string? Title, bool IsSystemTemplate, string? ChiefComplaint, string? Subjective, string? Objective, string? Assessment, string? Plan, string? Category = null);
     internal sealed record PhraseDto(Guid Id, SoapField Field, string? Label, string? Body, int SortOrder);
     internal sealed record RxTemplateDto(Guid TemplateId, string? Title, bool IsSystemTemplate, List<RxItemDto>? PrescriptionTemplateItems);
     internal sealed record FavoriteDto(Guid Id, Guid MedicineId, string? GenericName, string? Dosage, string? Quantity, string? Instruction, int SortOrder);

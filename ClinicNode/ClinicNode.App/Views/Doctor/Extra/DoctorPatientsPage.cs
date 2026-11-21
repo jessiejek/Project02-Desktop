@@ -117,11 +117,14 @@ public sealed class DoctorPatientsPage : StaffLivePage
                 };
                 return new HorizontalStackLayout { Spacing = 12, Children = { avatar, names } };
             }),
-            new("Latest appointment", new GridLength(190), o => ClinicTheme.Text(DoctorExtraRules.VisitDate(((DoctorPatientRow)o).LatestVisitDate), "BodyMd")),
+            new("Age / sex", new GridLength(120), o => { var r = (DoctorPatientRow)o; return ClinicTheme.Text(r.Age is { } a ? $"{a} · {r.Sex}" : "—", "BodyMd"); }),
+            new("Phone", new GridLength(150), o => ClinicTheme.Text(string.IsNullOrWhiteSpace(((DoctorPatientRow)o).Phone) ? "—" : ((DoctorPatientRow)o).Phone!, "BodyMd")),
+            new("Visits", new GridLength(70), o => ClinicTheme.Text(((DoctorPatientRow)o).VisitCount is var n and > 0 ? n.ToString() : "—", "BodyMd")),
+            new("Last visit", new GridLength(130), o => ClinicTheme.Text(DoctorExtraRules.VisitDate(((DoctorPatientRow)o).LatestVisitDate), "BodyMd")),
             new("", GridLength.Auto, o =>
             {
                 var r = (DoctorPatientRow)o;
-                //JJQR - AI (Nov 21, 2026) - both actions on ONE line, vertically centred in the row
+                //JJQR - AI (Nov 21, 2026) - the whole row opens the chart; the two buttons stay for the keyboard-minded
                 return new HorizontalStackLayout
                 {
                     Spacing = 8, VerticalOptions = LayoutOptions.Center,
@@ -137,7 +140,7 @@ public sealed class DoctorPatientsPage : StaffLivePage
         var empty = _pending ? "Loading patients…"
             : !string.IsNullOrEmpty(_search.Text) ? "No patients match this search. Try another name or ID."
             : "Patients will appear here after they book with you.";
-        _list.Children.Add(ClinicUi.Table(columns, filtered.Skip((_page - 1) * size).Take(size).Cast<object>(), empty));
+        _list.Children.Add(ClinicUi.Table(columns, filtered.Skip((_page - 1) * size).Take(size).Cast<object>(), empty, o => _ = StaffUi.PushAsync<DoctorPatientChartPage>(this, ((DoctorPatientRow)o).PatientId)));
 
         // pagination footer: total label, ‹ 1 2 3 ›
         var footer = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 16, Padding = new Thickness(24, 16) };

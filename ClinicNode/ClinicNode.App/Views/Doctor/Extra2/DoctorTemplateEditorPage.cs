@@ -31,12 +31,16 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         BackgroundColor = ClinicTheme.Color("Background");
         var cancel = StaffUi.Btn("Cancel", CloseAsync, "SecondaryButton");
         var save = StaffUi.Btn("Save", SaveAsync);
-        Content = StaffUi.Scroll(new VerticalStackLayout
-        {
-            Spacing = 16,
-            MaximumWidthRequest = 720,
-            Children = { ClinicTheme.Text(title, "HeadlineMd"), _error, _body, _blocked, StaffUi.Wrap(DoctorExtraUi.Spaced(cancel), DoctorExtraUi.Spaced(save)) },
-        });
+        //JJQR - AI (Nov 21, 2026) - editor chrome: title with Cancel / Save pinned at the top right (always visible, even on a long form), form below in a comfortable column
+        var header = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, Padding = new Thickness(0, 0, 0, 4) };
+        header.Add(new Label { Text = title, Style = ClinicTheme.Style("HeadlineMd"), VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.TailTruncation }, 0, 0);
+        header.Add(new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { cancel, save } }, 1, 0);
+        var form = new VerticalStackLayout { Spacing = 16, Padding = new Thickness(0, 4, 0, 24), Children = { _error, _body, _blocked } };
+        var page = new Grid { RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star) }, RowSpacing = 8, Padding = new Thickness(24, 16, 24, 0), MaximumWidthRequest = 920, HorizontalOptions = LayoutOptions.Center };
+        page.Add(header, 0, 0);
+        page.Add(new ScrollView { Content = form }, 0, 1);
+        Content = page;
+        //JJQR - END
     }
 
     private void Refresh() => StaffUi.Show(_blocked, _reason());
@@ -100,16 +104,21 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         var initial = new[] { row?.ChiefComplaint, row?.Subjective, row?.Objective, row?.Assessment, row?.Plan }.Select(v => v ?? "").ToArray();
         var fields = initial.ToArray();
         var startTitle = title;
+        //JJQR - AI (Nov 21, 2026) - which patients the template is for (saved with the template; drives the Adult / Pedia filter in a consultation)
+        var category = row?.Category is "Adult" or "Pedia" ? row.Category : ClinicNode.Core.Doctor.TemplateSpecialty.DefaultCategory(row?.Title);
+        var startCategory = category;
+        //JJQR - END
         var preview = false;
         var area = StaffUi.Column(12);
         p._reason = () => DoctorTemplateRules.ValidateSoap(title, fields);
-        p._dirty = () => title != startTitle || !fields.SequenceEqual(initial);
+        p._dirty = () => title != startTitle || category != startCategory || !fields.SequenceEqual(initial);
         void Render()
         {
             area.Children.Clear();
             if (!preview)
             {
                 area.Children.Add(StaffUi.Field("Template name", p.Line(title, "e.g. \"Annual Physical — Normal\"", v => title = v)));
+                area.Children.Add(StaffUi.Field("For", DoctorExtraUi.Segmented(["Adult", "Pedia"], category == "Pedia" ? 1 : 0, i => category = i == 1 ? "Pedia" : "Adult"), "Decides which group the template shows under when you pick one in a consultation."));
                 for (var i = 0; i < keys.Length; i++)
                 {
                     var k = i;
@@ -124,20 +133,14 @@ public sealed class DoctorTemplateEditorPage : ContentPage
                         ClinicTheme.Text(fields[i].Trim().Length > 0 ? fields[i].Trim() : "—", "BodyMd")));
             }
         }
-        var modes = StaffUi.Wrap();
-        void RenderModes()
-        {
-            modes.Children.Clear();
-            modes.Children.Add(DoctorExtraUi.Chip("Edit", !preview, () => { preview = false; RenderModes(); Render(); }));
-            modes.Children.Add(DoctorExtraUi.Chip("Preview", preview, () => { preview = true; RenderModes(); Render(); }));
-        }
-        RenderModes();
+        var modes = DoctorExtraUi.Segmented(["Edit", "Preview"], 0, i => { preview = i == 1; Render(); });
+        modes.HorizontalOptions = LayoutOptions.Start;
         Render();
         p._body.Children.Add(modes);
         p._body.Children.Add(area);
         p._save = async () =>
         {
-            var draft = new TplSoap(row?.Id ?? Guid.Empty, title.Trim(), false, Clean(fields[0]), Clean(fields[1]), Clean(fields[2]), Clean(fields[3]), Clean(fields[4]));
+            var draft = new TplSoap(row?.Id ?? Guid.Empty, title.Trim(), false, Clean(fields[0]), Clean(fields[1]), Clean(fields[2]), Clean(fields[3]), Clean(fields[4]), category);
             var r = await p._svc.SaveSoapAsync(p._doctorId, row?.Id, draft);
             return (r, $"SOAP template “{draft.Title}” saved.", "SOAP template was not saved. Your edits are still here — try again.");
         };
@@ -188,7 +191,10 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         var startTitle = title;
         var start = lines.Select(l => l.ToLine()).ToList();
         p._body.Children.Add(StaffUi.Field("Set name", p.Line(title, "e.g. \"Fever kit — adult\"", v => title = v)));
-        var list = StaffUi.Column(12);
+        var list = StaffUi.Column(10);
+        //JJQR - AI (Nov 21, 2026) - accordion: only ONE medicine is open for editing; the others fold into a one-line summary (name · dose · qty · route) so a long set stays readable
+        Guid? open = lines.Count == 1 ? lines[0].Key : null;
+        static string Summary(RxDraft d) => string.Join("  ·  ", new[] { d.Dosage, d.Quantity, d.Route, d.Instruction }.Where(x => !string.IsNullOrWhiteSpace(x)));
         void Render()
         {
             list.Children.Clear();
@@ -196,15 +202,35 @@ public sealed class DoctorTemplateEditorPage : ContentPage
             {
                 var idx = i;
                 var d = lines[i];
-                var head = StaffUi.Wrap(DoctorExtraUi.Spaced(ClinicTheme.Text($"Medicine {idx + 1}", "LabelLg"), 16));
+                var isOpen = open == d.Key;
+                var badge = new Border
+                {
+                    WidthRequest = 28, HeightRequest = 28, StrokeThickness = 0, VerticalOptions = LayoutOptions.Center,
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 }, BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.12f),
+                    Content = new Label { Text = (idx + 1).ToString(), FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ClinicTheme.Color("Primary"), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+                };
+                var name = new VerticalStackLayout { Spacing = 1, VerticalOptions = LayoutOptions.Center, Children =
+                {
+                    new Label { Text = string.IsNullOrWhiteSpace(d.GenericName) ? "New medicine" : d.GenericName, Style = ClinicTheme.Style("LabelLg"), TextColor = string.IsNullOrWhiteSpace(d.GenericName) ? ClinicTheme.Color("OnSurfaceVariant") : ClinicTheme.Color("OnSurface") },
+                    new Label { Text = Summary(d), Style = ClinicTheme.Style("MutedSm"), IsVisible = !isOpen && Summary(d).Length > 0, LineBreakMode = LineBreakMode.TailTruncation },
+                } };
                 var up = StaffUi.Btn("↑", () => { Move(d.Key, -1); return Task.CompletedTask; }, "GhostButton"); up.IsEnabled = idx > 0;
                 var down = StaffUi.Btn("↓", () => { Move(d.Key, 1); return Task.CompletedTask; }, "GhostButton"); down.IsEnabled = idx < lines.Count - 1;
-                var remove = StaffUi.DangerGhost("Remove", () => { lines.RemoveAll(x => x.Key == d.Key); Render(); return Task.CompletedTask; }); remove.IsEnabled = lines.Count > 1;
-                head.Children.Add(DoctorExtraUi.Spaced(up)); head.Children.Add(DoctorExtraUi.Spaced(down)); head.Children.Add(DoctorExtraUi.Spaced(remove));
-                list.Children.Add(StaffUi.Row(head, DoctorRxFields.TemplateLine(d, catalog)));
+                var toggle = StaffUi.Btn(isOpen ? "Done" : "Edit", () => { open = isOpen ? null : d.Key; Render(); return Task.CompletedTask; }, isOpen ? "PrimaryButton" : "SecondaryButton");
+                var remove = StaffUi.DangerGhost("Remove", () => { lines.RemoveAll(x => x.Key == d.Key); if (open == d.Key) open = null; Render(); return Task.CompletedTask; }); remove.IsEnabled = lines.Count > 1;
+                var actions = new HorizontalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { up, down, toggle, remove } };
+                var head = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+                head.Add(badge, 0, 0); head.Add(name, 1, 0); head.Add(actions, 2, 0);
+                var body = new VerticalStackLayout { Spacing = 12, Children = { head } };
+                if (isOpen) { body.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.5f) }); body.Children.Add(DoctorRxFields.TemplateLine(d, catalog)); }
+                var card = StaffUi.Row(body);
+                if (isOpen && card is Border b) { b.Stroke = ClinicTheme.Color("Primary"); b.StrokeThickness = 1.5; }
+                if (!isOpen) card.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { open = d.Key; Render(); }) });
+                list.Children.Add(card);
             }
             p.Refresh();
         }
+        //JJQR - END
         void Move(Guid key, int dir)
         {
             var ids = DoctorTemplateRules.MoveId(lines.Select(l => l.Key).ToList(), key, dir);
@@ -213,7 +239,7 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         }
         Render();
         p._body.Children.Add(list);
-        p._body.Children.Add(StaffUi.Wrap(DoctorExtraUi.Spaced(StaffUi.Btn("Add medicine", () => { lines.Add(new RxDraft()); Render(); return Task.CompletedTask; }, "SecondaryButton"))));
+        p._body.Children.Add(StaffUi.Wrap(DoctorExtraUi.Spaced(StaffUi.Btn("+ Add medicine", () => { var n = new RxDraft(); lines.Add(n); open = n.Key; Render(); return Task.CompletedTask; }, "PrimaryButton"))));
         p._reason = () => DoctorTemplateRules.ValidateRxSet(title, lines.Select(l => l.GenericName));
         p._dirty = () => title != startTitle || !lines.Select(l => l.ToLine()).SequenceEqual(start);
         p._save = async () =>

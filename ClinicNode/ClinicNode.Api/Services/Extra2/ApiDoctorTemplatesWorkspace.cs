@@ -18,7 +18,7 @@ public sealed class ApiDoctorTemplatesWorkspaceService(IApiClient api) : IDoctor
         var phrases = await api.GetAsync<List<ApiTplWire.PhraseDto>>("/api/soap-phrases", q, ct) ?? [];
         var certs = await api.GetAsync<List<ApiTplWire.CertDto>>("/api/medical-certificate-templates", q, ct) ?? [];
         return new TemplatesWorkspace(
-            soap.Select(t => new TplSoap(t.Id, t.Title ?? "", t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan))
+            soap.Select(t => new TplSoap(t.Id, t.Title ?? "", t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan, t.Category))
                 .OrderBy(t => t.Title, StringComparer.CurrentCulture).ToList(),
             phrases.Select(p => new TplPhrase(p.Id, p.Field.ToString(), p.Label ?? "", p.Body ?? "", p.SortOrder)).ToList(),
             await ApiTplWire.RxSetsAsync(api, doctorId, ct),
@@ -40,6 +40,7 @@ public sealed class ApiDoctorTemplatesWorkspaceService(IApiClient api) : IDoctor
             objective = Clean(draft.Objective),
             assessment = Clean(draft.Assessment),
             plan = Clean(draft.Plan),
+            category = Clean(draft.Category ?? ""),
         };
         return Write(async () => id is { } existing
             ? (await api.SendAsync<ApiTplWire.SoapDto>(HttpMethod.Put, $"/api/soap-templates/{Id(existing)}", body, null, ct))?.Id ?? existing

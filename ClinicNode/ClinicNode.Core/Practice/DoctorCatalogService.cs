@@ -9,7 +9,7 @@ namespace ClinicNode.Core.Practice;
 
 public sealed record Icd10Hit(string Code, string Description);
 public sealed record MedicineHit(Guid MedicineId, string GenericName);
-public sealed record SoapTemplateItem(Guid Id, string Title, bool IsSystem, string? ChiefComplaint, string? Subjective, string? Objective, string? Assessment, string? Plan);
+public sealed record SoapTemplateItem(Guid Id, string Title, bool IsSystem, string? ChiefComplaint, string? Subjective, string? Objective, string? Assessment, string? Plan, string? Category = null);
 public sealed record SoapPhraseItem(Guid Id, SoapField Field, string Label, string Body);
 public sealed record DiagnosisTemplateItem(Guid Id, string Label, string Body, string? Icd10Code);
 public sealed record RxTemplateItem(Guid Id, string Title, bool IsSystem, IReadOnlyList<ClinicNode.Core.Clinical.RxLine> Lines);
@@ -59,7 +59,7 @@ public sealed class DoctorCatalogService : IDoctorCatalogService
         await using var db = await _factory.CreateDbContextAsync(ct);
         return await db.SoapTemplates.AsNoTracking().Where(t => t.DoctorId == doctorId || t.IsSystemTemplate)
             .OrderBy(t => t.Title)
-            .Select(t => new SoapTemplateItem(t.Id, t.Title, t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan))
+            .Select(t => new SoapTemplateItem(t.Id, t.Title, t.IsSystemTemplate, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan, t.Category))
             .ToListAsync(ct);
     }
 

@@ -147,7 +147,7 @@ public partial class ConsultationPage
 
     // ---------- SOAP specialty filter ----------
     IReadOnlyList<SoapTemplateItem> FilteredSoapTemplates() =>
-        _soapTemplates.Where(t => TemplateSpecialty.MatchesSoap(t.Title, _soapSpecialty)).ToList();
+        _soapTemplates.Where(t => TemplateSpecialty.MatchesSoap(t.Title, t.Category, _soapSpecialty)).ToList();
 
     FlexLayout BuildSoapSpecialtyChips() //JJQR - AI (Nov 21, 2026) - returns the row so the caller can group it //JJQR - END
     {

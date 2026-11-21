@@ -171,12 +171,16 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         _search.HorizontalOptions = LayoutOptions.Fill;
         _search.WidthRequest = -1;
         _search.MaximumWidthRequest = 460;
+        _search.HorizontalOptions = LayoutOptions.Start;
+        _search.WidthRequest = 380;
         var scope = DoctorExtraUi.Segmented(["This tab", "All tabs"], _allTabs ? 1 : 0, i => { _allTabs = i == 1; Render(); });
         var viewToggle = DoctorExtraUi.Segmented(["List", "Cards"], _cards ? 1 : 0, i => { _cards = i == 1; Render(); });
-        var toolbar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto) } };
+        _primaryHost = new ContentView { VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.End };
+        var toolbar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto) } };
         toolbar.Add(_search, 0, 0);
         toolbar.Add(scope, 1, 0);
         toolbar.Add(viewToggle, 2, 0);
+        toolbar.Add(_primaryHost, 3, 0);
         _list.Children.Add(toolbar);
         //JJQR - END
         if (_missing)
@@ -210,7 +214,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
                 foreach (var t in visible)
                 {
                     var row = t;
-                    Item(row.Id, row.Title, DoctorTemplateRules.IsCopyTitle(row.Title) ? "Copy" : null,
+                    Item(row.Id, row.Title, (row.Category is "Adult" or "Pedia" ? row.Category : ClinicNode.Core.Doctor.TemplateSpecialty.DefaultCategory(row.Title)) + (DoctorTemplateRules.IsCopyTitle(row.Title) ? " · Copy" : ""),
                         DoctorTemplateRules.Truncate(new[] { row.ChiefComplaint, row.Subjective, row.Assessment, row.Plan, row.Objective }.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? ""),
                         () => Open(DoctorTemplateEditorPage.Soap(Sp, doctorId, row)),
                         [("Edit", () => Open(DoctorTemplateEditorPage.Soap(Sp, doctorId, row))),
@@ -241,16 +245,20 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
                         var col = StaffUi.Column(4);
                         col.Children.Add(ClinicTheme.Text(row.Label, "LabelLg"));
                         col.Children.Add(ClinicTheme.Text(DoctorTemplateRules.Truncate(row.Body, 120), "MutedSm"));
-                        var acts = StaffUi.Wrap();
-                        if (!filtering && idx > 0) acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn($"Move “{row.Label}” up", () => Reorder(svc, doctorId, ids, row.Id, -1, true), "SegmentedButton")));
-                        if (!filtering && idx < all.Count - 1) acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn($"Move “{row.Label}” down", () => Reorder(svc, doctorId, ids, row.Id, 1, true), "SegmentedButton")));
+                        var acts = new HorizontalStackLayout { Spacing = 2 };
+                        if (!filtering) { var upB = StaffUi.Btn("↑", () => Reorder(svc, doctorId, ids, row.Id, -1, true), "SegmentedButton"); upB.IsEnabled = idx > 0; acts.Children.Add(DoctorExtraUi.Spaced(upB)); }
+                        if (!filtering) { var dnB = StaffUi.Btn("↓", () => Reorder(svc, doctorId, ids, row.Id, 1, true), "SegmentedButton"); dnB.IsEnabled = idx < all.Count - 1; acts.Children.Add(DoctorExtraUi.Spaced(dnB)); }
                         acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Move to…", () => MoveTo(svc, doctorId, row), "SegmentedButton")));
                         acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Edit", () => Open(DoctorTemplateEditorPage.Phrase(Sp, doctorId, row, row.Field)), "SegmentedButton")));
                         acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Duplicate", () => Run(svc.SavePhraseAsync(doctorId, null, row.Field, DoctorTemplateRules.CopyTitle(row.Label, all.Select(x => x.Label)), row.Body),
                             $"Duplicated to “{DoctorTemplateRules.CopyTitle(row.Label, all.Select(x => x.Label))}”.", "Couldn’t duplicate the phrase. Please try again."), "SegmentedButton")));
                         acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.DangerGhost("Delete", () => Confirm(row.Id, row.Label, () => svc.DeletePhraseAsync(row.Id)))));
-                        col.Children.Add(acts);
-                        var phraseRow = StaffUi.Row(col);
+                        //JJQR - AI (Nov 21, 2026) - phrase row: text on the left, actions on the right (they used to hang under the text and wrap)
+                        var phraseGrid = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+                        acts.VerticalOptions = LayoutOptions.Center;
+                        phraseGrid.Add(col, 0, 0); phraseGrid.Add(acts, 1, 0);
+                        var phraseRow = StaffUi.Row(phraseGrid);
+                        //JJQR - END
                         if (_openId == row.Id) { phraseRow.BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.05f); _scrollTarget ??= phraseRow; } //JJQR - AI (21 Nov 2026) web: highlighted opened row // JJQR - END
                         section.Children.Add(phraseRow);
                     }
@@ -302,16 +310,18 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
                     var row = f; var idx = shown.FindIndex(x => x.Id == row.Id);
                     var ids = shown.Select(x => x.Id).ToList();
                     var col = StaffUi.Column(4);
-                    col.Children.Add(ClinicTheme.Text(row.GenericName, "LabelLg"));
+                    col.Children.Add(ClinicTheme.Text(ClinicNode.App.Views.Doctor.Extra.DoctorPatientChartPage.NiceMedicine(row.GenericName), "LabelLg"));
                     col.Children.Add(ClinicTheme.Text(string.Join(" · ", new[] { row.Dosage, row.Quantity, row.Instruction }.Where(x => !string.IsNullOrWhiteSpace(x))), "MutedSm"));
-                    var acts = StaffUi.Wrap();
-                    if (!filtering && idx > 0) acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn($"Move {row.GenericName} up", () => Reorder(svc, doctorId, ids, row.Id, -1, false), "SegmentedButton")));
-                    if (!filtering && idx < shown.Count - 1) acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn($"Move {row.GenericName} down", () => Reorder(svc, doctorId, ids, row.Id, 1, false), "SegmentedButton")));
+                    var acts = new HorizontalStackLayout { Spacing = 2 };
+                    if (!filtering) { var upB = StaffUi.Btn("↑", () => Reorder(svc, doctorId, ids, row.Id, -1, false), "SegmentedButton"); upB.IsEnabled = idx > 0; acts.Children.Add(DoctorExtraUi.Spaced(upB)); }
+                    if (!filtering) { var dnB = StaffUi.Btn("↓", () => Reorder(svc, doctorId, ids, row.Id, 1, false), "SegmentedButton"); dnB.IsEnabled = idx < shown.Count - 1; acts.Children.Add(DoctorExtraUi.Spaced(dnB)); }
                     // favorites have no Duplicate and no built-ins (web A1 / A4)
                     acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.Btn("Edit", async () => await Open(DoctorTemplateEditorPage.Favorite(Sp, doctorId, row, await svc.ListMedicinesAsync())), "SegmentedButton")));
                     acts.Children.Add(DoctorExtraUi.Spaced(StaffUi.DangerGhost("Delete", () => Confirm(row.Id, row.GenericName, () => svc.DeleteFavoriteAsync(row.Id)))));
-                    col.Children.Add(acts);
-                    var favRow = StaffUi.Row(col);
+                    var favGrid = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+                    acts.VerticalOptions = LayoutOptions.Center;
+                    favGrid.Add(col, 0, 0); favGrid.Add(acts, 1, 0);
+                    var favRow = StaffUi.Row(favGrid);
                     if (_openId == row.Id) { favRow.BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.05f); _scrollTarget ??= favRow; } //JJQR - AI (21 Nov 2026) // JJQR - END
                     _list.Children.Add(favRow);
                 }
@@ -340,12 +350,15 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         }
     }
 
+    private ContentView _primaryHost = new();
+
+    //JJQR - AI (Nov 21, 2026) - the "+ New …" button lives in the toolbar row (right) instead of on a row of its own
     private void Add(string text, Func<Task> add)
     {
-        var b = StaffUi.Btn(text, add);
-        b.HorizontalOptions = LayoutOptions.End;
-        _list.Children.Add(b);
+        var b = StaffUi.Btn("+ " + text, add);
+        _primaryHost.Content = b;
     }
+    //JJQR - END
 
     private void Hint(string text) => _list.Children.Add(StaffUi.Card(ClinicTheme.Text(text, "MutedBody")));
 
@@ -387,7 +400,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         var highlight = _openId == id;
         var col = StaffUi.Column(4);
         var titleRow = StaffUi.Wrap(DoctorExtraUi.Spaced(ClinicTheme.Text(title, "LabelLg"), 8, 0));
-        if (pill is not null) titleRow.Children.Add(ClinicTheme.Text(pill, "MutedSm"));
+        if (pill is not null) titleRow.Children.Add(new Border { Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(8, 2), VerticalOptions = LayoutOptions.Center, Content = new Label { Text = pill, Style = ClinicTheme.Style("PillLabelInfo") } });
         col.Children.Add(titleRow);
         if (!string.IsNullOrWhiteSpace(preview))
         {

@@ -40,7 +40,7 @@ public sealed class ConsultationLibraryService : IConsultationLibraryService
         var own = await db.SoapTemplates.AsNoTracking().Where(t => t.DoctorId == doctorId && !t.IsSystemTemplate).ToListAsync(ct);
         var taken = await TakenKeysAsync(db, doctorId, BuiltInTemplateKind.Soap, own.Select(o => o.SourceBuiltinKey), ct);
         var titles = own.Select(o => o.Title).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var list = own.Select(t => new SoapTemplateItem(t.Id, t.Title, false, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan)).ToList();
+        var list = own.Select(t => new SoapTemplateItem(t.Id, t.Title, false, t.ChiefComplaint, t.Subjective, t.Objective, t.Assessment, t.Plan, t.Category)).ToList();
         list.AddRange(BuiltInTemplateCatalog.SoapTemplates.Where(b => !taken.Contains(b.Key) && !titles.Contains(b.Title))
             .Select(b => new SoapTemplateItem(Guid.Parse(b.Key), b.Title, true, b.ChiefComplaint, b.Subjective, b.Objective, b.Assessment, b.Plan)));
         return list.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
