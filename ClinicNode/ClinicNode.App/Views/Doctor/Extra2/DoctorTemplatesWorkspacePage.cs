@@ -151,6 +151,16 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
 
     private string Query => _allTabs ? "" : _search.Text ?? "";
 
+    //JJQR - AI (Nov 22, 2026) - owner: switching tabs felt slow (the whole list is rebuilt before anything is painted). Paint "Loading..." first, then build the rows.
+    private void RenderSoon()
+    {
+        if (!_loaded) { Render(); return; }
+        _list.Children.Clear();
+        _list.Children.Add(ClinicTheme.Text("Loading…", "MutedBody"));
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(30), Render);
+    }
+    //JJQR - END
+
     private void Render()
     {
         _list.Children.Clear();
@@ -164,7 +174,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
             ["favorites"] = _lib?.Favorites.Count ?? 0, ["certificates"] = _lib?.Certificates.Count ?? 0,
         };
         // nav: "SOAP (3)" ... (web VISIBLE_TEMPLATE_TABS; Diagnoses stays hidden)
-        _list.Children.Add(DoctorExtraUi.Tabs(DoctorTemplateRules.Tabs.Select(t => (t.Id, $"{t.Label} ({counts[t.Id]})")).ToArray(), () => _tab, id => { _tab = id; Render(); }));
+        _list.Children.Add(DoctorExtraUi.Tabs(DoctorTemplateRules.Tabs.Select(t => (t.Id, $"{t.Label} ({counts[t.Id]})")).ToArray(), () => _tab, id => { _tab = id; RenderSoon(); }));
         // search row: input, "This tab" / "All tabs" chips
         _search.Placeholder = _allTabs ? "Search all tabs…" : "Search this tab…";
         //JJQR - AI (Nov 21, 2026) - one tidy toolbar row: wide search | scope toggle | view toggle (the old chips wrapped onto three lines)
@@ -173,8 +183,8 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         _search.MaximumWidthRequest = 460;
         _search.HorizontalOptions = LayoutOptions.Start;
         _search.WidthRequest = 380;
-        var scope = DoctorExtraUi.Segmented(["This tab", "All tabs"], _allTabs ? 1 : 0, i => { _allTabs = i == 1; Render(); });
-        var viewToggle = DoctorExtraUi.Segmented(["List", "Cards"], _cards ? 1 : 0, i => { _cards = i == 1; Render(); });
+        var scope = DoctorExtraUi.Segmented(["This tab", "All tabs"], _allTabs ? 1 : 0, i => { _allTabs = i == 1; RenderSoon(); });
+        var viewToggle = DoctorExtraUi.Segmented(["List", "Cards"], _cards ? 1 : 0, i => { _cards = i == 1; RenderSoon(); });
         _primaryHost = new ContentView { VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.End };
         var toolbar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto) } };
         toolbar.Add(_search, 0, 0);
