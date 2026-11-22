@@ -285,10 +285,19 @@ public partial class AppShell : Shell
     }
 
     //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.5: the Logout button: sync what is waiting first, ask if some is still waiting. Forced sign-outs (revoked, expired) do not ask.
+    //JJQR - AI (Nov 22, 2026) - owner: Logout could be clicked many times and started the sign-out many times. One sign-out at a time; extra clicks do nothing.
+    bool _signOutRunning;
     public async Task UserSignOutAsync()
     {
-        if (await ClinicNode.App.Views.Shared.SyncGuard.ConfirmLeavingAsync(_services, "signout", "Sign out anyway")) await SignOutAsync();
+        if (_signOutRunning) return;
+        _signOutRunning = true;
+        try
+        {
+            if (await ClinicNode.App.Views.Shared.SyncGuard.ConfirmLeavingAsync(_services, "signout", "Sign out anyway")) await SignOutAsync();
+        }
+        finally { _signOutRunning = false; }
     }
+    //JJQR - END
     //JJQR - END
 
     public async Task SignOutAsync()

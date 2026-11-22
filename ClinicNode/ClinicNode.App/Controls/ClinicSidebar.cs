@@ -220,7 +220,16 @@ public sealed class ClinicSidebar : Grid
             Content = grid,
         };
         var tap = new TapGestureRecognizer();
-        tap.Tapped += async (_, _) => await action();
+        //JJQR - AI (Nov 22, 2026) - owner: no double clicks. A row (Logout, every menu item) ignores taps while its action is still running.
+        var running = false;
+        tap.Tapped += async (_, _) =>
+        {
+            if (running) return;
+            running = true;
+            try { await action(); }
+            finally { running = false; }
+        };
+        //JJQR - END
         border.GestureRecognizers.Add(tap);
         return border;
     }

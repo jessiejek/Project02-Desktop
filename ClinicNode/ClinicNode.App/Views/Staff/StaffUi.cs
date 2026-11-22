@@ -136,6 +136,9 @@ public static class StaffUi
 
     public static View Field(string label, View input, string? hint = null)
     {
+        //JJQR - AI (Nov 22, 2026) - a password box gets the show/hide eye
+        if (input is Entry { IsPassword: true } pw) input = ClinicNode.App.Controls.PasswordEye.Wrap(pw);
+        //JJQR - END
         var col = new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text(label, "FieldLabel"), input } };
         if (hint is not null) col.Children.Add(ClinicTheme.Text(hint, "MutedSm"));
         return col;

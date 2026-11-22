@@ -20,6 +20,33 @@ public abstract class StaffLivePage : ContentPage
     protected virtual string? StaleLoadWarning => null;
     private bool _loadedOnce;
     //JJQR - END
+    //JJQR - AI (Nov 22, 2026) - owner: "if it fetches, show a skeleton". Every page built on this base shows a pulsing placeholder over its content until the FIRST load finishes (success or failure). Later live refreshes keep the old data on screen.
+    private Grid? _skeletonHost;
+    private View? _skeleton;
+    private bool _firstLoadDone;
+
+    private void ShowFirstLoadSkeleton()
+    {
+        if (_firstLoadDone || Content is null || ReferenceEquals(Content, _skeletonHost)) return;
+        var inner = Content;
+        Content = null;
+        var stack = new VerticalStackLayout { Spacing = 24, Padding = new Thickness(24), MaximumWidthRequest = 900, HorizontalOptions = LayoutOptions.Center };
+        stack.Children.Add(new SkeletonBar(24, 240));
+        stack.Children.Add(Skeleton.Card(3));
+        stack.Children.Add(Skeleton.Rows(5));
+        _skeleton = new Grid { BackgroundColor = ClinicTheme.Color("Background"), Children = { stack } };
+        _skeletonHost = new Grid { Children = { inner, _skeleton } };
+        Content = _skeletonHost;
+        // never leave it stuck: after 15 s the content is shown whatever happened
+        Dispatcher.StartTimer(TimeSpan.FromSeconds(15), () => { HideFirstLoadSkeleton(); return false; });
+    }
+
+    private void HideFirstLoadSkeleton()
+    {
+        _firstLoadDone = true;
+        if (_skeleton is not null) _skeleton.IsVisible = false;
+    }
+    //JJQR - END
 
     protected StaffLivePage(IServiceProvider sp, string title, bool live = true)
     {
@@ -38,6 +65,7 @@ public abstract class StaffLivePage : ContentPage
         try
         {
             await LoadAsync();
+            HideFirstLoadSkeleton(); //JJQR - AI (Nov 22, 2026) //JJQR - END
             StaffUi.Show(LoadError, null);
             //JJQR - AI (21 Nov 2026)
             ErrorStateView.IsVisible = false;
@@ -47,6 +75,7 @@ public abstract class StaffLivePage : ContentPage
         }
         catch (Exception ex)
         {
+            HideFirstLoadSkeleton(); //JJQR - AI (Nov 22, 2026) //JJQR - END
             //JJQR - AI (21 Nov 2026) - web ErrorState when the page opts in (no exception text, like the web)
             if (_loadedOnce && StaleLoadWarning is { } stale)
             {
@@ -73,6 +102,7 @@ public abstract class StaffLivePage : ContentPage
         base.OnAppearing();
         if (_live) _refresh ??= new LiveRefresh(this, Svc<IClinicEventBus>(), ReloadAsync, TimeSpan.FromSeconds(60));
         SubscribeHub(); //JJQR - AI (21 Nov 2026) //JJQR - END
+        ShowFirstLoadSkeleton(); //JJQR - AI (Nov 22, 2026) //JJQR - END
         _ = ReloadAsync();
     }
 

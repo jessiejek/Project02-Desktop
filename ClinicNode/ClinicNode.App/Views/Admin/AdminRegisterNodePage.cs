@@ -44,7 +44,7 @@ public sealed class AdminRegisterNodePage : ContentPage
                     ClinicTheme.Text("Use a cloud admin access token to register this computer for sync. The node secret is stored in the OS credential vault.", "MutedBody"),
                     _status,
                     ClinicTheme.Text("Admin access token", "FieldLabel"),
-                    _jwt,
+                    ClinicNode.App.Controls.PasswordEye.Wrap(_jwt), //JJQR - AI (Nov 22, 2026) - eye //JJQR - END
                     ClinicTheme.Text("Computer name", "FieldLabel"),
                     _name,
                     ClinicTheme.Text("Platform", "FieldLabel"),

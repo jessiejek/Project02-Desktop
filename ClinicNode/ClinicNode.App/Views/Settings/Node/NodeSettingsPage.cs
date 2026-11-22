@@ -169,7 +169,7 @@ public sealed class NodeSettingsPage : ContentPage, INodeSettingsDialogs
         return Card("Register this node",
             "Signed in online as an admin? Just press Register: your sign-in is used. Otherwise paste an admin access token. The node secret is stored in the system keychain.",
             status,
-            ClinicTheme.Text("Admin access token", "FieldLabel"), BoundEntry(nameof(NodeSettingsViewModel.AdminToken), "Admin access token", password: true),
+            ClinicTheme.Text("Admin access token", "FieldLabel"), ClinicNode.App.Controls.PasswordEye.Wrap(BoundEntry(nameof(NodeSettingsViewModel.AdminToken), "Admin access token", password: true)), //JJQR - AI (Nov 22, 2026) - eye //JJQR - END
             ClinicTheme.Text("Computer name", "FieldLabel"), BoundEntry(nameof(NodeSettingsViewModel.NodeName), "Name for this computer"),
             error,
             Action("Register this node", nameof(NodeSettingsViewModel.RegisterCommand), nameof(NodeSettingsViewModel.IsRegisterIdle), secondary: false));

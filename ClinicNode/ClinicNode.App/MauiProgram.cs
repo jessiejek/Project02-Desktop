@@ -84,6 +84,9 @@ public static class MauiProgram
             tv.TextContainerInset = new UIKit.UIEdgeInsets(10, 8, 10, 8);
             tv.FocusEffect = null; // no heavy blue system focus ring
         });
+#if MACCATALYST
+        ClinicNode.App.Platforms.MacCatalyst.NativeUiEnhancements.Register(); //JJQR - AI (Nov 22, 2026) - pointer cursor + click debounce for the whole app //JJQR - END
+#endif
         Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("ClinicEntryFocus", (handler, view) => handler.PlatformView.FocusEffect = null);
 #endif
         //JJQR - END
