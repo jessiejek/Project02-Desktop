@@ -2,6 +2,7 @@
 using ClinicNode.App.Controls;
 using ClinicNode.Core.Staff;
 
+using ClinicNode.App.Views.Shared;
 namespace ClinicNode.App.Views.Staff;
 
 public sealed class StaffProfilePage : StaffLivePage
@@ -56,8 +57,9 @@ public sealed class StaffProfilePage : StaffLivePage
                     _detailsSaved, _detailsError, //JJQR - AI (21 Nov 2026) - STAFF PARITY: web order: saved, then error //JJQR - END
                     StaffUi.Field("Full name", _fullName),
                     StaffUi.Field("Contact number", _contact),
-                    StaffUi.Field("Email", _email, "Ask an admin to change the email you sign in with."),
+                    StaffUi.Field("Email", _email, "Use the Change email box to change the email you sign in with."), //JJQR - AI (Nov 22, 2026) //JJQR - END
                     save),
+                new VerticalStackLayout { Spacing = 16, Children = {
                 StaffUi.Card(
                     ClinicTheme.Text("Change password", "HeadlineSm"),
                     _pwSaved, _pwError,
@@ -65,7 +67,9 @@ public sealed class StaffProfilePage : StaffLivePage
                     StaffUi.Field("New password", _new, StaffProfileService.PasswordHint),
                     StaffUi.Field("Confirm new password", _confirm),
                     _mismatch,
-                    _update))), //JJQR - AI (Nov 22, 2026) - details and password side by side instead of two 1,165 pt wide cards //JJQR - END
+                    _update),
+                //JJQR - AI (Nov 22, 2026) - owner: every profile can change its own email
+                ProfileEmailCard.Build(Svc<IStaffProfileService>(), () => _email.Text, e => _email.Text = e) } })), //JJQR - AI (Nov 22, 2026) - details and password side by side instead of two 1,165 pt wide cards //JJQR - END
             }
         });
     }

@@ -36,6 +36,16 @@ public sealed class ApiStaffProfileService(IApiClient api) : IStaffProfileServic
             staffId, "Your profile wasn’t saved. Please try again.");
     }
 
+    //JJQR - AI (Nov 22, 2026) - POST /api/auth/change-email { currentPassword, newEmail }; the server checks the password, the address and that nobody else has it
+    public Task<StaffResult> ChangeEmailAsync(string? currentPassword, string? newEmail, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(newEmail) || !newEmail.Contains('@')) return Task.FromResult(StaffResult.Fail("Enter a valid email address."));
+        if (string.IsNullOrEmpty(currentPassword)) return Task.FromResult(StaffResult.Fail("Enter your current password."));
+        var body = new Dictionary<string, string?> { ["currentPassword"] = currentPassword, ["newEmail"] = newEmail.Trim() };
+        return Write(() => api.SendAsync(HttpMethod.Post, "/api/auth/change-email", body, null, ct), null, "Could not change the email.");
+    }
+    //JJQR - END
+
     public bool CanUpdatePassword(string? current, string? newPassword, string? confirm) =>
         !string.IsNullOrWhiteSpace(current) && (newPassword ?? "").Length >= PasswordPolicy.MinLength && newPassword == confirm;
 

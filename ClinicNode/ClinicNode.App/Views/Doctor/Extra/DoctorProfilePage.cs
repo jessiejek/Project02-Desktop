@@ -81,13 +81,7 @@ public sealed class DoctorProfilePage : StaffLivePage
         _fee.Text = p.ConsultationFee.ToString("0.##", CultureInfo.InvariantCulture);
         _license.Text = p.LicenseNumber; _ptr.Text = p.PtrNumber; _s2.Text = p.S2Number;
         // Admin-only fields: read-only here (deliberate web diff until Jessie decides)
-        foreach (var e in new[] { _name, _spec }) e.IsReadOnly = true; //JJQR - AI (Nov 22, 2026) - License / PTR / S2 are the doctor's own to enter; owner: the doctor's own FEE (PF) is editable too //JJQR - END
-        //JJQR - AI (21 Nov 2026) - Jessie (6:30 PM): the 6 Admin-only fields LOOK read-only (muted background + text); Bio stays editable
-        foreach (var e in new[] { _name, _spec })
-        {
-            e.BackgroundColor = ClinicTheme.Color("SurfaceContainerLow");
-            e.TextColor = ClinicTheme.Color("OnSurfaceVariant");
-        }
+        //JJQR - AI (Nov 22, 2026) - owner: the doctor edits their own full name, specialization, fee, license, PTR, S2 and bio //JJQR - END
         //JJQR - END
 
         var grid = new Grid
@@ -116,7 +110,9 @@ public sealed class DoctorProfilePage : StaffLivePage
             save!.Text = "Saving profile…";
             try
             {
-                var r = await Svc<IDoctorBioService>().SaveBioAsync(doctorId, _bio.Text, _license.Text ?? "", _ptr.Text ?? "", _s2.Text ?? "");
+                //JJQR - AI (Nov 22, 2026) - owner: saves name, specialization, fee, license/PTR/S2 and bio (online: PUT /api/doctors/me; offline: this computer's copy, sent at the next sync)
+                var r = await svc.SaveAsync(new DoctorProfileEdit(_name.Text, _spec.Text, _bio.Text, _fee.Text, _license.Text, _ptr.Text, _s2.Text));
+                //JJQR - END
                 if (!r.Succeeded) { StaffUi.Show(_error, r.Error); return; }
                 //JJQR - AI (Nov 22, 2026) - printouts read this computer's own copy of the doctor row: keep it in step with what the server just stored //JJQR - END
                 await CopyIdsToLocalAsync(doctorId);
@@ -182,9 +178,12 @@ public sealed class DoctorProfilePage : StaffLivePage
             },
         }, 1, 0);
 
-        var details = new Grid { ColumnSpacing = 24, RowSpacing = 18, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
-        details.Add(Info("Consultation fee", "₱" + _fee.Text), 0, 0);
-        details.Add(Info("Specialization", _spec.Text), 1, 0);
+        //JJQR - AI (Nov 22, 2026) - owner: editable boxes, not read-only text
+        var details = new Grid { ColumnSpacing = 16, RowSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        details.Add(StaffUi.Field("Full name", _name), 0, 0);
+        details.Add(StaffUi.Field("Specialization", _spec), 1, 0);
+        details.Add(StaffUi.Field("Consultation fee (₱)", _fee, "A new fee applies to new bookings only."), 2, 0);
+        //JJQR - END
         //JJQR - AI (Nov 22, 2026) - the doctor's own License / PTR / S2 numbers are editable (they print on prescriptions and certificates) //JJQR - END
         var ids = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
         ids.Add(StaffUi.Field("License no.", _license), 0, 0);
@@ -195,7 +194,7 @@ public sealed class DoctorProfilePage : StaffLivePage
         {
             BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"), StrokeThickness = 0, Padding = new Thickness(12, 8),
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
-            Content = ClinicTheme.Text("🔒 Name and specialization are set by the clinic admin. Your fee, License, PTR and S2 numbers are yours to enter; the license, PTR and S2 numbers print on prescriptions and certificates. A new fee applies to new bookings only.", "MutedSm"),
+            Content = ClinicTheme.Text("Everything on this page is yours to edit. The license, PTR and S2 numbers print on prescriptions and certificates.", "MutedSm"),
         };
 
         var bioBox = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Bio", "FieldLabel"), ClinicTheme.Text("Shown on your public profile.", "MutedSm"), _bio } };
@@ -212,7 +211,8 @@ public sealed class DoctorProfilePage : StaffLivePage
             new Label { Text = "Clinic availability", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17 },
             ClinicTheme.Text("Weekly hours and dates away.", "MutedBody"),
             StaffUi.Btn("Manage availability", () => StaffUi.PushAsync<DoctorSchedulePage>(this), "SecondaryButton"));
-        var right = new VerticalStackLayout { Spacing = 16, Children = { pwCard, availCard }, VerticalOptions = LayoutOptions.Start };
+        var emailCard = ClinicNode.App.Views.Shared.ProfileEmailCard.Build(Svc<ClinicNode.Core.Staff.IStaffProfileService>(), () => _email.Text, e => _email.Text = e); //JJQR - AI (Nov 22, 2026) - change email //JJQR - END
+        var right = new VerticalStackLayout { Spacing = 16, Children = { pwCard, emailCard, availCard }, VerticalOptions = LayoutOptions.Start };
 
         var cols = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(new GridLength(3, GridUnitType.Star)), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) } };
         cols.Add(left, 0, 0);

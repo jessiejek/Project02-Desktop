@@ -28,6 +28,13 @@ public sealed class SessionRefreshingStaffProfileService : IStaffProfileService
     public bool CanUpdatePassword(string? current, string? newPassword, string? confirm) =>
         _inner.CanUpdatePassword(current, newPassword, confirm);
 
+    public async Task<StaffResult> ChangeEmailAsync(string? currentPassword, string? newEmail, CancellationToken ct = default)
+    {
+        var result = await _inner.ChangeEmailAsync(currentPassword, newEmail, ct);
+        if (result.Succeeded) await _auth.RefreshCurrentAsync(ct); //JJQR - AI (Nov 22, 2026) - show the new email in the session //JJQR - END
+        return result;
+    }
+
     public Task<StaffResult> ChangePasswordAsync(string? current, string? newPassword, string? confirm, CancellationToken ct = default) =>
         _inner.ChangePasswordAsync(current, newPassword, confirm, ct);
 }

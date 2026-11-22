@@ -17,6 +17,9 @@ public interface IStaffProfileService
     /// <summary>Web <c>canUpdate</c>: current not blank, new ≥ 12 chars, new == confirm.</summary>
     bool CanUpdatePassword(string? current, string? newPassword, string? confirm);
     Task<StaffResult> ChangePasswordAsync(string? current, string? newPassword, string? confirm, CancellationToken ct = default);
+    //JJQR - AI (Nov 22, 2026) - owner: every profile can change its own sign-in email (current password required). Online only.
+    Task<StaffResult> ChangeEmailAsync(string? currentPassword, string? newEmail, CancellationToken ct = default);
+    //JJQR - END
 }
 
 public sealed class StaffProfileService : IStaffProfileService
@@ -48,6 +51,11 @@ public sealed class StaffProfileService : IStaffProfileService
         var row = await db.StaffAccounts.AsNoTracking().SingleOrDefaultAsync(s => s.UserId == userId, ct);
         return row is null ? null : new StaffProfile(row.StaffId, row.FullName, row.ContactNumber ?? "", row.Email);
     }
+
+    //JJQR - AI (Nov 22, 2026) - the email is the sign-in on the SERVER, so it can only be changed while Online
+    public Task<StaffResult> ChangeEmailAsync(string? currentPassword, string? newEmail, CancellationToken ct = default) =>
+        Task.FromResult(StaffResult.Fail("Changing your email needs the internet. Switch to Online and try again."));
+    //JJQR - END
 
     public async Task<StaffResult> SaveAsync(string? fullName, string? contactNumber, CancellationToken ct = default)
     {
