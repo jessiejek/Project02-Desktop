@@ -51,6 +51,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ClinicNode.Core.Queue.IQueueNumberSource>(sp => sp.GetRequiredService<ClinicNode.Sync.Local.QueueBlockNumberSource>());
         //JJQR - END
         //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.1
+        services.AddSingleton<ClinicNode.Core.Sync.IWorkModeService>(sp => new WorkModeService(
+            sp.GetRequiredService<IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>(),
+            sp.GetRequiredService<ClinicNode.Core.Auth.IAuthService>(), sp.GetService<ClinicNode.Core.Sync.ISyncBridge>()));
+        //JJQR - END
         services.AddSingleton<SyncLoop>();
         services.AddSingleton<ISyncLoop>(sp => sp.GetRequiredService<SyncLoop>());
         return services;

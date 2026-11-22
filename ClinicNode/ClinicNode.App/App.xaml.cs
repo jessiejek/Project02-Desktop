@@ -30,6 +30,9 @@ public partial class App : Application
             await _database.InitializeAsync();
             if (_services.GetRequiredService<IAuthService>() is AuthService auth)
                 await auth.LoadRememberedEmailAsync();
+            //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.1: load the saved work mode before the login page, so a restart keeps it
+            await _services.GetRequiredService<ClinicNode.Core.Sync.IWorkModeService>().InitializeAsync();
+            //JJQR - END
             // MAUI does not run hosted services; start the sync loop only after the local DB is ready.
             _services.GetRequiredService<ISyncLoop>().Start();
         }
