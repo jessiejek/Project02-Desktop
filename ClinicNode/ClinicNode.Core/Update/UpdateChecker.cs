@@ -68,12 +68,24 @@ public sealed class UpdateChecker
 
     public async Task<UpdateInfo> CheckAsync(Version current, CancellationToken ct = default)
     {
+        //JJQR - AI (Nov 22, 2026) - GitHub's file cache can serve the NEW latest.json with the OLD signature (or the reverse) for a few minutes after a release, which looked like a forged feed.
+        // Each check now asks for fresh copies (a unique ?t= value skips the cache) and, if the signature still does not match, asks once more after 3 seconds before refusing.
+        var first = await FetchAndVerifyAsync(current, ct);
+        if (first.Status != UpdateStatus.BadSignature) return first;
+        try { await Task.Delay(TimeSpan.FromSeconds(3), ct); } catch (OperationCanceledException) { return first; }
+        return await FetchAndVerifyAsync(current, ct);
+    }
+
+    private async Task<UpdateInfo> FetchAndVerifyAsync(Version current, CancellationToken ct)
+    {
+        //JJQR - END
         byte[] body; string sigText;
         try
         {
             var http = _http();
-            body = await http.GetByteArrayAsync(_feedUrl, ct);
-            sigText = (await http.GetStringAsync(_feedUrl + ".sig", ct)).Trim();
+            var t = "?t=" + DateTime.UtcNow.Ticks;
+            body = await http.GetByteArrayAsync(_feedUrl + t, ct);
+            sigText = (await http.GetStringAsync(_feedUrl + ".sig" + t, ct)).Trim();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException or IOException)
         {

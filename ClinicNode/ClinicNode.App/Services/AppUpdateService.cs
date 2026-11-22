@@ -12,7 +12,7 @@ public sealed class AppUpdateService : IDisposable
     public const string FeedUrl = "https://raw.githubusercontent.com/jessiejek/Project02-releases/main/latest.json";
     public const string InstallCommand = "curl -fsSL https://raw.githubusercontent.com/jessiejek/Project02-releases/main/install.sh | bash";
     // public half of the owner's update-signing key (the private half lives only in a GitHub secret and the owner's _secrets folder)
-    static readonly byte[] PublicKey = Convert.FromBase64String("");
+    static readonly byte[] PublicKey = Convert.FromBase64String(UpdateKeys.PublicKeyBase64);
 
     readonly HttpClient _http = new(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = TimeSpan.FromSeconds(60) };
     readonly UpdateChecker _checker;
