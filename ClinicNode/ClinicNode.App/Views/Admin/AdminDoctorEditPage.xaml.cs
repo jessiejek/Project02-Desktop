@@ -9,6 +9,7 @@ public partial class AdminDoctorEditPage : ContentPage
     public AdminDoctorEditPage(AdminDoctorEditViewModel vm)
     {
         InitializeComponent();
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this); //JJQR - AI (Nov 22, 2026) - top bar + back in one top row //JJQR - END
         BindingContext = _vm = vm;
         Content = ClinicNode.App.Controls.Skeleton.Overlay(AdminDoctorFormView.Build(vm), nameof(AdminDoctorEditViewModel.IsFirstLoad)); //JJQR - AI (Nov 22, 2026) - skeleton while the doctor loads //JJQR - END
     }

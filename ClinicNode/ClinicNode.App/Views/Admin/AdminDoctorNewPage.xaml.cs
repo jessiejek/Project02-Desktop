@@ -9,6 +9,7 @@ public partial class AdminDoctorNewPage : ContentPage
     public AdminDoctorNewPage(AdminDoctorNewViewModel vm)
     {
         InitializeComponent();
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this); //JJQR - AI (Nov 22, 2026) - top bar + back in one top row //JJQR - END
         BindingContext = _vm = vm;
         Content = AdminDoctorFormView.Build(vm);
     }

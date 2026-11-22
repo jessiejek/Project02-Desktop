@@ -28,10 +28,10 @@ public sealed class SyncConflictsPage : ContentPage
         Title = "Sync review";
         BackgroundColor = ClinicTheme.Color("Background");
         var refresh = new Button { Text = "Refresh", Style = ClinicTheme.Style("SecondaryButton") };
-        refresh.Clicked += async (_, _) => await ReloadAsync();
+        refresh.Clicked += async (_, _) => await refresh.RunBusyAsync(ReloadAsync);
         var syncNow = new Button { Text = "Sync now" };
         syncNow.Clicked += (_, _) => { _sync.RequestSync(); _status.Text = "Syncing..."; };
-        _resolveAll.Clicked += async (_, _) => await ResolveAllAsync();
+        _resolveAll.Clicked += async (_, _) => await _resolveAll.RunBusyAsync(ResolveAllAsync);
         Content = new ScrollView
         {
             Content = new VerticalStackLayout

@@ -17,6 +17,7 @@ public partial class AdminBookingDetailPage : ContentPage
     public AdminBookingDetailPage(AdminBookingDetailViewModel vm)
     {
         InitializeComponent();
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this); //JJQR - AI (Nov 22, 2026) - top bar + back in one top row //JJQR - END
         BindingContext = vm;
         //JJQR - AI (21 Nov 2026)
         _vm = vm;

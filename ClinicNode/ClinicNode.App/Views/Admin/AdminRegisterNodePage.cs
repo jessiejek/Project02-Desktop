@@ -29,7 +29,7 @@ public sealed class AdminRegisterNodePage : ContentPage
         _name.Text = ClinicNode.App.Services.ComputerName.Get();
         _platform.Text = $"{DeviceInfo.Current.Platform} {DeviceInfo.Current.VersionString}".Trim();
         _version.Text = AppInfo.Current.VersionString;
-        _submit.Clicked += async (_, _) => await RegisterAsync();
+        _submit.Clicked += async (_, _) => await _submit.RunBusyAsync(RegisterAsync);
 
         Content = new ScrollView
         {

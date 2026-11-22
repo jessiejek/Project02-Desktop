@@ -27,7 +27,7 @@ public sealed class AdminDialog : ContentPage
         Shell.SetPresentationMode(this, PresentationMode.ModalNotAnimated);
         //JJQR - AI (Nov 21, 2026) - shared modal chrome
         ConfirmButton = new Button { Text = confirm, Style = ClinicTheme.Style(danger ? "DangerButton" : "PrimaryButton") };
-        ConfirmButton.Clicked += async (_, _) => await ConfirmAsync();
+        ConfirmButton.Clicked += async (_, _) => await ConfirmButton.RunBusyAsync(ConfirmAsync);
         _errorLabel = new Label { Style = ClinicTheme.Style("FormAlertErrorText") };
         _errorBox = new Border { Style = ClinicTheme.Style("FormAlertError"), Content = _errorLabel, IsVisible = false, Margin = new Thickness(0, 0, 0, 12) };
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End };

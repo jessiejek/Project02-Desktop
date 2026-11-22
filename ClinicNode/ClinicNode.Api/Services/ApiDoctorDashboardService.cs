@@ -47,11 +47,19 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
     public async Task<DoctorDashboard> GetAsync(Guid doctorId, CancellationToken ct = default)
     {
         var today = ClinicClock.Today;
-        var doctor = await api.GetAsync<DoctorDto>($"/api/doctors/{doctorId:D}", null, ct);
-        var status = await api.GetAsync<DayStatusDto>($"/api/doctors/{doctorId:D}/day-status", new Dictionary<string, string?> { ["date"] = today.ToString("yyyy-MM-dd") }, ct);
-        var bookings = await api.GetAsync<List<BookingDto>>("/api/bookings/doctor/today", null, ct) ?? [];
-        var perf = await new ApiDoctorPerformanceService(api).GetAsync(doctorId, PerformancePeriodName.Today, today, ct);
-        var announcements = await api.GetAsync<List<AnnouncementDto>>("/api/announcements", null, ct) ?? [];
+        //JJQR - AI (Nov 22, 2026) - owner: slow Today page. Six independent reads were made one after another; they now go out AT THE SAME TIME.
+        var tDoctor = api.GetAsync<DoctorDto>($"/api/doctors/{doctorId:D}", null, ct);
+        var tStatus = api.GetAsync<DayStatusDto>($"/api/doctors/{doctorId:D}/day-status", new Dictionary<string, string?> { ["date"] = today.ToString("yyyy-MM-dd") }, ct);
+        var tBookings = api.GetAsync<List<BookingDto>>("/api/bookings/doctor/today", null, ct);
+        var tPerf = new ApiDoctorPerformanceService(api).GetAsync(doctorId, PerformancePeriodName.Today, today, ct);
+        var tAnnouncements = api.GetAsync<List<AnnouncementDto>>("/api/announcements", null, ct);
+        var tConsults = api.GetAsync<List<JsonObject>>("/api/consultations", new Dictionary<string, string?> { ["doctorId"] = doctorId.ToString("D") }, ct);
+        var doctor = await tDoctor;
+        var status = await tStatus;
+        var bookings = await tBookings ?? [];
+        var perf = await tPerf;
+        var announcements = await tAnnouncements ?? [];
+        //JJQR - END
 
         var now = DateTimeOffset.UtcNow;
         int Wait(BookingDto b) => b.UpdatedAt is { } u ? Math.Max(0, (int)(now - u).TotalMinutes) : 0;
@@ -76,7 +84,7 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
         var followUps = new List<AttentionItem>();
         try
         {
-            var consults = await api.GetAsync<List<JsonObject>>("/api/consultations", new Dictionary<string, string?> { ["doctorId"] = doctorId.ToString("D") }, ct) ?? [];
+            var consults = await tConsults ?? [];
             foreach (var c in consults)
             {
                 if (!Guid.TryParse(S(c, "booking_id"), out var bookingId)) continue;

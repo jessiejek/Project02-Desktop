@@ -43,13 +43,19 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
     public async Task<ConsultationWorkspace> LoadByBookingAsync(Guid bookingId, CancellationToken ct = default)
     {
         VisitVersions.Begin(bookingId); //JJQR - AI (Nov 22, 2026) - opening a visit starts a fresh stale-form session; the reads below record the version this screen is based on //JJQR - END
-        var booking = await api.GetAsync<Booking>($"/api/bookings/{bookingId:D}", null, ct)
-                      ?? throw new InvalidOperationException("Booking not found.");
-        var consult = await TryGetAsync<Consultation>($"/api/consultations/by-booking/{bookingId:D}", null, ct);
-        var templates = (await api.GetAsync<List<VitalFieldTemplate>>("/api/vital-field-templates", null, ct) ?? [])
+        //JJQR - AI (Nov 22, 2026) - owner: slow open. Round 1: the five independent reads go out AT THE SAME TIME; round 2 (below) does the same for what belongs to the consultation.
+        var tBooking = api.GetAsync<Booking>($"/api/bookings/{bookingId:D}", null, ct);
+        var tConsult = TryGetAsync<Consultation>($"/api/consultations/by-booking/{bookingId:D}", null, ct);
+        var tTemplates = api.GetAsync<List<VitalFieldTemplate>>("/api/vital-field-templates", null, ct);
+        var tReadings = api.GetAsync<List<PatientVitalReading>>("/api/vitals", new Dictionary<string, string?> { ["bookingId"] = bookingId.ToString("D") }, ct);
+        var tSettings = TryGetAsync<ClinicSetting>("/api/settings", null, ct);
+        var booking = await tBooking ?? throw new InvalidOperationException("Booking not found.");
+        var consult = await tConsult;
+        var templates = (await tTemplates ?? [])
             .Where(t => t.IsDefault).OrderBy(t => t.Description).ToList();
-        var readings = await api.GetAsync<List<PatientVitalReading>>("/api/vitals", new Dictionary<string, string?> { ["bookingId"] = bookingId.ToString("D") }, ct) ?? [];
-        var settings = await TryGetAsync<ClinicSetting>("/api/settings", null, ct) ?? new ClinicSetting();
+        var readings = await tReadings ?? [];
+        var settings = await tSettings ?? new ClinicSetting();
+        //JJQR - END
         var fee = FeeCalculator.Compute(settings, booking.VisitType, booking.DiscountCategory, booking.MedCertRequested);
 
         var draft = new ConsultationDraft
@@ -78,9 +84,16 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
         if (consult is not null)
         {
             var cid = consult.ConsultationId;
+            //JJQR - AI (Nov 22, 2026) - round 2, all at once
+            var tGroups = api.GetAsync<List<PrescriptionGroup>>("/api/prescription-groups", new Dictionary<string, string?> { ["bookingId"] = bookingId.ToString("D") }, ct);
+            var tLabs = TryGetAsync<List<LabOrder>>($"/api/lab-orders/by-booking/{bookingId:D}", null, ct);
+            var tVax = TryGetAsync<List<PatientVaccination>>($"/api/patient-vaccinations/by-consultation/{cid:D}", null, ct);
+            var tFu = consult.FollowUp is null ? api.GetAsync<List<FollowUp>>("/api/follow-ups", new Dictionary<string, string?> { ["consultationId"] = cid.ToString("D") }, ct) : null;
+            var tCert = TryGetAsync<MedicalCertificate>($"/api/medical-certificates/by-consultation/{cid:D}", null, ct);
+            //JJQR - END
             draft.Diagnoses = consult.ConsultationDiagnoses.Select(d => new DiagnosisLine { Id = d.Id, Icd10Code = d.Icd10Code, CustomDescription = d.CustomDescription, Type = d.Type }).ToList();
 
-            var groups = await api.GetAsync<List<PrescriptionGroup>>("/api/prescription-groups", new Dictionary<string, string?> { ["bookingId"] = bookingId.ToString("D") }, ct) ?? [];
+            var groups = await tGroups ?? [];
             if (groups.FirstOrDefault() is { } g)
                 draft.Prescriptions = g.LineItems.OrderBy(i => i.CreatedAt).Select(i => new RxLine
                 {
@@ -89,14 +102,14 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
                     Indication = i.Indication, Route = i.Route, AsNeeded = i.AsNeeded, IsControlledSubstance = i.IsControlledSubstance,
                 }).ToList();
 
-            var labs = await TryGetAsync<List<LabOrder>>($"/api/lab-orders/by-booking/{bookingId:D}", null, ct) ?? [];
+            var labs = await tLabs ?? [];
             draft.LabOrders = labs.Where(l => l.ConsultationId == cid).Select(l => new LabLine
             {
                 LabOrderId = l.LabOrderId, LabTestId = l.LabTestId, TestName = l.TestName, Reason = l.Reason,
                 ClinicalIndication = l.ClinicalIndication, SpecimenType = l.SpecimenType, Notes = l.Notes,
             }).ToList();
 
-            var vax = await TryGetAsync<List<PatientVaccination>>($"/api/patient-vaccinations/by-consultation/{cid:D}", null, ct) ?? [];
+            var vax = await tVax ?? [];
             draft.Vaccinations = vax.Select(v =>
             {
                 var line = new VaccinationLine { Id = v.Id, VaccineName = v.VaccineName, DoseNumber = v.DoseNumber, Notes = v.Notes };
@@ -106,7 +119,7 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
                 return line;
             }).ToList();
 
-            var fu = consult.FollowUp ?? (await api.GetAsync<List<FollowUp>>("/api/follow-ups", new Dictionary<string, string?> { ["consultationId"] = cid.ToString("D") }, ct) ?? []).FirstOrDefault();
+            var fu = consult.FollowUp ?? (tFu is null ? null : (await tFu ?? []).FirstOrDefault());
             if (fu is not null)
             {
                 draft.FollowUpMode = ConsultRules.IsPrnFollowUp(fu.Reason, fu.Instructions) ? FollowUpMode.Prn : FollowUpMode.Dated;
@@ -117,7 +130,7 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
             }
             else draft.FollowUpMode = FollowUpMode.None;
 
-            var cert = await TryGetAsync<MedicalCertificate>($"/api/medical-certificates/by-consultation/{cid:D}", null, ct);
+            var cert = await tCert;
             if (cert is not null)
             {
                 draft.CertificateExists = true;

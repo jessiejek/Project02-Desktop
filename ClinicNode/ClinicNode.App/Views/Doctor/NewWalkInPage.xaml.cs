@@ -16,6 +16,7 @@ public partial class NewWalkInPage : ContentPage
     public NewWalkInPage(IServiceProvider services)
     {
         InitializeComponent();
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this, services); //JJQR - AI (Nov 22, 2026) //JJQR - END
         BackgroundColor = ClinicTheme.Color("Background");
         _wizard = new WalkInWizardView(services);
         if (services.GetService<IAuthService>()?.Current?.IsDoctor == true)

@@ -30,7 +30,7 @@ public sealed class ForgotPasswordPage : ContentPage
         BackgroundColor = ClinicTheme.Color("SurfaceContainerLow");
         _email.Text = email ?? "";
         SemanticProperties.SetDescription(_email, "Email");
-        _send.Clicked += async (_, _) => await SendAsync();
+        _send.Clicked += async (_, _) => await _send.RunBusyAsync(SendAsync);
         _email.Completed += async (_, _) => await SendAsync();
         _busy.Color = ClinicTheme.Color("Primary");
 

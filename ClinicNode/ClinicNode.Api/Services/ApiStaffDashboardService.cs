@@ -15,11 +15,16 @@ public sealed class ApiStaffDashboardService(IApiClient api) : IStaffDashboardSe
 {
     public async Task<StaffDashboard> GetAsync(CancellationToken ct = default)
     {
-        var list = await api.GetAsync<Paged<BookingDto>>("/api/bookings/staff/today",
+        //JJQR - AI (Nov 22, 2026) - the three reads are independent: sent AT THE SAME TIME (was one after another)
+        var tList = api.GetAsync<Paged<BookingDto>>("/api/bookings/staff/today",
             Q(("pageSize", "500"), ("activeOnly", "true"), ("statuses", "Confirmed,CheckedIn")), ct);
-        var count = await api.GetAsync<Paged<BookingDto>>("/api/bookings/staff/today", Q(("pageSize", "1"), ("activeOnly", "true")), ct);
+        var tCount = api.GetAsync<Paged<BookingDto>>("/api/bookings/staff/today", Q(("pageSize", "1"), ("activeOnly", "true")), ct);
         // Web: a failed queue read leaves the board empty (0 ready) instead of failing the dashboard.
-        var board = await Optional(() => api.GetAsync<QueueBoardDto>("/api/queue", null, ct), null);
+        var tBoard = Optional(() => api.GetAsync<QueueBoardDto>("/api/queue", null, ct), null);
+        var list = await tList;
+        var count = await tCount;
+        var board = await tBoard;
+        //JJQR - END
 
         var rows = (list?.Items ?? [])
             .Where(b => StaffRules.IsArrival(b.Status))

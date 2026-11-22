@@ -76,12 +76,17 @@ public sealed partial class ApiStaffPatientsService(IApiClient api) : IStaffPati
 
     public async Task<StaffPatientDetail?> GetDetailAsync(Guid patientId, CancellationToken ct = default)
     {
+        //JJQR - AI (Nov 22, 2026) - patient, bookings and visits are asked for AT THE SAME TIME
+        var tPatient = api.GetAsync<PatientDto>($"/api/patients/{patientId:D}", null, ct);
+        var tBookings = api.GetAsync<List<BookingDto>>("/api/bookings", Q(("patientId", patientId.ToString("D"))), ct);
+        var tConsults = api.GetAsync<List<ConsultationDto>>("/api/consultations", Q(("patientId", patientId.ToString("D"))), ct);
         PatientDto? p;
-        try { p = await api.GetAsync<PatientDto>($"/api/patients/{patientId:D}", null, ct); }
-        catch (ApiNotFoundException) { return null; }
+        try { p = await tPatient; }
+        catch (ApiNotFoundException) { _ = Task.WhenAll(tBookings, tConsults).ContinueWith(t => _ = t.Exception, TaskScheduler.Default); return null; }
         if (p is null) return null;
-        var bookings = await api.GetAsync<List<BookingDto>>("/api/bookings", Q(("patientId", patientId.ToString("D"))), ct) ?? [];
-        var consults = await api.GetAsync<List<ConsultationDto>>("/api/consultations", Q(("patientId", patientId.ToString("D"))), ct) ?? [];
+        var bookings = await tBookings ?? [];
+        var consults = await tConsults ?? [];
+        //JJQR - END
         return new StaffPatientDetail(
             ToRow(p),
             bookings.Select(b => new PatientBookingRow(b.BookingId, b.Doctors?.StaffAccounts?.FullName ?? "", b.AppointmentDate, b.Status)).ToList(),

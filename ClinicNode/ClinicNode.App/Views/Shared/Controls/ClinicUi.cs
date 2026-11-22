@@ -31,11 +31,13 @@ public static class ClinicUi
         };
         b.Clicked += async (_, _) =>
         {
-            if (!b.IsEnabled) return;
-            b.IsEnabled = false; // no double submit (web Button loading state)
-            try { await onClick(); }
-            catch (Exception ex) { ClinicToast.Show(ex.Message, ToastKind.Error); }
-            finally { b.IsEnabled = true; }
+            //JJQR - AI (Nov 22, 2026) - no double submit AND a visible "Text..." while it works
+            await ClinicNode.App.Controls.BusyButton.RunBusyAsync(b, async () =>
+            {
+                try { await onClick(); }
+                catch (Exception ex) { ClinicToast.Show(ex.Message, ToastKind.Error); }
+            });
+            //JJQR - END
         };
         return b;
     }
@@ -177,7 +179,7 @@ public sealed class ClinicDialog : ContentPage
         Shell.SetPresentationMode(this, PresentationMode.ModalNotAnimated);
         //JJQR - AI (Nov 21, 2026) - shared modal chrome (backdrop, floating card, title bar + close, grey footer)
         var ok = new Button { Text = confirm, Style = ClinicTheme.Style(danger ? "DangerButton" : "PrimaryButton") };
-        ok.Clicked += async (_, _) => await DoneAsync(true);
+        ok.Clicked += async (_, _) => await ok.RunBusyAsync(() => DoneAsync(true));
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End };
         if (cancel is not null)
         {

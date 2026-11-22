@@ -105,19 +105,33 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
 
     public async Task<PatientChart?> GetChartAsync(Guid doctorId, Guid patientId, CancellationToken ct = default)
     {
-        PatientDto? p;
-        try { p = await api.GetAsync<PatientDto>($"/api/patients/{Id(patientId)}", null, ct); }
-        catch (ApiNotFoundException) { return null; }
-        if (p is null) return null;
+        //JJQR - AI (Nov 22, 2026) - owner: the chart was blank for seconds. It asked the server 12 questions one after another; they do not depend on each other, so all are sent AT THE SAME TIME (one wait instead of twelve).
         var pid = Id(patientId);
-        var bookings = (await api.GetAsync<List<BookingDto>>("/api/bookings", Q(("patientId", pid), ("doctorId", Id(doctorId))), ct) ?? [])
+        var tPatient = api.GetAsync<PatientDto>($"/api/patients/{pid}", null, ct);
+        var tBookings = api.GetAsync<List<BookingDto>>("/api/bookings", Q(("patientId", pid), ("doctorId", Id(doctorId))), ct);
+        var tConsults = Optional(() => api.GetAsync<List<ConsultationDto>>("/api/consultations", Q(("patientId", pid), ("doctorId", Id(doctorId))), ct), null);
+        var tTemplates = Optional(() => api.GetAsync<List<VitalTemplateDto>>("/api/vital-field-templates", null, ct), null);
+        var tReadings = Optional(() => api.GetAsync<List<VitalReadingDto>>("/api/vitals", Q(("patientId", pid)), ct), null);
+        var tGroups = Optional(() => api.GetAsync<List<RxGroupDto>>("/api/prescription-groups", Q(("patientId", pid), ("doctorId", Id(doctorId))), ct), null);
+        var tLabs = Optional(() => api.GetAsync<List<LabResultDto>>("/api/patient-lab-results", Q(("patientId", pid)), ct), null);
+        var tDocs = Optional(() => api.GetAsync<List<DocumentDto>>("/api/patient-documents", Q(("patientId", pid)), ct), null);
+        var tVax = Optional(() => api.GetAsync<List<VaccinationDto>>("/api/patient-vaccinations", Q(("patientId", pid)), ct), null);
+        var tLabOrders = Optional(() => api.GetAsync<List<LabOrderDto>>("/api/lab-orders", Q(("patientId", pid)), ct), null);
+        var tFollowUps = Optional(() => api.GetAsync<List<FollowUpRowDto>>("/api/follow-ups", Q(("patientId", pid)), ct), null);
+        var tCerts = Optional(() => api.GetAsync<List<CertRowDto>>("/api/medical-certificates", Q(("patientId", pid)), ct), null);
+        PatientDto? p;
+        try { p = await tPatient; }
+        catch (ApiNotFoundException) { _ = Task.WhenAll(tBookings, tConsults, tTemplates, tReadings, tGroups, tLabs, tDocs, tVax, tLabOrders, tFollowUps, tCerts).ContinueWith(t => _ = t.Exception, TaskScheduler.Default); return null; }
+        if (p is null) return null;
+        //JJQR - END
+        var bookings = (await tBookings ?? [])
             .Where(b => b.DoctorId == doctorId).ToList();
         var chartBookings = bookings.OrderByDescending(b => b.AppointmentDate).ThenByDescending(b => b.CreatedAt)
             .Select(b => new ChartBooking(b.BookingId, b.AppointmentDate,
                 (b.BookingServices ?? []).Select(s => s.Services?.Name ?? "").Where(n => n.Length > 0).ToList(), b.Status, b.QueueNumber)).ToList();
         var dates = bookings.ToDictionary(b => b.BookingId, b => b.AppointmentDate);
 
-        var consults = (await Optional(() => api.GetAsync<List<ConsultationDto>>("/api/consultations", Q(("patientId", pid), ("doctorId", Id(doctorId))), ct), null) ?? [])
+        var consults = (await tConsults ?? [])
             .Where(c => c.DoctorId == doctorId).ToList();
         var chartConsults = consults.Select(c => new ChartConsultation(c.ConsultationId, c.BookingId,
                 c.Bookings?.AppointmentDate ?? (dates.TryGetValue(c.BookingId, out var d) ? d : ClinicClock.DateOf(c.CreatedAt ?? DateTimeOffset.UtcNow)), c.Status,
@@ -125,27 +139,27 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
                 (c.ConsultationDiagnoses ?? []).Select(x => x.CustomDescription ?? "").Where(x => x.Length > 0).ToList()))
             .OrderByDescending(c => c.AppointmentDate).ToList();
 
-        var templates = (await Optional(() => api.GetAsync<List<VitalTemplateDto>>("/api/vital-field-templates", null, ct), null) ?? [])
+        var templates = (await tTemplates ?? [])
             .OrderBy(t => t.CreatedAt).ToList();
-        var readings = await Optional(() => api.GetAsync<List<VitalReadingDto>>("/api/vitals", Q(("patientId", pid)), ct), null) ?? [];
+        var readings = await tReadings ?? [];
         var visits = readings.GroupBy(r => r.BookingId)
             .Select(g => new ChartVitalVisit(g.Key, dates.TryGetValue(g.Key, out var vd) ? vd : g.Max(r => r.RecordedAt),
                 g.GroupBy(r => r.TemplateId).ToDictionary(x => x.Key, x => x.OrderByDescending(r => r.UpdatedAt).First().Value ?? "")))
             .OrderByDescending(v => v.Date).ToList();
 
-        var groups = (await Optional(() => api.GetAsync<List<RxGroupDto>>("/api/prescription-groups", Q(("patientId", pid), ("doctorId", Id(doctorId))), ct), null) ?? [])
+        var groups = (await tGroups ?? [])
             .Where(g => g.DoctorId == doctorId).ToList();
         var rx = groups.OrderByDescending(g => g.CreatedAt).Select(g => new ChartRxGroup(g.GroupId, g.BookingId, g.CreatedAt,
             (g.PrescriptionLineItems ?? []).Select(i => new ChartRxLine(i.GenericName ?? "", i.Dosage ?? "", i.Quantity ?? "", i.Instruction)).ToList())).ToList();
 
-        var labs = await Optional(() => api.GetAsync<List<LabResultDto>>("/api/patient-lab-results", Q(("patientId", pid)), ct), null) ?? [];
-        var docs = await Optional(() => api.GetAsync<List<DocumentDto>>("/api/patient-documents", Q(("patientId", pid)), ct), null) ?? [];
-        var vax = await Optional(() => api.GetAsync<List<VaccinationDto>>("/api/patient-vaccinations", Q(("patientId", pid)), ct), null) ?? [];
+        var labs = await tLabs ?? [];
+        var docs = await tDocs ?? [];
+        var vax = await tVax ?? [];
 
         //JJQR - AI (Nov 21, 2026) - per-visit extras: lab orders, follow-up and certificate (each optional: the chart still loads without them)
-        var labOrders = await Optional(() => api.GetAsync<List<LabOrderDto>>("/api/lab-orders", Q(("patientId", pid)), ct), null) ?? [];
-        var followUps = await Optional(() => api.GetAsync<List<FollowUpRowDto>>("/api/follow-ups", Q(("patientId", pid)), ct), null) ?? [];
-        var certs = await Optional(() => api.GetAsync<List<CertRowDto>>("/api/medical-certificates", Q(("patientId", pid)), ct), null) ?? [];
+        var labOrders = await tLabOrders ?? [];
+        var followUps = await tFollowUps ?? [];
+        var certs = await tCerts ?? [];
         var extras = bookings.Select(b =>
         {
             var cid = consults.FirstOrDefault(c => c.BookingId == b.BookingId)?.ConsultationId ?? Guid.Empty;

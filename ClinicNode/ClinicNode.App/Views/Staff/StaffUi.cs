@@ -39,10 +39,9 @@ public static class StaffUi
         var b = new Button { Text = text, Style = ClinicTheme.Style(style) };
         b.Clicked += async (_, _) =>
         {
-            if (!b.IsEnabled) return;
-            b.IsEnabled = false;
-            try { await onClick(); }
-            finally { b.IsEnabled = true; }
+            //JJQR - AI (Nov 22, 2026) - the button shows "Text..." while its work runs
+            await ClinicNode.App.Controls.BusyButton.RunBusyAsync(b, onClick);
+            //JJQR - END
         };
         return b;
     }

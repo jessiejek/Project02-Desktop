@@ -62,6 +62,7 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
 
     public DoctorPrescriptionFormPage(IServiceProvider sp, Guid patientId, string patientName, Guid bookingId, Guid? editGroupId, Guid? copyFromGroupId)
     {
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this, sp); //JJQR - AI (Nov 22, 2026) //JJQR - END
         _sp = sp;
         _patientId = patientId;
         _patientName = patientName;
