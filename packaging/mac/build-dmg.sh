@@ -11,6 +11,8 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 PROJ="$ROOT/ClinicNode/ClinicNode.App/ClinicNode.App.csproj"
 ENT="$ROOT/ClinicNode/ClinicNode.App/Platforms/MacCatalyst/Entitlements.plist"
 RID="${RID:-maccatalyst-arm64}"
+#JJQR - AI (Nov 22, 2026) - MODE=jit (default) packages the normal build with production defaults (this is what works); MODE=release is the trimmed+AOT build, which currently crashes at start.
+MODE="${MODE:-jit}"
 OUT="${OUT:-$ROOT/packaging/out}"
 SIGN_ID="${SIGN_ID:-}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
@@ -20,9 +22,15 @@ VERSION="${VERSION:-0.0.0}"
 mkdir -p "$OUT"
 
 echo "== build Release $RID (self-contained) =="
-dotnet build "$PROJ" -c Release -f net10.0-maccatalyst -r "$RID" -p:SelfContained=true --nologo -v q
+if [[ "$MODE" == "release" ]]; then
+  dotnet build "$PROJ" -c Release -f net10.0-maccatalyst -r "$RID" -p:SelfContained=true --nologo -v q
+  CONF=Release
+else
+  dotnet build "$PROJ" -c Debug -f net10.0-maccatalyst -p:ClinicProd=true --nologo -v q
+  CONF=Debug
+fi
 
-APP="$(find "$ROOT/ClinicNode/ClinicNode.App/bin/Release/net10.0-maccatalyst/$RID" -maxdepth 1 -name '*.app' | head -1)"
+APP="$(find "$ROOT/ClinicNode/ClinicNode.App/bin/$CONF/net10.0-maccatalyst/$RID" -maxdepth 1 -name '*.app' | head -1)"
 [[ -d "$APP" ]] || { echo "error: .app not found" >&2; exit 1; }
 echo "app: $APP"
 

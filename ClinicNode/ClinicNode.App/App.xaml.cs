@@ -13,7 +13,14 @@ public partial class App : Application
 
     public App(IServiceProvider services)
     {
-        InitializeComponent();
+        //JJQR - AI (Nov 22, 2026) - release-build diagnosis: log the real reason if the very first setup fails
+        try { InitializeComponent(); }
+        catch (Exception ex)
+        {
+            try { File.AppendAllText(Path.Combine(FileSystem.AppDataDirectory, "ClinicNode", "startup-crash.log"), $"{DateTimeOffset.Now:O} [App.InitializeComponent]\n{ex}\n\n"); } catch { }
+            throw;
+        }
+        //JJQR - END
         // Force Light always. The web app has no dark-theme toggle;
         // ignore macOS / Windows dark mode so clinic screens stay on #f8f9ff.
         UserAppTheme = AppTheme.Light;
@@ -45,6 +52,18 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
+        //JJQR - AI (Nov 22, 2026) - the RELEASE build crashed while opening the first window with no readable reason (macOS only shows "quit unexpectedly"). Write the real reason next to the database, then let it fail as before.
+        try { return CreateWindowCore(); }
+        catch (Exception ex)
+        {
+            try { File.AppendAllText(Path.Combine(FileSystem.AppDataDirectory, "ClinicNode", "startup-crash.log"), $"{DateTimeOffset.Now:O}\n{ex}\n\n"); } catch { /* nothing more we can do */ }
+            throw;
+        }
+    }
+
+    Window CreateWindowCore()
+    {
+        //JJQR - END
         var shell = _services.GetRequiredService<AppShell>();
         var window = new Window(shell) { Title = "Clinic Node" };
         //JJQR - AI (Nov 21, 2026) - desktop window: a sensible first size and a minimum so the three-column workspace never gets squeezed

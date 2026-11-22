@@ -55,6 +55,9 @@ public static class MauiProgram
         try { SQLitePCL.Batteries_V2.Init(); }
         catch { /* bundled by EF / SQLitePCLRaw if already initialized */ }
 
+#if CLINIC_PROD
+        ClinicNode.Core.Diagnostics.DevNetworkLog.Enabled = false; //JJQR - AI (Nov 22, 2026) - the packaged app has no developer log //JJQR - END
+#endif
         var dataDir = Path.Combine(FileSystem.AppDataDirectory, "ClinicNode");
         var options = new NodeOptions
         {
@@ -233,7 +236,7 @@ public static class MauiProgram
     const string ProductionCloudUrl = "https://chococheese0660-001-site1.gtempurl.com";
     static string DefaultCloudUrl()
     {
-#if DEBUG
+#if DEBUG && !CLINIC_PROD
         return "";
 #else
         return ProductionCloudUrl;
@@ -250,7 +253,7 @@ public static class MauiProgram
         if (string.Equals(env, "1", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(env, "true", StringComparison.OrdinalIgnoreCase))
             return true;
-#if DEBUG
+#if DEBUG && !CLINIC_PROD
         return true;
 #else
         return false;

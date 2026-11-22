@@ -22,6 +22,13 @@
     <WindowsPackageType Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">None</WindowsPackageType>
   </PropertyGroup>
 
+  <!-- JJQR - AI (Nov 22, 2026) - "production defaults" switch for the packaged app: dotnet build -p:ClinicProd=true. A true Release build of this app crashes at start (the trimmer + ahead-of-time compiler used for Mac Release builds break the XAML/reflection code; fixing that is a separate job),
+       so the DMG is made from the normal (JIT) build with these production defaults: live server address, demo mode off, developer log off. -->
+  <PropertyGroup Condition="'$(ClinicProd)' == 'true'">
+    <DefineConstants>$(DefineConstants);CLINIC_PROD</DefineConstants>
+  </PropertyGroup>
+  <!-- JJQR - END -->
+
   <ItemGroup>
     <MauiIcon Include="Resources/AppIcon/appicon.svg" ForegroundFile="Resources/AppIcon/appiconfg.svg" Color="#00685F" />
     <MauiSplashScreen Include="Resources/Splash/splash.svg" Color="#00685F" BaseSize="128,128" />
