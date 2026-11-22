@@ -259,6 +259,39 @@ Goal: sync problems are visible to the admin on the web, and duplicates are merg
 - **Merging happens only on the server database**, by an Admin in the web portal. The desktop receives the result on its next pull (the kept patient, plus a marker that the other patient was merged away). The desktop never merges patients.
 
 - **Step 4.0 Design note (owner approves before any code).** Written in this plan: the review-item kinds (per Q4), their fields, statuses (open, resolved), who may resolve, the exact endpoints, and the migration. The migration is a backend schema change; the owner schedules the window.
+#### Step 4.0 design note (PROPOSED 22 Nov 2026, waiting for the owner's approval; no code until approved)
+
+**Facts found in the backend (Project02-be, `main`):** `patients` is soft-delete + sync-tracked (`deleted_at`, `row_version`, `origin_node_id`). Tables that hold a `patient_id` and must move on a merge: bookings, consultations, medical certificates, vitals readings, follow-ups, lab orders, lab values, lab results, documents, vaccinations, prescription groups, patient consents, data requests. Receipt-number clashes are already readable by an Admin (`GET /api/payments/or-clashes`, read-only) and queue-number clashes are only audit rows. There is no review-item table and no merge today.
+
+**1. What is stored (new table `sync_review_items`, on the server):** `id` (guid; for desktop uploads it is the desktop's own item id, so uploading twice is harmless), `kind`, `status` (`open` | `resolved`), `title`, `details_json`, `patient_id` and `other_patient_id` (for duplicates), `aggregate` + `entity_id` + `other_entity_id` (for clashes and rejected changes), `origin_node_id`, `created_at`, `resolved_at`, `resolved_by_user_id`, `resolution` (`merged` | `dismissed` | `fixed`), `resolution_note`. A unique key on (`kind`, `entity_id`, `other_entity_id`) stops the same item being created twice.
+
+**2. Kinds (your Q4 answer):**
+| Kind | Made by | When |
+|---|---|---|
+| `possible_duplicate_patient` | the server, at push | a pushed new patient has the same first name, last name and birthdate (spaces, capitals, accents and punctuation ignored) as another live patient with a different id |
+| `or_number_clash` | the server, at push | two payments carry the same receipt number (names both payments) |
+| `change_rejected` | the desktop, uploaded | the server refused a change (includes "consultation already completed in the cloud") |
+| `change_stuck` | the desktop, uploaded | a change failed 10 times |
+Not admin items: queue-number clashes and "merged / cloud kept some values" notes stay on the desktop's own list and in the audit log (not in your Q4 list).
+
+**3. Who may do what:** only an **Admin** lists, opens, resolves or merges (Staff, Doctor, Patient get 403). Desktops upload with their node credential (same as push). Every create, resolve and merge writes an audit row.
+
+**4. Endpoints (all new, nothing existing changes):**
+- `GET /api/sync/review-items?status=&kind=&page=` and `GET /api/sync/review-items/{id}`, Admin.
+- `POST /api/sync/review-items/{id}/resolve` `{resolution, note}`, Admin (note required, 5+ characters).
+- `POST /api/sync/review-items` (node credential): the desktop uploads its items; idempotent by id.
+- `POST /api/patients/merge` `{keep_patient_id, merge_patient_id, note}`, Admin, one transaction.
+
+**5. The merge (step 4.4), exactly:** the patient you choose to **keep** stays as it is; any field that is **empty** on the kept record is filled from the merged one (nothing is overwritten); every row in the tables listed above is moved to the kept patient; the merged patient is marked deleted and gets `merged_into_patient_id` = the kept patient; the merged patient's code and a one-line summary go into the audit row; the open duplicate item is resolved as `merged`. All moved rows get a new `row_version`, so every desktop receives them on its next pull; the desktop applies "this patient was merged into that one" and never merges anything itself.
+
+**6. The database change (the migration):** one new table `sync_review_items` and one new nullable column `patients.merged_into_patient_id` (with an index). Nothing is deleted or rewritten, so rolling back means dropping that table and column. It ships together with the payment change (step 2.4 branch) in one planned window that the owner chooses.
+
+**7. Desktop side (Case B upload):** a new local column marks each review item as uploaded; at the end of a successful sync the desktop uploads the items not yet uploaded (rejected changes, and changes stuck at 10 tries) and marks them. Items it cannot upload yet (server unreachable) stay on the desktop list and the badge keeps saying "Sync problem".
+
+**8. Web page (step 4.5):** one new admin page "Sync review" (sidebar item under the existing admin pages): list with filters (status, kind), an item opens with its details and a Resolve button with a note; for a duplicate it opens the merge screen: two columns, the two records side by side with counts of what each holds (visits, consultations, payments, ...), a choice of which one to keep, and a confirm step that says what will move. Nothing else on the web changes.
+
+**To decide before code (owner):** (a) merge rule in point 5 (kept record wins, empty fields filled from the other): OK? (b) queue-number clashes stay off the admin list: OK? (c) the sidebar name "Sync review": OK?
+
 - **Step 4.1 Server.** A table for review items; the desktop uploads its review items during sync; list and resolve endpoints for Admin only; each change audited.
 - **Step 4.2 Duplicate detection.** When a pushed patient create matches an existing patient by normalized first name, last name and birthdate: apply it anyway and create a "possible duplicate patient" review item. Never merge automatically (D4).
 - **Step 4.3 Receipt clashes.** A pushed `or_number_clash` creates a review item naming both payments.
