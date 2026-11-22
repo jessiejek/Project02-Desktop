@@ -1,0 +1,95 @@
+name: Release desktop (Mac)
+
+# JJQR - AI (Nov 22, 2026) - owner: "who updates the releases repo?" GitHub does, when you push a version tag.
+#   git tag -a v0.2.4 -m "Faster consultation. Fixed the date picker."     <- the tag message becomes the "what is new" notes
+#   git push origin v0.2.4
+# It builds the Mac app on GitHub's Mac, signs latest.json with YOUR key, and publishes the installers + feed to the public Project02-releases repo.
+# Installed apps pick it up about 5 minutes later (GitHub's cache).
+#
+# ONE-TIME SETUP: add these three repository secrets (Settings > Secrets and variables > Actions) in Project02-Desktop:
+#   BE_READ_TOKEN      fine-grained token, READ access to Project02-be (the projects reference it)           (same one the Windows test build uses)
+#   RELEASES_TOKEN     fine-grained token, READ AND WRITE access (Contents) to Project02-releases only
+#   UPDATE_SIGNING_KEY the full text of Allyn/_secrets/update-signing-private.pem (including the BEGIN/END lines)
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What is new (one line)"
+        required: false
+        default: "Improvements and fixes"
+
+concurrency:
+  group: release-desktop
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - name: Check out the desktop repo
+        uses: actions/checkout@v4
+        with:
+          path: Project02-desktop
+          fetch-depth: 0
+
+      - name: Check out the backend repo (project references)
+        uses: actions/checkout@v4
+        with:
+          repository: jessiejek/Project02-be
+          token: ${{ secrets.BE_READ_TOKEN }}
+          path: Project02-be
+
+      - name: Check out the public releases repo
+        uses: actions/checkout@v4
+        with:
+          repository: jessiejek/Project02-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          path: Project02-releases
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install the MAUI workload
+        run: dotnet workload install maui
+
+      - name: Work out the version and the notes
+        id: v
+        working-directory: Project02-desktop
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+            NOTES="$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | sed '/^$/d' | head -5)"
+          else
+            VER="$(sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p' ClinicNode/ClinicNode.App/ClinicNode.App.csproj | head -1)"
+            NOTES="${{ github.event.inputs.notes }}"
+          fi
+          [ -n "$NOTES" ] || NOTES="Improvements and fixes"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          { echo "notes<<EOF"; echo "$NOTES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          # the tag decides the version shown in the app
+          sed -i '' "s#<ApplicationDisplayVersion>.*</ApplicationDisplayVersion>#<ApplicationDisplayVersion>${VER}</ApplicationDisplayVersion>#; s#<ApplicationVersion>.*</ApplicationVersion>#<ApplicationVersion>${GITHUB_RUN_NUMBER}</ApplicationVersion>#" ClinicNode/ClinicNode.App/ClinicNode.App.csproj
+
+      - name: Build, sign the feed, write the release files
+        working-directory: Project02-desktop
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$RUNNER_TEMP/update-key.pem"
+          chmod 600 "$RUNNER_TEMP/update-key.pem"
+          mapfile -t NOTE_LINES <<< "${{ steps.v.outputs.notes }}" 2>/dev/null || NOTE_LINES=("${{ steps.v.outputs.notes }}")
+          UPDATE_KEY="$RUNNER_TEMP/update-key.pem" REL_DIR="$GITHUB_WORKSPACE/Project02-releases" \
+            bash packaging/release/make-release.sh "${NOTE_LINES[@]}"
+          rm -f "$RUNNER_TEMP/update-key.pem"
+
+      - name: Publish to the releases repo
+        working-directory: Project02-releases
+        run: |
+          git config user.name "release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Clinic Node ${{ steps.v.outputs.version }}"
+          git push origin HEAD:main
+# JJQR - END
