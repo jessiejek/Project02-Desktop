@@ -70,6 +70,7 @@
                 <Button x:Name="ToastAction" Text="Undo" Style="{StaticResource GhostButton}" Clicked="OnToastAction" />
             </HorizontalStackLayout>
             <FlexLayout Wrap="Wrap" JustifyContent="End">
+                <ActivityIndicator x:Name="FooterSpinner" IsRunning="False" IsVisible="False" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" Margin="8,0,0,0" Color="{StaticResource Primary}" SemanticProperties.Description="Saving" />
                 <Button x:Name="PrevButton" Text="Prev" Style="{StaticResource SecondaryButton}" Clicked="OnPrev" Margin="8,0,0,0" />
                 <Button x:Name="NextButton" Text="Next" Style="{StaticResource SecondaryButton}" Clicked="OnNext" Margin="8,0,0,0" />
                 <Button x:Name="AmendButton" Text="Edit Consultation" Style="{StaticResource SecondaryButton}" Clicked="OnAmend" IsVisible="False" Margin="8,0,0,0" />

@@ -118,7 +118,9 @@ public partial class ConsultationPage : ContentPage
         //JJQR - AI (Nov 22, 2026) - while the consultation loads (~1 s) the screen showed empty panels and every Print button; hide them and say what is happening //JJQR - END
         foreach (var b in new[] { PrintRxButton, PrintLabsButton, PrintCertButton, PrintSlipButton }) b.IsVisible = false;
         SectionHost.Children.Clear();
-        SectionHost.Children.Add(new Label { Text = "Loading consultation…", Margin = new Thickness(8, 24), TextColor = ClinicTheme.Color("OnSurfaceVariant") });
+        //JJQR - AI (Nov 22, 2026) - spinner next to the loading text
+        SectionHost.Children.Add(new HorizontalStackLayout { Spacing = 10, Margin = new Thickness(8, 24), Children = { new ActivityIndicator { IsRunning = true, WidthRequest = 22, HeightRequest = 22, Color = ClinicTheme.Color("Primary") }, new Label { Text = "Loading consultation…", VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") } } });
+        //JJQR - END
         try
         {
             _workspace = await _consults.LoadByBookingAsync(bookingId);
@@ -1801,6 +1803,12 @@ public partial class ConsultationPage : ContentPage
             //JJQR - END
         }
         else StatusLabel.Text = "Viewing a completed visit (read-only).";
+        //JJQR - AI (Nov 22, 2026) - owner: show a loading spinner (and "Saving...") whenever Save & next / Save / Next / Prev are working, so the page never looks frozen
+        FooterSpinner.IsVisible = FooterSpinner.IsRunning = _busy;
+        PrevButton.IsEnabled = !_busy;
+        NextButton.IsEnabled = !_busy;
+        if (_busy && SaveNextButton.IsVisible) SaveNextButton.Text = "Saving…";
+        //JJQR - END
     }
 
     void OnAmend(object? sender, EventArgs e)
