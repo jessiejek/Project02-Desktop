@@ -211,15 +211,18 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
             }, null, ct) ?? throw new ApiServerException(500, "The server did not return the saved consultation.");
             var cid = saved.ConsultationId;
 
-            await api.SendAsync(HttpMethod.Put, $"/api/consultations/{cid:D}/diagnoses",
+            //JJQR - AI (Nov 22, 2026) - owner: "Save & next" was very slow. After the consultation row exists, the diagnoses, vitals, prescription, follow-up, labs, vaccinations and certificate are independent of each other,
+            // so they are sent AT THE SAME TIME (one round trip of waiting instead of about eight). The queue completion still goes last, after all of them succeeded.
+            var parts = new List<Task>();
+            parts.Add(api.SendAsync(HttpMethod.Put, $"/api/consultations/{cid:D}/diagnoses",
                 d.Diagnoses.Where(x => !string.IsNullOrWhiteSpace(x.Icd10Code) || !string.IsNullOrWhiteSpace(x.CustomDescription))
-                    .Select(x => new { Icd10Code = Nb(x.Icd10Code), CustomDescription = Nb(x.CustomDescription), Type = x.Type, Id = x.Id }).ToList(), null, ct);
+                    .Select(x => new { Icd10Code = Nb(x.Icd10Code), CustomDescription = Nb(x.CustomDescription), Type = x.Type, Id = x.Id }).ToList(), null, ct));
 
             // Vitals are append-only once the visit is finalised (§5.5): never re-sent from an amendment.
             if (status != ConsultationStatus.Amended)
             {
                 var vitals = d.Vitals.Where(v => !string.IsNullOrWhiteSpace(v.Value)).Select(v => new { TemplateId = v.TemplateId, Value = v.Value!.Trim() }).ToList();
-                if (vitals.Count > 0) await api.SendAsync(HttpMethod.Put, $"/api/vitals/by-booking/{bid:D}", vitals, null, ct);
+                if (vitals.Count > 0) parts.Add(api.SendAsync(HttpMethod.Put, $"/api/vitals/by-booking/{bid:D}", vitals, null, ct));
             }
 
             var items = d.Prescriptions.Where(r => !string.IsNullOrWhiteSpace(r.GenericName)).Select(r => new
@@ -229,38 +232,39 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
                 DurationKind = Nb(r.DurationKind), DurationValue = r.DurationValue, Indication = Nb(r.Indication), Route = Nb(r.Route), AsNeeded = r.AsNeeded, Id = r.Id,
             }).ToList();
             if (items.Count > 0)
-                await api.SendAsync(HttpMethod.Put, $"/api/prescription-groups/by-booking/{bid:D}", new { PatientId = d.PatientId, DoctorId = d.DoctorId, BookingId = bid, Items = items }, null, ct);
+                parts.Add(api.SendAsync(HttpMethod.Put, $"/api/prescription-groups/by-booking/{bid:D}", new { PatientId = d.PatientId, DoctorId = d.DoctorId, BookingId = bid, Items = items }, null, ct));
             else
-            {
-                var groups = await api.GetAsync<List<PrescriptionGroup>>("/api/prescription-groups", new Dictionary<string, string?> { ["bookingId"] = bid.ToString("D") }, ct) ?? [];
-                foreach (var g in groups) await TryDeleteAsync($"/api/prescription-groups/{g.GroupId:D}", ct);
-            }
+                parts.Add(Task.Run(async () =>
+                {
+                    var groups = await api.GetAsync<List<PrescriptionGroup>>("/api/prescription-groups", new Dictionary<string, string?> { ["bookingId"] = bid.ToString("D") }, ct) ?? [];
+                    foreach (var g in groups) await TryDeleteAsync($"/api/prescription-groups/{g.GroupId:D}", ct);
+                }));
 
-            if (d.FollowUpMode == FollowUpMode.None) await TryDeleteAsync($"/api/follow-ups/by-consultation/{cid:D}", ct);
+            if (d.FollowUpMode == FollowUpMode.None) parts.Add(TryDeleteAsync($"/api/follow-ups/by-consultation/{cid:D}", ct));
             else
             {
                 var prn = d.FollowUpMode == FollowUpMode.Prn;
                 var date = prn ? d.FollowUpDate ?? ClinicClock.Today : d.FollowUpDate;
                 if (date is { } fd)
-                    await api.SendAsync(HttpMethod.Put, $"/api/follow-ups/by-consultation/{cid:D}", new
+                    parts.Add(api.SendAsync(HttpMethod.Put, $"/api/follow-ups/by-consultation/{cid:D}", new
                     {
                         PatientId = d.PatientId, DoctorId = d.DoctorId, FollowUpDate = fd,
                         Reason = Nb(d.FollowUpReason) ?? (prn ? ConsultRules.PrnReason : null),
                         Instructions = Nb(d.FollowUpInstructions) ?? (prn ? ConsultRules.PrnInstructions : null),
                         ReminderEnabled = !prn && d.FollowUpReminder,
                         Status = FollowUpStatus.Pending,
-                    }, null, ct);
-                else await TryDeleteAsync($"/api/follow-ups/by-consultation/{cid:D}", ct);
+                    }, null, ct));
+                else parts.Add(TryDeleteAsync($"/api/follow-ups/by-consultation/{cid:D}", ct));
             }
 
-            await api.SendAsync(HttpMethod.Put, $"/api/lab-orders/by-consultation/{cid:D}",
+            parts.Add(api.SendAsync(HttpMethod.Put, $"/api/lab-orders/by-consultation/{cid:D}",
                 d.LabOrders.Where(l => !string.IsNullOrWhiteSpace(l.TestName)).Select(l => new
                 {
                     LabTestId = l.LabTestId, TestName = l.TestName.Trim(), ClinicalIndication = Nb(l.ClinicalIndication) ?? Nb(l.Reason),
                     SpecimenType = Nb(l.SpecimenType), Notes = Nb(l.Notes), LabOrderId = l.LabOrderId,
-                }).ToList(), null, ct);
+                }).ToList(), null, ct));
 
-            await api.SendAsync(HttpMethod.Put, $"/api/patient-vaccinations/by-consultation/{cid:D}",
+            parts.Add(api.SendAsync(HttpMethod.Put, $"/api/patient-vaccinations/by-consultation/{cid:D}",
                 d.Vaccinations.Where(v => !string.IsNullOrWhiteSpace(v.VaccineName)).Select(v =>
                 {
                     var x = v.Details();
@@ -279,12 +283,14 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
                         ReactionNotes = Nb(extra?.ReactionNotes), AdministeredDate = extra?.AdministeredDate, Status = extra?.Status,
                     };
                     //JJQR - END
-                }).ToList(), null, ct);
+                }).ToList(), null, ct));
 
             if (d.CertificateExists)
             {
                 var today = ClinicClock.Today;
                 var from = d.McExamFrom ?? today;
+                parts.Add(Task.Run(async () =>
+                {
                 await api.SendAsync(HttpMethod.Put, $"/api/medical-certificates/by-consultation/{cid:D}", new
                 {
                     PatientId = d.PatientId, DoctorId = d.DoctorId, IssueDate = today,
@@ -295,12 +301,19 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
                     PurposeException = Nb(d.McPurposeException), ComeBackOn = d.McComeBackOn ?? (d.FollowUpMode == FollowUpMode.Dated ? d.FollowUpDate : null),
                 }, null, ct);
                 d.FeeState().CertificateOnServer = true;
+                }));
             }
             else if (d.FeeState().CertificateOnServer)
             {
-                await TryDeleteAsync($"/api/medical-certificates/by-consultation/{cid:D}", ct);
-                d.FeeState().CertificateOnServer = false;
+                parts.Add(Task.Run(async () =>
+                {
+                    await TryDeleteAsync($"/api/medical-certificates/by-consultation/{cid:D}", ct);
+                    d.FeeState().CertificateOnServer = false;
+                }));
             }
+
+            await Task.WhenAll(parts);
+            //JJQR - END
 
             if (status == ConsultationStatus.Completed)
                 await api.SendAsync(HttpMethod.Put, $"/api/queue/{bid:D}/complete", new { }, null, ct);

@@ -85,6 +85,7 @@ public partial class ConsultationPage : ContentPage
     public ConsultationPage(IConsultationService consults, IPrintDocumentFactory printDocs, IPrinter printer, IDoctorCatalogService catalog, IServiceProvider services)
     {
         InitializeComponent();
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this, services); //JJQR - AI (Nov 22, 2026) - top bar (ping) on the consultation, set BEFORE the page is shown //JJQR - END
         Overlay.SizeChanged += (_, _) => { if (Overlay.Width > 0) OverlayCard.WidthRequest = Math.Max(420, Math.Min(880, Overlay.Width - 56)); }; //JJQR - AI (Nov 21, 2026) - dialogs get a proper width //JJQR - END
         _consults = consults;
         _printDocs = printDocs;
@@ -128,9 +129,8 @@ public partial class ConsultationPage : ContentPage
             if (D.Status == ConsultationStatus.Draft) _mode = requested == "view" ? "view" : "complete";
             else _mode = requested == "amend" ? "amend" : "view";
             //JJQR - END
-            await LoadReferenceDataAsync();
-            //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
-            await LoadGapDataAsync();
+            //JJQR - AI (Nov 22, 2026) - owner: the screen took ~10 s to open. About 20 independent lists were fetched ONE AFTER ANOTHER (each a full round trip to a far server). Now they are all requested at the same time.
+            await Task.WhenAll(LoadReferenceDataAsync(), LoadGapDataAsync());
             //JJQR - END
             InitFormState();
             _section = ConsultRules.VisibleOrder(false, 0)[0];
@@ -162,24 +162,30 @@ public partial class ConsultationPage : ContentPage
     {
         var doctorId = D.DoctorId;
         async Task Try(Func<Task> load) { try { await load(); } catch (Exception ex) { StatusLabel.Text = "Some reference lists did not load: " + ex.Message; } }
-        await Try(async () => _settings = await _lib.GetClinicSettingsAsync());
-        await Try(async () => _soapTemplates = await _lib.ListSoapTemplatesAsync(doctorId));
-        await Try(async () => _phrases = await _lib.ListSoapPhrasesAsync(doctorId));
-        await Try(async () => _certTemplates = await _lib.ListCertTemplatesAsync(doctorId));
-        await Try(async () => _dxTemplates = await _lib.ListDiagnosisTemplatesAsync(doctorId));
-        await Try(async () => _rxTemplates = await _lib.ListRxTemplatesAsync(doctorId));
-        await Try(async () => _medicines = await _lib.ListMedicinesAsync());
-        await Try(async () => _labTests = await _lib.ListLabTestsAsync());
-        await Try(async () => _doctor = await _lib.GetDoctorCredentialsAsync(doctorId));
-        await Try(async () => _allergies = await _lib.ListAllergiesAsync(D.PatientId));
-        await Try(async () => _history = await LoadLiveHistoryAsync()); //JJQR - AI (Nov 21, 2026) - earlier visits come from the LIVE records (the local copy only has what this computer synced) //JJQR - END
-        await Try(async () =>
+        //JJQR - AI (Nov 22, 2026) - all at once (see OnAppearing)
+        var tasks = new List<Task>
         {
-            var addr = await _lib.GetPatientAddressAsync(D.PatientId);
-            var text = ConsultRules.CleanMedCertAddress(ConsultRules.PatientAddressFromProfile(addr?.Address, addr?.City));
-            _patientAddressMissing = text.Length == 0;
-            if (!D.CertificateExists && string.IsNullOrWhiteSpace(D.McAddress)) D.McAddress = text;
-        });
+            Try(async () => _settings = await _lib.GetClinicSettingsAsync()),
+            Try(async () => _soapTemplates = await _lib.ListSoapTemplatesAsync(doctorId)),
+            Try(async () => _phrases = await _lib.ListSoapPhrasesAsync(doctorId)),
+            Try(async () => _certTemplates = await _lib.ListCertTemplatesAsync(doctorId)),
+            Try(async () => _dxTemplates = await _lib.ListDiagnosisTemplatesAsync(doctorId)),
+            Try(async () => _rxTemplates = await _lib.ListRxTemplatesAsync(doctorId)),
+            Try(async () => _medicines = await _lib.ListMedicinesAsync()),
+            Try(async () => _labTests = await _lib.ListLabTestsAsync()),
+            Try(async () => _doctor = await _lib.GetDoctorCredentialsAsync(doctorId)),
+            Try(async () => _allergies = await _lib.ListAllergiesAsync(D.PatientId)),
+            Try(async () => _history = await LoadLiveHistoryAsync()),
+            Try(async () =>
+            {
+                var addr = await _lib.GetPatientAddressAsync(D.PatientId);
+                var text = ConsultRules.CleanMedCertAddress(ConsultRules.PatientAddressFromProfile(addr?.Address, addr?.City));
+                _patientAddressMissing = text.Length == 0;
+                if (!D.CertificateExists && string.IsNullOrWhiteSpace(D.McAddress)) D.McAddress = text;
+            }),
+        };
+        await Task.WhenAll(tasks);
+        //JJQR - END
     }
 
     void InitFormState()

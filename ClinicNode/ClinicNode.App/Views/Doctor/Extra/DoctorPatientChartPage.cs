@@ -47,6 +47,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     public DoctorPatientChartPage(IServiceProvider sp, Guid patientId) : base(sp, "Patient chart", live: false)
     {
         _patientId = patientId;
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this, sp); //JJQR - AI (Nov 22, 2026) - top bar on pushed pages, set BEFORE the page is shown //JJQR - END
         //JJQR - AI (21 Nov 2026) - tab strip kept so Select() can re-render it; tab-level error line for prescription actions
         _tabs = DoctorExtraUi.Tabs(LabelledTabs(), () => _selected, id => { _selected = id; RenderTab(); });
         //JJQR - AI (Nov 21, 2026) - clinical record layout: patient summary rail on the left (identity, latest vitals, diagnoses, medicines), tabs + content on the right

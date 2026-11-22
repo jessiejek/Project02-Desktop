@@ -45,15 +45,14 @@ public partial class ConsultationPage
     async Task LoadGapDataAsync()
     {
         if (_workspace is null) return;
-        try { _favorites = await _lib.ListFavoriteMedicinesAsync(D.DoctorId); } catch { _favorites = []; }
-        try { _vaxHistory = await _lib.ListPatientVaccinationsAsync(D.PatientId); } catch { _vaxHistory = []; }
-        try { _isPregnant = (await _lib.GetPatientClinicalFlagsAsync(D.PatientId))?.IsPregnant == true; } catch { _isPregnant = false; }
-        await LoadAmendmentsAsync();
-        //JJQR - AI (21 Nov 2026) - renal cue / drug safety / refill last visit / SOAP specialty default (ConsultationPage.Safety.cs)
-        await LoadSafetyDataAsync();
-        //JJQR - END
-        //JJQR - AI (21 Nov 2026) - ALL-1 banner chips (payment, pregnancy/LMP, G/P, guardian)
-        await LoadBannerDataAsync();
+        //JJQR - AI (Nov 22, 2026) - owner: slow open. These fetches do not depend on each other, so they run at the same time.
+        await Task.WhenAll(
+            Task.Run(async () => { try { _favorites = await _lib.ListFavoriteMedicinesAsync(D.DoctorId); } catch { _favorites = []; } }),
+            Task.Run(async () => { try { _vaxHistory = await _lib.ListPatientVaccinationsAsync(D.PatientId); } catch { _vaxHistory = []; } }),
+            Task.Run(async () => { try { _isPregnant = (await _lib.GetPatientClinicalFlagsAsync(D.PatientId))?.IsPregnant == true; } catch { _isPregnant = false; } }),
+            LoadAmendmentsAsync(),
+            LoadSafetyDataAsync(),
+            LoadBannerDataAsync());
         //JJQR - END
     }
 

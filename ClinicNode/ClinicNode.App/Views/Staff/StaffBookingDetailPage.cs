@@ -23,6 +23,7 @@ public sealed class StaffBookingDetailPage : StaffLivePage
     public StaffBookingDetailPage(IServiceProvider sp, Guid bookingId) : base(sp, "Booking")
     {
         _id = bookingId;
+        ClinicNode.App.Views.Shared.TopBarOnPushed.Attach(this, sp); //JJQR - AI (Nov 22, 2026) - top bar on pushed pages, set BEFORE the page is shown //JJQR - END
         Content = StaffUi.Scroll(new VerticalStackLayout
         {
             Spacing = 16,
