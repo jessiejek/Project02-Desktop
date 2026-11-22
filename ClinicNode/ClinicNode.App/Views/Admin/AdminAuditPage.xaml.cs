@@ -27,7 +27,7 @@ public partial class AdminAuditPage : ContentPage
             ColumnSpacing = 16,
             ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) },
         };
-        filters.Add(ClinicUi.Field("Record type", _type), 0, 0);
+        filters.Add(ClinicUi.Field("Record type", ClinicPickers.PickerBox(null, _type)), 0, 0);
         filters.Add(ClinicUi.Field("Search", _search), 1, 0);
         Root.Children.Add(new Border { Style = ClinicTheme.Style("Card"), Content = filters });
         Root.Children.Add(_body);

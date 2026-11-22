@@ -222,7 +222,7 @@ public partial class AppShell : Shell
                 AddFlyout("Reports", "admin-reports", typeof(AdminReportsPage));
                 //JJQR - AI (21 Nov 2026) - wave-end wiring: System group pages (allen4)
                 AddFlyout("Sync computers", "admin-sync-computers", typeof(AdminSyncComputersPage));
-                AddFlyout("Receipt number clashes", "admin-or-clashes", typeof(AdminOrClashesPage));
+                AddFlyout("Receipt clashes", "admin-or-clashes", typeof(AdminOrClashesPage));
                 //JJQR - END
                 AddFlyout("Register this node", "admin-register-node", typeof(AdminRegisterNodePage));
                 //JJQR - AI (Nov 21, 2026) - allen5: this-computer settings (admin only; can change the sync URL)
@@ -250,9 +250,8 @@ public partial class AppShell : Shell
                         new ClinicNavItem("Reports", "admin-reports", true, "monitoring"),
                         //JJQR - AI (21 Nov 2026) - wave-end wiring
                         new ClinicNavItem("Sync computers", "admin-sync-computers", true, "devices"),
-                        new ClinicNavItem("Receipt number clashes", "admin-or-clashes", true, "receipt_long"),
+                        new ClinicNavItem("Receipt clashes", "admin-or-clashes", true, "receipt_long"),
                         //JJQR - END
-                        new ClinicNavItem("Register this node", "admin-register-node", true, "cloud_upload"),
                         //JJQR - AI (Nov 21, 2026) - allen5: this-computer settings (admin only)
                         new ClinicNavItem("This computer", "node-settings", true, "settings"),
                         //JJQR - END

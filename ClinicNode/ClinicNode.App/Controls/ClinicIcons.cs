@@ -91,6 +91,8 @@ public static class ClinicIcons
         ["copy"] = new("FASolid", "\uF0C5"),
         ["edit"] = new("FASolid", "\uF303"),
         ["upload_file"] = new("FASolid", "\uF093"),
+        ["devices"] = new("FASolid", "\uF109"),
+        ["cloud_upload"] = new("FASolid", "\uF0EE"),
         ["eye"] = new("FASolid", "\uF06E"),
         ["eye_slash"] = new("FASolid", "\uF070"),
     };

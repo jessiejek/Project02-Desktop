@@ -68,12 +68,12 @@ public partial class AdminBookingsPage : ContentPage
         _doctor.SelectedItem = _vm.SelectedDoctor;
         _status.SelectedItem = _vm.SelectedStatus;
         _search.Text = _vm.Query;
-        var dateField = new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("Visit date", "FieldLabel"), _date, ClinicTheme.Text("Any date when empty", "FieldHint") } };
+        var dateField = new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("Visit date", "FieldLabel"), ClinicPickers.DateBox(null, _date, null, true), ClinicTheme.Text("Any date when empty", "FieldHint") } };
         var grid = new Grid { ColumnSpacing = 16 };
         for (var i = 0; i < 4; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         grid.Add(ClinicUi.Field("Search", _search), 0, 0);
-        grid.Add(ClinicUi.Field("Doctor", _doctor), 1, 0);
-        grid.Add(ClinicUi.Field("Status", _status), 2, 0);
+        grid.Add(ClinicUi.Field("Doctor", ClinicPickers.PickerBox(null, _doctor)), 1, 0);
+        grid.Add(ClinicUi.Field("Status", ClinicPickers.PickerBox(null, _status)), 2, 0);
         grid.Add(dateField, 3, 0);
         ListArea.Children.Add(new Border { Style = ClinicTheme.Style("Card"), Content = grid });
         ListArea.Children.Add(_listBody);
