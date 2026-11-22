@@ -193,6 +193,10 @@ public sealed class TopBarView : Grid
     string CompactSyncLabel()
     {
         //JJQR - AI (21 Nov 2026) - owner rule 6: "Online, up to date" / "Syncing..." / "Offline, N changes waiting"; conflicts still win
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.5: the three badge words come first. Sync problem wins over everything but a computer that is not registered (that has its own wording below).
+        if (_sync.Phase != SyncPhase.NotRegistered && (_indicator is not null ? _indicator.Kind == ClinicNode.App.Shared.OnlineIndicatorKind.Problem : _sync.HasSyncProblem))
+            return "Sync problem";
+        //JJQR - END
         if (_indicator is not null && _sync.ConflictCount == 0 && _sync.Phase is not (SyncPhase.Revoked or SyncPhase.NeedsUpdate or SyncPhase.NotRegistered))
             return _indicator.Text;
         //JJQR - END
@@ -201,10 +205,13 @@ public sealed class TopBarView : Grid
         return _sync.Phase switch
         {
             //JJQR - AI (Nov 21, 2026) - say what is really wrong: the API can be reachable while this computer is just not registered for sync
-            SyncPhase.Offline or SyncPhase.Error => "Offline",
-            SyncPhase.NotRegistered => "Online · not registered for sync",
-            SyncPhase.Revoked => "Sync access revoked",
-            SyncPhase.NeedsUpdate => "App update needed",
+            SyncPhase.Offline => "Offline",
+            //JJQR - AI (Nov 22, 2026) - step 0.5: an error is a Sync problem, not "Offline"; an unregistered computer says whether the server answers (it used to print a fixed "Online")
+            SyncPhase.Error => "Sync problem",
+            SyncPhase.NotRegistered => (_indicator is not null && _indicator.Kind == ClinicNode.App.Shared.OnlineIndicatorKind.Offline) ? "Offline · not registered for sync" : "Online · not registered for sync",
+            SyncPhase.Revoked => "Sync problem · access revoked",
+            SyncPhase.NeedsUpdate => "Sync problem · app update needed",
+            //JJQR - END
             //JJQR - END
             _ => "Online",
         };

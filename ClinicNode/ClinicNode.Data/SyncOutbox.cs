@@ -117,6 +117,25 @@ public sealed class SyncOutbox : ISyncOutbox
         }
     }
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.5: "Sync problem" = a pending change retried this many times
+    public const int StuckAttempts = 10;
+
+    public async Task<int> CountStuckAsync(ClinicAppDbContext db, int minAttempts, CancellationToken ct = default)
+    {
+        var (cmd, mustDispose) = CreateCommand(db);
+        try
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM node_sync_outbox WHERE acked_at IS NULL AND attempts >= $n;";
+            Add(cmd, "$n", minAttempts);
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+        }
+        finally
+        {
+            if (mustDispose) await cmd.DisposeAsync();
+        }
+    }
+    //JJQR - END
+
     public static async Task<NodeIdentity> GetOrCreateIdentityAsync(ClinicAppDbContext db, CancellationToken ct = default)
     {
         var conn = await OpenAsync(db, ct);

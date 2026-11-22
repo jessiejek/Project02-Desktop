@@ -22,5 +22,9 @@ public interface ISyncOutbox
     Task MarkAttemptAsync(ClinicApp.Infrastructure.ClinicAppDbContext db, Guid operationId, string? error, CancellationToken ct = default);
 
     Task<int> CountPendingAsync(ClinicApp.Infrastructure.ClinicAppDbContext db, CancellationToken ct = default);
+
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.5: changes the server ANSWERED about but would not accept, at least <paramref name="minAttempts"/> times (a whole push that fails because the server is unreachable does not count)
+    Task<int> CountStuckAsync(ClinicApp.Infrastructure.ClinicAppDbContext db, int minAttempts, CancellationToken ct = default);
+    //JJQR - END
 }
 // JJQR - END

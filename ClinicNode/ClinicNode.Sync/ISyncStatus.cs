@@ -19,6 +19,12 @@ public interface ISyncStatus : INotifyPropertyChanged, ISyncStatusSource
     string? LastError { get; }
     bool IsOnline { get; }
     bool IsSyncing { get; }
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.5 (default members so older fakes still compile)
+    /// <summary>Changes the server refused 10+ times (stuck).</summary>
+    int StuckCount => 0;
+    /// <summary>True for the "Sync problem" badge: sync error, revoked, update needed, or something stuck.</summary>
+    bool HasSyncProblem => Phase is SyncPhase.Error or SyncPhase.Revoked or SyncPhase.NeedsUpdate || StuckCount > 0;
+    //JJQR - END
     /// <summary>Ready-made one-line text, e.g. "Offline — 3 waiting to sync".</summary>
     string Banner { get; }
 

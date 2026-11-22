@@ -95,7 +95,7 @@ public sealed class LiveSyncCoordinator : IDisposable
     }
 }
 
-public enum OnlineIndicatorKind { Online, Syncing, Offline }
+public enum OnlineIndicatorKind { Online, Syncing, Offline, Problem } //JJQR - AI (Nov 22, 2026) - step 0.5: Problem = "Sync problem" //JJQR - END
 
 /// <summary>Owner rule 6: one short line for the top bar. Changed is raised off the UI thread.</summary>
 public sealed class OnlineStatusIndicator
@@ -112,29 +112,28 @@ public sealed class OnlineStatusIndicator
 
     public event Action? Changed;
 
-    public OnlineIndicatorKind Kind
+    public OnlineIndicatorKind Kind => SyncBadge.Resolve(_connectivity.IsOnline, _sync.Phase, _sync.IsSyncing, _sync.PendingCount, _sync.HasSyncProblem) switch //JJQR - AI (Nov 22, 2026) - step 0.5: one rule (ClinicNode.Sync.SyncBadge) //JJQR - END
     {
-        get
-        {
-            var offline = !_connectivity.IsOnline || _sync.Phase is SyncPhase.Offline;
-            if (offline) return OnlineIndicatorKind.Offline;
-            if (_sync.IsSyncing || _sync.PendingCount > 0) return OnlineIndicatorKind.Syncing;
-            return OnlineIndicatorKind.Online;
-        }
-    }
-
-    public string Text => Kind switch
-    {
-        OnlineIndicatorKind.Offline => $"Offline, {_sync.PendingCount} change{(_sync.PendingCount == 1 ? "" : "s")} waiting",
-        OnlineIndicatorKind.Syncing => "Syncing...",
-        _ => "Online, up to date",
+        SyncBadgeKind.Offline => OnlineIndicatorKind.Offline,
+        SyncBadgeKind.Problem => OnlineIndicatorKind.Problem,
+        SyncBadgeKind.Syncing => OnlineIndicatorKind.Syncing,
+        _ => OnlineIndicatorKind.Online,
     };
+
+    public string Text => SyncBadge.Text(Kind switch
+    {
+        OnlineIndicatorKind.Offline => SyncBadgeKind.Offline,
+        OnlineIndicatorKind.Problem => SyncBadgeKind.Problem,
+        OnlineIndicatorKind.Syncing => SyncBadgeKind.Syncing,
+        _ => SyncBadgeKind.Online,
+    }, _sync.PendingCount);
 
     /// <summary>Theme colour key for the status dot (Colors.xaml).</summary>
     public string ColorKey => Kind switch
     {
         OnlineIndicatorKind.Offline => "StatusWarning",
         OnlineIndicatorKind.Syncing => "Primary",
+        OnlineIndicatorKind.Problem => "StatusDanger", //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         _ => "StatusSuccess",
     };
 }

@@ -29,11 +29,20 @@ public sealed class SyncStatus
     /// <summary>Last connectivity verdict (health probe or last request). False until first contact.</summary>
     public bool IsOnline { get; init; }
     //JJQR - END
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.5: changes that keep being refused by the server (10+ tries). Any of them means "Sync problem".
+    public int StuckCount { get; init; }
+    /// <summary>The badge word set: Sync problem = the sync broke (error, revoked, update needed) or something is stuck.</summary>
+    public bool HasSyncProblem => Phase is SyncPhase.Error or SyncPhase.Revoked or SyncPhase.NeedsUpdate || StuckCount > 0;
+    //JJQR - END
 
     public string Banner
     {
         get
         {
+            //JJQR - AI (Nov 22, 2026) - step 0.5: something is stuck (the sync itself is working, but this change will not go through)
+            if (StuckCount > 0 && Phase is not (SyncPhase.Revoked or SyncPhase.NeedsUpdate or SyncPhase.Error))
+                return $"Sync problem — {StuckCount} change{(StuckCount == 1 ? "" : "s")} could not be sent after several tries";
+            //JJQR - END
             if (Phase == SyncPhase.Syncing) return PendingCount > 0 ? $"Syncing… ({PendingCount} pending)" : "Syncing…";
             if (Phase == SyncPhase.Offline) return PendingCount > 0 ? $"Offline — {PendingCount} waiting to sync" : "Offline";
             //JJQR - AI (Nov 21, 2026) - allen2

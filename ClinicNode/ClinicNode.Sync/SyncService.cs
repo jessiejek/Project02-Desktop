@@ -75,6 +75,8 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
     public string? LastError => _current.LastError;
     public bool IsOnline => _current.IsOnline;
     public bool IsSyncing => _current.Phase == SyncPhase.Syncing;
+    public int StuckCount => _current.StuckCount; //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
+    public bool HasSyncProblem => _current.HasSyncProblem;
     public string Banner => _current.Banner;
 
     //JJQR - AI (Nov 21, 2026) - reprint signal (queue slips, patient cards); see ISyncStatus
@@ -175,6 +177,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         await SyncLocalStore.EnsureSchemaAsync(db, ct);
         var pending = await _outbox.CountPendingAsync(db, ct);
         var conflicts = await SyncLocalStore.CountOpenConflictsAsync(db, ct);
+        var stuck = await _outbox.CountStuckAsync(db, SyncOutbox.StuckAttempts, ct); //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         await NotifyReprintAsync(db, ct); //JJQR - AI (Nov 21, 2026) // JJQR - END
         var identity = await SyncOutbox.GetOrCreateIdentityAsync(db, ct);
         var phase = !_cloud.IsConfigured
@@ -188,6 +191,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
             LastSuccessfulSyncAt = identity.LastSuccessfulSyncAt,
             LastError = phase is SyncPhase.Idle or SyncPhase.Offline && !_cloud.IsConfigured ? null : _current.LastError,
             IsOnline = _current.IsOnline,
+            StuckCount = stuck, //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         });
         return _current;
     }
@@ -385,6 +389,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
             ConflictCount = await SyncLocalStore.CountOpenConflictsAsync(db, ct),
             LastSuccessfulSyncAt = at,
             IsOnline = true,
+            StuckCount = await _outbox.CountStuckAsync(db, SyncOutbox.StuckAttempts, ct), //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         });
         _logger.LogInformation("Sync cycle: pushed {Pushed} (acked {Acked}, retry {Retry}); pulled {Pulled}, applied {Applied}.", pushed, acked, retry, pulled, applied);
         return new SyncCycleResult(true, SyncFailureKind.None, null) { Pushed = pushed, Acked = acked, RetryLater = retry, Pulled = pulled, Applied = applied };
@@ -611,6 +616,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
             LastSuccessfulSyncAt = (await SyncOutbox.GetOrCreateIdentityAsync(db, ct)).LastSuccessfulSyncAt,
             LastError = error,
             IsOnline = online,
+            StuckCount = await _outbox.CountStuckAsync(db, SyncOutbox.StuckAttempts, ct), //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         });
         _logger.LogWarning("Sync cycle failed ({Kind}): {Error}", kind, error);
         return new SyncCycleResult(false, kind, error) { Pushed = pushed, Acked = acked };
@@ -624,6 +630,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         LastSuccessfulSyncAt = s.LastSuccessfulSyncAt,
         LastError = error,
         IsOnline = online,
+        StuckCount = s.StuckCount, //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
     };
 
     private void Publish(SyncStatus status)
@@ -637,6 +644,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         if (old.Phase != status.Phase) { Raise(nameof(Phase)); Raise(nameof(IsSyncing)); }
         if (old.PendingCount != status.PendingCount) Raise(nameof(PendingCount));
         if (old.ConflictCount != status.ConflictCount) Raise(nameof(ConflictCount));
+        if (old.StuckCount != status.StuckCount) { Raise(nameof(StuckCount)); Raise(nameof(HasSyncProblem)); } //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         if (old.LastSuccessfulSyncAt != status.LastSuccessfulSyncAt) Raise(nameof(LastSyncedAt));
         if (old.LastError != status.LastError) Raise(nameof(LastError));
         if (old.IsOnline != status.IsOnline) Raise(nameof(IsOnline));
