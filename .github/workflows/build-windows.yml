@@ -1,0 +1,53 @@
+name: Build Windows app (test build)
+
+# JJQR - AI (Nov 22, 2026) - the clinic computers run WINDOWS. The Windows build has never been compiled in this project (all work was done on a Mac), and a Windows build cannot be made on a Mac.
+# This workflow builds it on GitHub's free Windows machine, so we can see (and fix) the first compile errors, and download the result.
+# Run it by hand: GitHub > Actions > "Build Windows app (test build)" > Run workflow. Result: an artifact "ClinicNode-windows-x64" (a folder you can unzip and run on a Windows PC).
+#
+# ONE-TIME SETUP: the desktop projects reference the backend repo (../../../Project02-be), which is private. Add a repository secret
+#   BE_READ_TOKEN = a fine-grained personal access token with READ access to the Project02-be repository (Contents: Read-only).
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-windows
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the desktop repo
+        uses: actions/checkout@v4
+        with:
+          path: Project02-desktop
+
+      - name: Check out the backend repo (project references)
+        uses: actions/checkout@v4
+        with:
+          repository: jessiejek/Project02-be
+          token: ${{ secrets.BE_READ_TOKEN }}
+          path: Project02-be
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install the MAUI workload
+        run: dotnet workload install maui --skip-manifest-update
+
+      - name: Publish (Windows x64, self-contained, unpackaged)
+        working-directory: Project02-desktop
+        run: >
+          dotnet publish ClinicNode/ClinicNode.App/ClinicNode.App.csproj
+          -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained true
+          -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true
+          -o ../out/ClinicNode
+
+      - name: Upload the app folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClinicNode-windows-x64
+          path: out/ClinicNode
+          if-no-files-found: error
+# JJQR - END
