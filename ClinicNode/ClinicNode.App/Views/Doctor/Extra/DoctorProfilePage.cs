@@ -81,9 +81,9 @@ public sealed class DoctorProfilePage : StaffLivePage
         _fee.Text = p.ConsultationFee.ToString("0.##", CultureInfo.InvariantCulture);
         _license.Text = p.LicenseNumber; _ptr.Text = p.PtrNumber; _s2.Text = p.S2Number;
         // Admin-only fields: read-only here (deliberate web diff until Jessie decides)
-        foreach (var e in new[] { _name, _spec, _fee }) e.IsReadOnly = true; //JJQR - AI (Nov 22, 2026) - License / PTR / S2 are the doctor's own to enter //JJQR - END
+        foreach (var e in new[] { _name, _spec }) e.IsReadOnly = true; //JJQR - AI (Nov 22, 2026) - License / PTR / S2 are the doctor's own to enter; owner: the doctor's own FEE (PF) is editable too //JJQR - END
         //JJQR - AI (21 Nov 2026) - Jessie (6:30 PM): the 6 Admin-only fields LOOK read-only (muted background + text); Bio stays editable
-        foreach (var e in new[] { _name, _spec, _fee })
+        foreach (var e in new[] { _name, _spec })
         {
             e.BackgroundColor = ClinicTheme.Color("SurfaceContainerLow");
             e.TextColor = ClinicTheme.Color("OnSurfaceVariant");
@@ -195,7 +195,7 @@ public sealed class DoctorProfilePage : StaffLivePage
         {
             BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"), StrokeThickness = 0, Padding = new Thickness(12, 8),
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
-            Content = ClinicTheme.Text("🔒 Name, specialization and fee are set by the clinic admin. Your License, PTR and S2 numbers are yours to enter; they print on prescriptions and certificates.", "MutedSm"),
+            Content = ClinicTheme.Text("🔒 Name and specialization are set by the clinic admin. Your fee, License, PTR and S2 numbers are yours to enter; the license, PTR and S2 numbers print on prescriptions and certificates. A new fee applies to new bookings only.", "MutedSm"),
         };
 
         var bioBox = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Bio", "FieldLabel"), ClinicTheme.Text("Shown on your public profile.", "MutedSm"), _bio } };

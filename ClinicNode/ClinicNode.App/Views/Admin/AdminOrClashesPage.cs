@@ -25,7 +25,8 @@ public sealed class AdminOrClashesPage : ContentPage
     {
         base.OnAppearing();
         Render();
-        await _vm.LoadAsync();
+        var hide = ClinicNode.App.Controls.Skeleton.CoverPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
+        try { await _vm.LoadAsync(); } finally { hide(); }
         Render();
     }
 

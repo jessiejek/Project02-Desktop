@@ -107,7 +107,8 @@ public sealed class AdminSyncComputersPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        _ = LoadAsync();
+        var hide = ClinicNode.App.Controls.Skeleton.CoverPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
+        _ = LoadAsync().ContinueWith(_ => MainThread.BeginInvokeOnMainThread(hide));
     }
 
     protected override void OnDisappearing()

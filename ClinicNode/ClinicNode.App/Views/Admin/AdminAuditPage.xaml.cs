@@ -47,7 +47,8 @@ public partial class AdminAuditPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await LoadAndRenderAsync(_vm.LoadAsync);
+        var hide = ClinicNode.App.Controls.Skeleton.CoverPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
+        try { await LoadAndRenderAsync(_vm.LoadAsync); } finally { hide(); }
     }
 
     //JJQR - AI (21 Nov 2026) - web: "Loading entries…" and Previous / Next disabled while a page loads (was only re-rendered afterwards)
