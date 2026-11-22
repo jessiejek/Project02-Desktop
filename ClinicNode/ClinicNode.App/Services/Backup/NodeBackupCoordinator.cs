@@ -35,7 +35,7 @@ public sealed class NodeBackupCoordinator
         try
         {
             await using (var fs = File.Create(temp))
-                await Task.Run(() => Service.CreateAsync(fs, password, _appVersion ?? AppInfo.Current.VersionString, _machine ?? DeviceInfo.Current.Name, ct: ct), ct);
+                await Task.Run(() => Service.CreateAsync(fs, password, _appVersion ?? AppInfo.Current.VersionString, _machine ?? ComputerName.Get(), ct: ct), ct);
             return await _files.ExportAsync(temp, name, ct);
         }
         finally { if (File.Exists(temp)) File.Delete(temp); } // ciphertext only, plain delete is fine

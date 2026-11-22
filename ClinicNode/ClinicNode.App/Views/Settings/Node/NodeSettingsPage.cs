@@ -18,7 +18,7 @@ public sealed class NodeSettingsPage : ContentPage, INodeSettingsDialogs
         NodeOptions node, DatabaseEncryptionResult encryption, NodeBackupCoordinator backup)
     {
         _vm = new NodeSettingsViewModel(endpoint, registration, sync, printing, node, encryption, this, backup,
-            appVersion: AppInfo.Current.VersionString, machineName: DeviceInfo.Current.Name);
+            appVersion: AppInfo.Current.VersionString, machineName: ClinicNode.App.Services.ComputerName.Get());
         BindingContext = _vm;
         Title = "This computer";
         BackgroundColor = ClinicTheme.Color("Background");

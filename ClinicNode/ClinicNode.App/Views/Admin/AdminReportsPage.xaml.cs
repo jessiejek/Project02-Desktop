@@ -117,7 +117,7 @@ public partial class AdminReportsPage : ContentPage
                 new("Doctor", GridLength.Star, o => ClinicUi.Cell(((UnpaidCompletedRow)o).DoctorName)),
                 new("Visit date", new GridLength(130), o => ClinicUi.Cell(Short(((UnpaidCompletedRow)o).AppointmentDate))),
                 new("Amount due", new GridLength(120), o => new Label { Text = Money(((UnpaidCompletedRow)o).AmountDue), Style = ClinicTheme.Style("TableCell"), HorizontalTextAlignment = TextAlignment.End }),
-                new("", new GridLength(130), o =>
+                new("", new GridLength(160), o =>
                 {
                     var link = new Button { Text = "Open booking", Style = ClinicTheme.Style("GhostButton"), HorizontalOptions = LayoutOptions.End };
                     var id = ((UnpaidCompletedRow)o).BookingId;

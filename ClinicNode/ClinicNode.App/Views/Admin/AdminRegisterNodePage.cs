@@ -26,7 +26,7 @@ public sealed class AdminRegisterNodePage : ContentPage
         _registration = registration;
         Title = "Register this node";
         BackgroundColor = ClinicTheme.Color("Background");
-        _name.Text = string.IsNullOrWhiteSpace(DeviceInfo.Current.Name) ? "Clinic Node" : DeviceInfo.Current.Name;
+        _name.Text = ClinicNode.App.Services.ComputerName.Get();
         _platform.Text = $"{DeviceInfo.Current.Platform} {DeviceInfo.Current.VersionString}".Trim();
         _version.Text = AppInfo.Current.VersionString;
         _submit.Clicked += async (_, _) => await RegisterAsync();
