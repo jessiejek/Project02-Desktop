@@ -104,6 +104,9 @@ public sealed class ClinicSidebar : Grid
                     Margin = new Thickness(8, 0, 8, 12),
                 },
                 logout,
+                //JJQR - AI (Nov 22, 2026) - the version, always visible
+                new Label { Text = "Clinic Node v" + (Version.TryParse(AppInfo.Current.VersionString, out var _v) ? _v.ToString(3) : AppInfo.Current.VersionString), FontSize = 11, TextColor = ClinicTheme.Color("SidebarMuted"), HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 14, 0, 12) },
+                //JJQR - END
             },
         };
 

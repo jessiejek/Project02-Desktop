@@ -77,3 +77,12 @@ The app has the PUBLIC key built in and refuses a manifest whose signature does 
 2. Open it. The app starts with the live server address already set (no environment variable).
 3. An admin signs in and presses **Register this computer** (already built).
 4. First sync fills the computer (about 12,700 reference rows plus the clinic's data).
+
+
+## 10. What was actually built (22 Nov 2026) and what we learned
+- **Version** is `ApplicationDisplayVersion` in `ClinicNode.App.csproj` (0.2.0 now). It shows in the sidebar footer and in the Connection panel ("App version").
+- **Feed:** `latest.json` + `latest.json.sig` (ECDSA P-256, signed with the owner's private key in `_secrets/`, never in a repo). The app and `install.sh` carry the public key and refuse an unsigned or altered feed. Hosted in a small PUBLIC GitHub repo `Project02-releases` (raw files, free).
+- **In the app:** `AppUpdateService` checks 20 s after start and every 6 h; a chip "Update X.Y.Z" appears in the top bar; Connection panel has "Check for updates". The download is verified against the SHA-256 in the signed feed.
+- **Sandbox finding:** the Mac app is sandboxed, so it CANNOT replace itself in Applications. The flow is: download + verify + open the DMG, the person drags it onto Applications (Replace). Or paste the one-line installer (`install.sh`), which installs with no warning. On Windows (not sandboxed) a silent in-place update is possible later.
+- **Release build:** a true Release (trimmed + AOT) Mac build crashes at start today, so the DMG is made from the normal (JIT) build with production defaults (`-p:ClinicProd=true`). Making Release safe is a separate job.
+- **To publish a version:** bump the version, then `UPDATE_KEY=../_secrets/update-signing-private.pem REL_DIR=../Project02-releases packaging/release/make-release.sh "note 1" "note 2"`, then commit and push `Project02-releases`.

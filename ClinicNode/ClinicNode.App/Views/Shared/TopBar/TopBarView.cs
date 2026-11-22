@@ -78,7 +78,20 @@ public sealed class TopBarView : Grid
 
         //JJQR - AI (Nov 22, 2026) - owner: the moving line under the top bar was REMOVED (annoying; it also stayed on). Skeletons on empty screens stay.
         //JJQR - END
-        PlaceIn(_modePill, 1); //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - OTA: a small "Update 0.3.0" chip next to the connection pill, shown only when a newer version exists
+        var updates = sp.GetService<ClinicNode.App.Services.AppUpdateService>();
+        var updateChip = new Button { Text = "", IsVisible = false, HeightRequest = 30, Padding = new Thickness(12, 0), VerticalOptions = LayoutOptions.Center };
+        updateChip.Apply("PrimaryButton");
+        updateChip.Clicked += async (_, _) => await ClinicNode.App.Views.Shared.UpdateUi.ShowAsync(_sp);
+        void RefreshChip() => MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var i = updates?.Last;
+            updateChip.IsVisible = i is { HasUpdate: true };
+            if (i is { HasUpdate: true }) updateChip.Text = "⬆  Update " + i.Latest!.ToString(3);
+        });
+        if (updates is not null) { updates.Changed += RefreshChip; Unloaded += (_, _) => updates.Changed -= RefreshChip; RefreshChip(); }
+        var pillHost = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { updateChip, _modePill } };
+        PlaceIn(pillHost, 1); //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
         PlaceIn(_badgeHost, 2);
 
         _syncChip = StaffUi.Btn("Online", async () => await OpenSyncMenuAsync(), "GhostButton");

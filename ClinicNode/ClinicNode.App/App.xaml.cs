@@ -42,6 +42,7 @@ public partial class App : Application
             //JJQR - END
             // MAUI does not run hosted services; start the sync loop only after the local DB is ready.
             _services.GetRequiredService<ISyncLoop>().Start();
+            _services.GetService<ClinicNode.App.Services.AppUpdateService>()?.Start(); //JJQR - AI (Nov 22, 2026) - OTA: look for a newer version in the background //JJQR - END
             _services.GetRequiredService<ClinicNode.Api.Http.IConnectionMonitor>().Start(); //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.3: watches the connection in both modes //JJQR - END
         }
         catch

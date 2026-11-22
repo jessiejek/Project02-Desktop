@@ -90,6 +90,9 @@ public sealed class ConnectionPanelPage : ContentPage
         _modeBtn = StaffUi.Btn("", async () => await SwitchModeAsync(), "GhostButton");
         _syncBtn = StaffUi.Btn("Sync now", async () => await SyncNowAsync(), "PrimaryButton");
         var buttons = new HorizontalStackLayout { Spacing = 10, Children = { _modeBtn, _syncBtn } };
+        //JJQR - AI (Nov 22, 2026) - OTA
+        buttons.Children.Add(StaffUi.Btn("Check for updates", async () => { await ClinicNode.App.Views.Shared.UpdateUi.ShowAsync(_sp); Render(); }, "GhostButton"));
+        //JJQR - END
         //JJQR - AI (Nov 22, 2026) - owner request: developer log button, only when the log is on (Debug builds)
         if (DevNetworkLog.Enabled) buttons.Children.Add(StaffUi.Btn("Developer log", async () => await Navigation.PushModalAsync(new DevLogPage()), "GhostButton"));
         //JJQR - END
@@ -148,6 +151,14 @@ public sealed class ConnectionPanelPage : ContentPage
         Row("Database on the server", n.Database);
         Row("Changes waiting to sync", _sync.PendingCount.ToString());
         Row("Last successful sync", ConnectionColors.Manila(_sync.LastSyncedAt));
+        //JJQR - AI (Nov 22, 2026) - OTA: version and update status
+        var upd = _sp.GetService<ClinicNode.App.Services.AppUpdateService>();
+        if (upd is not null)
+        {
+            Row("App version", upd.CurrentText);
+            Row("Updates", ClinicNode.App.Views.Shared.UpdateUi.StatusLine(upd.Last) + (upd.LastCheckedAt is { } at ? $"  (checked {ConnectionColors.Manila(at)})" : ""));
+        }
+        //JJQR - END
 
         var offline = _mode.Mode == WorkMode.Offline;
         _modeBtn.Text = offline ? "Switch to Online" : "Switch to Offline mode";

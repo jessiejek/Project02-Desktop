@@ -20,12 +20,14 @@ public sealed record UpdateManifest(
     [property: JsonPropertyName("mac_arm64")] UpdatePackage? MacArm64,
     [property: JsonPropertyName("mac_x64")] UpdatePackage? MacX64,
     [property: JsonPropertyName("win_x64")] UpdatePackage? WinX64,
+    [property: JsonPropertyName("mac_arm64_dmg")] UpdatePackage? MacArm64Dmg = null,
+    [property: JsonPropertyName("mac_x64_dmg")] UpdatePackage? MacX64Dmg = null,
     [property: JsonPropertyName("rollout_percent")] int RolloutPercent = 100);
 
 public enum UpdateStatus { NotChecked, UpToDate, Available, Required, Unreachable, BadSignature, Error }
 
 public sealed record UpdateInfo(UpdateStatus Status, Version Current, Version? Latest = null, Version? MinVersion = null,
-    IReadOnlyList<string>? Notes = null, UpdatePackage? Package = null, DateTimeOffset? ReleasedAt = null, string? Message = null)
+    IReadOnlyList<string>? Notes = null, UpdatePackage? Package = null, DateTimeOffset? ReleasedAt = null, string? Message = null, UpdatePackage? Installer = null)
 {
     public bool HasUpdate => Status is UpdateStatus.Available or UpdateStatus.Required;
 }
@@ -92,6 +94,7 @@ public sealed class UpdateChecker
 
         Version.TryParse(m.MinVersion, out var min);
         var pkg = _platformKey switch { "mac_arm64" => m.MacArm64, "mac_x64" => m.MacX64, "win_x64" => m.WinX64, _ => null };
+        var installer = _platformKey switch { "mac_arm64" => m.MacArm64Dmg ?? m.MacArm64, "mac_x64" => m.MacX64Dmg ?? m.MacX64, _ => pkg }; // what a person opens by hand (a DMG on the Mac)
         if (latest <= current && (min is null || current >= min))
             return new UpdateInfo(UpdateStatus.UpToDate, current, latest, min, m.Notes, pkg, m.ReleasedAt);
 
@@ -101,7 +104,7 @@ public sealed class UpdateChecker
             return new UpdateInfo(UpdateStatus.UpToDate, current, latest, min, m.Notes, pkg, m.ReleasedAt);
         if (pkg is null)
             return new UpdateInfo(UpdateStatus.UpToDate, current, latest, min, m.Notes, null, m.ReleasedAt, "A new version exists but not for this kind of computer yet.");
-        return new UpdateInfo(required ? UpdateStatus.Required : UpdateStatus.Available, current, latest, min, m.Notes, pkg, m.ReleasedAt);
+        return new UpdateInfo(required ? UpdateStatus.Required : UpdateStatus.Available, current, latest, min, m.Notes, pkg, m.ReleasedAt, Installer: installer);
     }
 }
 //JJQR - END

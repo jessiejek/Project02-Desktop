@@ -150,6 +150,7 @@ public static class MauiProgram
         services.AddTransient<NodeSettingsPage>();
         // JJQR - END
 
+        services.AddSingleton<ClinicNode.App.Services.AppUpdateService>(); //JJQR - AI (Nov 22, 2026) - OTA //JJQR - END
         services.AddSingleton(ClinicNode.Core.Printing.PrintingOptions.Load(dataDir));
         services.AddSingleton<ClinicNode.Core.Print.IPrintDocumentFactory, ClinicNode.Core.Printing.ClinicFormsPrintDocumentFactory>();
         if (host.UsePlatformStores)
