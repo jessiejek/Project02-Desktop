@@ -16,6 +16,9 @@ public interface ISyncService : ISyncStatusSource
 {
     Task<SyncStatus> RefreshStatusAsync(CancellationToken ct = default);
     Task<SyncCycleResult> RunOnceAsync(CancellationToken ct = default);
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.1: an awaited run the user asked for (Sync now, first login of the day, before going Online). Checks first, sends everything waiting, receives, tops up queue numbers, and reports.
+    Task<SyncCycleResult> RunManualAsync(CancellationToken ct = default) => RunOnceAsync(ct);
+    //JJQR - END
 }
 
 public sealed record SyncCycleResult(bool Succeeded, SyncFailureKind Failure, string? Error)
@@ -25,6 +28,25 @@ public sealed record SyncCycleResult(bool Succeeded, SyncFailureKind Failure, st
     public int RetryLater { get; init; }
     public int Pulled { get; init; }
     public int Applied { get; init; }
+    //JJQR - AI (Nov 22, 2026) - step 3.1: the full picture of one run
+    /// <summary>Changes the server took exactly as sent (applied, or already known).</summary>
+    public int Accepted { get; init; }
+    /// <summary>Changes the server took but kept some of its own values.</summary>
+    public int Merged { get; init; }
+    /// <summary>Changes that clashed with something newer on the server.</summary>
+    public int Conflicts { get; init; }
+    /// <summary>Changes the server refused.</summary>
+    public int Rejected { get; init; }
+    /// <summary>New items for the review list created by this run.</summary>
+    public int NewReviewItems { get; init; }
+    /// <summary>Changes still waiting on this computer when the run ended.</summary>
+    public int StillWaiting { get; init; }
+    /// <summary>Changes received from the server.</summary>
+    public int Received => Pulled;
+    public int QueueBlocksReserved { get; init; }
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset FinishedAt { get; init; }
+    //JJQR - END
 }
 
 public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Sync.ISyncBridge
@@ -216,10 +238,43 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         }
     }
 
-    private async Task<SyncCycleResult> RunCycleAsync(CancellationToken ct)
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.1
+    public async Task<SyncCycleResult> RunManualAsync(CancellationToken ct = default)
     {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await using var db = await _factory.CreateDbContextAsync(ct);
+            await SyncLocalStore.EnsureSchemaAsync(db, ct);
+            if (!_cloud.IsConfigured)
+            {
+                await RefreshStatusAsync(ct);
+                return new SyncCycleResult(false, SyncFailureKind.NotConfigured, UnconfiguredCloudSyncClient.Message) { StillWaiting = await _outbox.CountPendingAsync(db, ct) };
+            }
+            // 1) registered? 2) does the server answer, with its database ready (/health/ready)? The app version is checked by the server on the first push/pull (426 = "Needs update").
+            if (_cloud is ClinicNode.Sync.Wire.ISyncNodeRegistration reg && !await reg.IsRegisteredAsync(ct))
+                return await FailAsync(db, SyncFailureKind.NotRegistered, "This computer is not registered with the clinic server. An admin registers it under Admin > Sync computers.", ct, 0, 0);
+            if (!await _cloud.PingAsync(ct))
+            {
+                ReportConnectivity(false);
+                return await FailAsync(db, SyncFailureKind.Offline, "The clinic server cannot be reached, or its database is not ready. Nothing was sent; your changes are safe on this computer.", ct, 0, 0);
+            }
+            ReportConnectivity(true);
+            return await RunCycleAsync(ct, manual: true);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+    //JJQR - END
+
+    private async Task<SyncCycleResult> RunCycleAsync(CancellationToken ct, bool manual = false) //JJQR - AI (Nov 22, 2026) - step 3.1: manual = send until nothing is left //JJQR - END
+    {
+        var startedAt = DateTimeOffset.UtcNow; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
         await using var db = await _factory.CreateDbContextAsync(ct);
         await SyncLocalStore.EnsureSchemaAsync(db, ct);
+        var openBefore = await SyncLocalStore.CountOpenConflictsAsync(db, ct); //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
 
         if (!_cloud.IsConfigured)
         {
@@ -254,7 +309,9 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
 
         // 1) push
         int pushed = 0, acked = 0, retry = 0;
-        for (var batchNo = 0; batchNo < _options.MaxPushBatchesPerCycle; batchNo++)
+        int accepted = 0, mergedCount = 0, conflicts = 0, rejected = 0; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
+        var maxBatches = manual ? Math.Max(_options.MaxPushBatchesPerCycle, 1000) : _options.MaxPushBatchesPerCycle; //JJQR - AI (Nov 22, 2026) - step 3.1: a manual run goes on until the outbox is empty //JJQR - END
+        for (var batchNo = 0; batchNo < maxBatches; batchNo++)
         {
             var now = DateTimeOffset.UtcNow;
             var window = await _outbox.ListPendingAsync(db, Math.Max(_options.PushBatchSize * 4, 200), ct);
@@ -341,7 +398,19 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
                     retry++;
                     continue;
                 }
-                if (await HandleOutcomeAsync(db, op, outcome, ct)) { acked++; batchAcked++; }
+                if (await HandleOutcomeAsync(db, op, outcome, ct))
+                {
+                    acked++; batchAcked++;
+                    //JJQR - AI (Nov 22, 2026) - step 3.1: one count per kind of answer
+                    switch (outcome.Status)
+                    {
+                        case PushOperationStatus.Merged: mergedCount++; break;
+                        case PushOperationStatus.Conflict: conflicts++; break;
+                        case PushOperationStatus.Rejected: rejected++; break;
+                        default: accepted++; break;
+                    }
+                    //JJQR - END
+                }
                 else retry++;
             }
             //JJQR - AI (Nov 21, 2026) - an automatic amendment retry was queued: push it in this same cycle
@@ -352,7 +421,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
 
         // 2) pull
         var cursor = await SyncOutbox.GetCursorAsync(db, CloudStream, ct);
-        int pulled = 0, applied = 0;
+        int pulled = 0, applied = 0, blocksReserved = 0; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
         DateTimeOffset? serverTime = null;
         for (var page = 0; page < _options.MaxPullPagesPerCycle; page++)
         {
@@ -372,6 +441,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
             var today = ClinicApp.Domain.ClinicClock.Today;
             await QueueBlocks.PruneAsync(db, today, ct);
             var blocks = await QueueBlocks.TopUpAsync(db, _cloud, today, ct);
+            blocksReserved = blocks; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
             if (blocks > 0) _logger.LogInformation("Reserved {Blocks} queue-number block(s).", blocks);
         }
         catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Queue block top-up failed ({Type}); will retry next cycle.", ex.GetType().Name); }
@@ -392,7 +462,16 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
             StuckCount = await _outbox.CountStuckAsync(db, SyncOutbox.StuckAttempts, ct), //JJQR - AI (Nov 22, 2026) - step 0.5 //JJQR - END
         });
         _logger.LogInformation("Sync cycle: pushed {Pushed} (acked {Acked}, retry {Retry}); pulled {Pulled}, applied {Applied}.", pushed, acked, retry, pulled, applied);
-        return new SyncCycleResult(true, SyncFailureKind.None, null) { Pushed = pushed, Acked = acked, RetryLater = retry, Pulled = pulled, Applied = applied };
+        //JJQR - AI (Nov 22, 2026) - step 3.1
+        var openAfter = await SyncLocalStore.CountOpenConflictsAsync(db, ct);
+        return new SyncCycleResult(true, SyncFailureKind.None, null)
+        {
+            Pushed = pushed, Acked = acked, RetryLater = retry, Pulled = pulled, Applied = applied,
+            Accepted = accepted, Merged = mergedCount, Conflicts = conflicts, Rejected = rejected,
+            NewReviewItems = Math.Max(0, openAfter - openBefore), StillWaiting = await _outbox.CountPendingAsync(db, ct),
+            QueueBlocksReserved = blocksReserved, StartedAt = startedAt, FinishedAt = DateTimeOffset.UtcNow,
+        };
+        //JJQR - END
     }
 
     /// <summary>Contract §3.3. Returns true when the operation was acked.</summary>
