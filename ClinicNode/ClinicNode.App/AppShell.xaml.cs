@@ -70,13 +70,7 @@ public partial class AppShell : Shell
             // "//staff-home" etc.
             var leaf = route.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? route;
             _sidebar?.SetActiveRoute(leaf);
-            //JJQR - AI (Nov 22, 2026) - owner: the top bar (connection pill, sync badge, notifications) must be visible on EVERY page. Pages opened on top of another (a visit, a chart, a template editor) had none.
-            try
-            {
-                if (_auth.Current is not null && CurrentPage is { } page && page.Navigation.NavigationStack.Count > 1 && Shell.GetTitleView(page) is null)
-                    Shell.SetTitleView(page, new Views.Shared.TopBarView(_services));
-            }
-            catch { /* the top bar must never break a navigation */ }
+            //JJQR - AI (Nov 22, 2026) - REMOVED: setting a top bar on pages opened over another page crashed MAUI navigation on Mac ("Failed to marshal the Objective-C object ... ShellPageRendererTracker+TitleViewContainer", seen live by the owner). The top bar stays on the main screens only until a safe way is found (set before the page is pushed, not after).
             //JJQR - END
         };
     }
