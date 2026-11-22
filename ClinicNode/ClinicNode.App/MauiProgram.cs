@@ -60,7 +60,7 @@ public static class MauiProgram
         {
             DataDirectory = dataDir,
             Demo = IsDemo(),
-            CloudBaseUrl = Environment.GetEnvironmentVariable("CLINIC_NODE_CLOUD_URL") ?? "",
+            CloudBaseUrl = Environment.GetEnvironmentVariable("CLINIC_NODE_CLOUD_URL") ?? DefaultCloudUrl(),
         };
         AddClinicNodeAppServices(builder.Services, options, new ClinicNodeAppHostOptions
         {
@@ -227,6 +227,18 @@ public static class MauiProgram
         KeepAlivePingPolicy = HttpKeepAlivePingPolicy.WithActiveRequests,
         KeepAlivePingDelay = TimeSpan.FromSeconds(30),
     };
+    //JJQR - END
+
+    //JJQR - AI (Nov 22, 2026) - installer: an INSTALLED copy has no environment variable, so a release build starts with the live clinic server address (an admin can still change it in Settings > This computer). Debug builds keep using the variable / saved address.
+    const string ProductionCloudUrl = "https://chococheese0660-001-site1.gtempurl.com";
+    static string DefaultCloudUrl()
+    {
+#if DEBUG
+        return "";
+#else
+        return ProductionCloudUrl;
+#endif
+    }
     //JJQR - END
 
     static bool IsDemo()

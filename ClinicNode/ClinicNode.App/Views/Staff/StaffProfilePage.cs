@@ -9,7 +9,10 @@ public sealed class StaffProfilePage : StaffLivePage
 {
     private readonly Entry _fullName = new();
     private readonly Entry _contact = new() { Keyboard = Keyboard.Telephone };
-    private readonly Entry _email = new() { IsReadOnly = true };
+    private readonly Entry _email = new() { Keyboard = Keyboard.Email }; //JJQR - AI (Nov 22, 2026) - owner: one form, everything editable, including the email //JJQR - END
+    private readonly Entry _emailPassword = new() { IsPassword = true, Placeholder = "Current password" };
+    private string _initialEmail = "";
+    private View? _emailPasswordField;
     private readonly Label _detailsError = StaffUi.Error();
     private readonly Label _detailsSaved = StaffUi.Success();
     private readonly Entry _current = new() { IsPassword = true };
@@ -42,6 +45,7 @@ public sealed class StaffProfilePage : StaffLivePage
         //JJQR - END
         _update.IsEnabled = false;
         _update.HorizontalOptions = LayoutOptions.End; //JJQR - AI (21 Nov 2026) - STAFF PARITY //JJQR - END
+        _email.TextChanged += (_, _) => RefreshDirty(); //JJQR - AI (Nov 22, 2026) //JJQR - END
         foreach (var e in new[] { _current, _new, _confirm }) e.TextChanged += (_, _) => RefreshPassword();
         Content = StaffUi.Scroll(new VerticalStackLayout
         {
@@ -57,9 +61,9 @@ public sealed class StaffProfilePage : StaffLivePage
                     _detailsSaved, _detailsError, //JJQR - AI (21 Nov 2026) - STAFF PARITY: web order: saved, then error //JJQR - END
                     StaffUi.Field("Full name", _fullName),
                     StaffUi.Field("Contact number", _contact),
-                    StaffUi.Field("Email", _email, "Use the Change email box to change the email you sign in with."), //JJQR - AI (Nov 22, 2026) //JJQR - END
+                    StaffUi.Field("Email", _email, "This is the email you sign in with."),
+                    _emailPasswordField = StaffUi.Field("Current password", _emailPassword, "Needed only when you change the email."), //JJQR - AI (Nov 22, 2026) - one form: the password box appears only when the email is changed //JJQR - END
                     save),
-                new VerticalStackLayout { Spacing = 16, Children = {
                 StaffUi.Card(
                     ClinicTheme.Text("Change password", "HeadlineSm"),
                     _pwSaved, _pwError,
@@ -67,9 +71,7 @@ public sealed class StaffProfilePage : StaffLivePage
                     StaffUi.Field("New password", _new, StaffProfileService.PasswordHint),
                     StaffUi.Field("Confirm new password", _confirm),
                     _mismatch,
-                    _update),
-                //JJQR - AI (Nov 22, 2026) - owner: every profile can change its own email
-                ProfileEmailCard.Build(Svc<IStaffProfileService>(), () => _email.Text, e => _email.Text = e) } })), //JJQR - AI (Nov 22, 2026) - details and password side by side instead of two 1,165 pt wide cards //JJQR - END
+                    _update))), //JJQR - AI (Nov 22, 2026) - details and password side by side instead of two 1,165 pt wide cards //JJQR - END
             }
         });
     }
@@ -84,12 +86,17 @@ public sealed class StaffProfilePage : StaffLivePage
         //JJQR - END
         _fullName.Text = p.FullName;
         _contact.Text = p.ContactNumber;
-        _email.Text = p.Email;
+        _email.Text = p.Email; _initialEmail = p.Email ?? "";
         RefreshDirty(); //JJQR - AI (21 Nov 2026) //JJQR - END
     }
 
     //JJQR - AI (21 Nov 2026) - STAFF PARITY helpers
-    void RefreshDirty() => _save.IsEnabled = (_fullName.Text ?? "") != _initialName || (_contact.Text ?? "") != _initialContact;
+    bool EmailChanged => !string.Equals((_email.Text ?? "").Trim(), _initialEmail, StringComparison.OrdinalIgnoreCase);
+    void RefreshDirty()
+    {
+        _save.IsEnabled = (_fullName.Text ?? "") != _initialName || (_contact.Text ?? "") != _initialContact || EmailChanged;
+        if (_emailPasswordField is not null) _emailPasswordField.IsVisible = EmailChanged;
+    }
 
     static View TwoColumns(View left, View right)
     {
@@ -119,6 +126,14 @@ public sealed class StaffProfilePage : StaffLivePage
         StaffUi.Show(_detailsSaved, null);
         var r = await Svc<IStaffProfileService>().SaveAsync(_fullName.Text, _contact.Text);
         if (!r.Succeeded) { StaffUi.Show(_detailsError, r.Error ?? "Your profile wasn’t saved. Please try again."); return; }
+        //JJQR - AI (Nov 22, 2026) - the email is part of the same Save: changed only if it was edited, and it needs the current password
+        if (EmailChanged)
+        {
+            var er = await Svc<IStaffProfileService>().ChangeEmailAsync(_emailPassword.Text, _email.Text);
+            if (!er.Succeeded) { StaffUi.Show(_detailsError, "Name and number were saved, but the email was not changed: " + (er.Error ?? "please try again.")); Dispatcher.Dispatch(RefreshDirty); return; }
+            _email.Text = (_email.Text ?? "").Trim().ToLowerInvariant(); _initialEmail = _email.Text; _emailPassword.Text = "";
+        }
+        //JJQR - END
         StaffUi.Show(_detailsSaved, $"Saved {StaffUi.DateTimeText(DateTimeOffset.Now)}.");
         //JJQR - AI (21 Nov 2026) - STAFF PARITY: the saved values are the new baseline for the dirty check
         _initialName = _fullName.Text ?? "";

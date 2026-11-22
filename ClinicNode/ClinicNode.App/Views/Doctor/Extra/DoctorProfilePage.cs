@@ -28,6 +28,13 @@ public sealed class DoctorProfilePage : StaffLivePage
         _confirm = new() { IsPassword = true, Placeholder = "Confirm Password" };
     private readonly Label _error = StaffUi.Error(), _saved = StaffUi.Success(), _pwError = StaffUi.Error(), _pwSaved = StaffUi.Success();
     private readonly Label _email = ClinicTheme.Text("", "MutedBody");
+    //JJQR - AI (Nov 22, 2026) - owner: one form, everything editable, including the email (the password box appears only when the email is changed)
+    private readonly Entry _emailEdit = new() { Keyboard = Keyboard.Email };
+    private readonly Entry _emailPassword = new() { IsPassword = true, Placeholder = "Current password" };
+    private string _initialEmail = "";
+    private View? _emailPasswordField;
+    private bool EmailChanged => !string.Equals((_emailEdit.Text ?? "").Trim(), _initialEmail, StringComparison.OrdinalIgnoreCase);
+    //JJQR - END
     private Button? _updatePw;
 
     public DoctorProfilePage(IServiceProvider sp) : base(sp, "Profile", live: false)
@@ -76,7 +83,7 @@ public sealed class DoctorProfilePage : StaffLivePage
         if (svc.CurrentDoctorId is null) { _body.Children.Add(DoctorExtraUi.NotLinked()); return; }
         // web: no row → throw → ErrorState
         var p = await svc.GetMineAsync() ?? throw new InvalidOperationException("Profile unavailable");
-        _email.Text = p.Email;
+        _email.Text = p.Email; _emailEdit.Text = p.Email; _initialEmail = p.Email ?? ""; //JJQR - AI (Nov 22, 2026) //JJQR - END
         _name.Text = p.FullName; _spec.Text = p.Specialization; _bio.Text = p.Bio;
         _fee.Text = p.ConsultationFee.ToString("0.##", CultureInfo.InvariantCulture);
         _license.Text = p.LicenseNumber; _ptr.Text = p.PtrNumber; _s2.Text = p.S2Number;
@@ -114,6 +121,15 @@ public sealed class DoctorProfilePage : StaffLivePage
                 var r = await svc.SaveAsync(new DoctorProfileEdit(_name.Text, _spec.Text, _bio.Text, _fee.Text, _license.Text, _ptr.Text, _s2.Text));
                 //JJQR - END
                 if (!r.Succeeded) { StaffUi.Show(_error, r.Error); return; }
+                //JJQR - AI (Nov 22, 2026) - the email is part of the same Save: changed only if edited; needs the current password
+                if (EmailChanged)
+                {
+                    var er = await Svc<ClinicNode.Core.Staff.IStaffProfileService>().ChangeEmailAsync(_emailPassword.Text, _emailEdit.Text);
+                    if (!er.Succeeded) { StaffUi.Show(_error, "Your details were saved, but the email was not changed: " + (er.Error ?? "please try again.")); return; }
+                    _emailEdit.Text = (_emailEdit.Text ?? "").Trim().ToLowerInvariant(); _initialEmail = _emailEdit.Text; _email.Text = _initialEmail; _emailPassword.Text = "";
+                    if (_emailPasswordField is not null) _emailPasswordField.IsVisible = false;
+                }
+                //JJQR - END
                 //JJQR - AI (Nov 22, 2026) - printouts read this computer's own copy of the doctor row: keep it in step with what the server just stored //JJQR - END
                 await CopyIdsToLocalAsync(doctorId);
                 StaffUi.Show(_saved, $"Profile saved at {DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).ToString("h:mm:ss tt", CultureInfo.GetCultureInfo("en-PH"))}.");
@@ -183,6 +199,12 @@ public sealed class DoctorProfilePage : StaffLivePage
         details.Add(StaffUi.Field("Full name", _name), 0, 0);
         details.Add(StaffUi.Field("Specialization", _spec), 1, 0);
         details.Add(StaffUi.Field("Consultation fee (₱)", _fee, "A new fee applies to new bookings only."), 2, 0);
+        var emailRow = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+        emailRow.Add(StaffUi.Field("Email (you sign in with it)", _emailEdit), 0, 0);
+        _emailPasswordField = StaffUi.Field("Current password", _emailPassword, "Needed only when you change the email.");
+        _emailPasswordField.IsVisible = false;
+        emailRow.Add(_emailPasswordField, 1, 0);
+        _emailEdit.TextChanged += (_, _) => { if (_emailPasswordField is not null) _emailPasswordField.IsVisible = EmailChanged; };
         //JJQR - END
         //JJQR - AI (Nov 22, 2026) - the doctor's own License / PTR / S2 numbers are editable (they print on prescriptions and certificates) //JJQR - END
         var ids = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
@@ -200,7 +222,7 @@ public sealed class DoctorProfilePage : StaffLivePage
         var bioBox = new VerticalStackLayout { Spacing = 6, Children = { ClinicTheme.Text("Bio", "FieldLabel"), ClinicTheme.Text("Shown on your public profile.", "MutedSm"), _bio } };
         _bio.HeightRequest = 120;
 
-        var left = StaffUi.Card(_saved, who, Divider(), details, lockNote, ids, Divider(), _error, bioBox, save);
+        var left = StaffUi.Card(_saved, who, Divider(), details, emailRow, lockNote, ids, Divider(), _error, bioBox, save);
         left.VerticalOptions = LayoutOptions.Start;
 
         var pwCard = StaffUi.Card(
@@ -211,8 +233,7 @@ public sealed class DoctorProfilePage : StaffLivePage
             new Label { Text = "Clinic availability", FontFamily = ClinicTheme.FontSemiBold, FontSize = 17 },
             ClinicTheme.Text("Weekly hours and dates away.", "MutedBody"),
             StaffUi.Btn("Manage availability", () => StaffUi.PushAsync<DoctorSchedulePage>(this), "SecondaryButton"));
-        var emailCard = ClinicNode.App.Views.Shared.ProfileEmailCard.Build(Svc<ClinicNode.Core.Staff.IStaffProfileService>(), () => _email.Text, e => _email.Text = e); //JJQR - AI (Nov 22, 2026) - change email //JJQR - END
-        var right = new VerticalStackLayout { Spacing = 16, Children = { pwCard, emailCard, availCard }, VerticalOptions = LayoutOptions.Start };
+        var right = new VerticalStackLayout { Spacing = 16, Children = { pwCard, availCard }, VerticalOptions = LayoutOptions.Start };
 
         var cols = new Grid { ColumnSpacing = 16, ColumnDefinitions = { new ColumnDefinition(new GridLength(3, GridUnitType.Star)), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) } };
         cols.Add(left, 0, 0);
