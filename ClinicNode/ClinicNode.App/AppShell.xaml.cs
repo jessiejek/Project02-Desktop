@@ -70,6 +70,14 @@ public partial class AppShell : Shell
             // "//staff-home" etc.
             var leaf = route.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? route;
             _sidebar?.SetActiveRoute(leaf);
+            //JJQR - AI (Nov 22, 2026) - owner: the top bar (connection pill, sync badge, notifications) must be visible on EVERY page. Pages opened on top of another (a visit, a chart, a template editor) had none.
+            try
+            {
+                if (_auth.Current is not null && CurrentPage is { } page && page.Navigation.NavigationStack.Count > 1 && Shell.GetTitleView(page) is null)
+                    Shell.SetTitleView(page, new Views.Shared.TopBarView(_services));
+            }
+            catch { /* the top bar must never break a navigation */ }
+            //JJQR - END
         };
     }
 

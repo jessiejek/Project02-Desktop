@@ -209,9 +209,10 @@ public sealed class TopBarView : Grid
             ApplyName(); //JJQR - AI (21 Nov 2026) - follow a renamed session //JJQR - END
             if (session.Role == UserRole.Doctor && session.DoctorId is { } did)
             {
-                var board = await _sp.GetRequiredService<IDoctorStatusService>().GetTodayAsync();
-                var mine = board.Doctors.FirstOrDefault(d => d.DoctorId == did)?.Status ?? DoctorDayStatusEnum.Available;
-                _badgeHost.Content = ClinicTheme.MakeStatusPill(mine.ToString());
+                //JJQR - AI (Nov 22, 2026) - owner: the doctor's day status (Available...) is shown on the Availability card of the Today page, not in the top bar
+                _badgeHost.Content = null;
+                _badgeHost.IsVisible = false;
+                //JJQR - END
             }
             else
             {
@@ -275,7 +276,7 @@ public sealed class TopBarView : Grid
         if (double.IsNaN(w) || w <= 0) return;
         // Hide lower-priority chrome first so search + sync + bell + avatar stay visible.
         _nameLabel.IsVisible = w >= 640;
-        _badgeHost.IsVisible = w >= 520;
+        _badgeHost.IsVisible = w >= 520 && _badgeHost.Content is not null; //JJQR - AI (Nov 22, 2026) //JJQR - END
     }
 
     void PlaceIn(View view, int column)
