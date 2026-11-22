@@ -132,6 +132,13 @@ public sealed class DoctorAppointmentDetailPage : StaffLivePage
                 {
                     var markPaid = StaffUi.Btn("Mark payment received", async () =>
                     {
+                        //JJQR - AI (Nov 22, 2026) - the clinic server only lets the doctor confirm payments after the Phase 4 backend release (owner 22 Nov); until then the doctor does it in Offline mode, or staff do it
+                        if (!(Svc<ClinicNode.Core.Sync.IWorkModeService>()?.IsOffline ?? false))
+                        {
+                            await DisplayAlertAsync("Not available yet", "While the computer is Online, payments are marked by the staff. To mark this one yourself, switch to Offline mode first (tap the Online pill at the top).", "OK");
+                            return;
+                        }
+                        //JJQR - END
                         var paid = await RecordPaymentPage.ShowAsync(this, Svc<ClinicNode.Core.Staff.IStaffPaymentsService>(), d.BookingId, d.PatientName, "", d.AmountDue, receiptHint: false, bookletNumber: true);
                         if (paid is not null) await LoadAsync();
                     });
