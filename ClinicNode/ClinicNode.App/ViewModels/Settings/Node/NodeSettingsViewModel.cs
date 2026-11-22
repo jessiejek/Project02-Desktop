@@ -352,7 +352,7 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
         if (!await RunAsync(nameof(IsSyncBusy), v => IsSyncBusy = v)) return;
         try
         {
-            var r = await _sync.RunOnceAsync();
+            var r = await _sync.RunManualAsync("manual"); //JJQR - AI (Nov 22, 2026) - step 3.2: kept in the run history //JJQR - END
             SyncResult = r.Succeeded
                 ? $"Synced: sent {r.Pushed}, received {r.Pulled}."
                 : r.Failure switch

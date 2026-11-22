@@ -131,7 +131,7 @@ public partial class App : Application
                     }
                     else if (await shell.DisplayAlertAsync("Connection", suggestion.Message, "Sync and go Online", "Not now"))
                     {
-                        var run = await _services.GetRequiredService<ISyncService>().RunOnceAsync();
+                        var run = await _services.GetRequiredService<ISyncService>().RunManualAsync("switch");
                         if (run.Succeeded) await mode.SetAsync(ClinicNode.Core.Sync.WorkMode.Online);
                         else await shell.DisplayAlertAsync("Sync did not finish", (run.Error ?? "The clinic server did not accept everything.") + " You are still in Offline mode.", "OK");
                     }

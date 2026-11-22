@@ -265,7 +265,7 @@ public sealed class TopBarView : Grid
         var buttons = new List<string> { "Sync now" };
         if (_sync.ConflictCount > 0) buttons.Add("Review conflicts");
         var choice = await shell.DisplayActionSheetAsync(_sync.Banner, "Close", null, [.. buttons]);
-        if (choice == "Sync now") _sync.RequestSync();
+        if (choice == "Sync now") await SyncResultPage.ShowAsync(_sp, "manual"); //JJQR - AI (Nov 22, 2026) - step 3.2 //JJQR - END
         else if (choice == "Review conflicts") await shell.GoToAsync("sync-conflicts");
     }
 

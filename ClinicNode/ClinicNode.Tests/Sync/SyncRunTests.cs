@@ -108,5 +108,46 @@ public class SyncRunTests
         Assert.True(ids.Count >= total);
         Assert.Equal(total, ids.Distinct().Count());                      // every change reached the server; a repeat is the same operation id, which the server treats as already known
     }
+
+    // ── step 3.2: the history of runs ─────────────────────────────────────────
+    [Fact]
+    public async Task Every_manual_run_is_kept_with_its_trigger_including_failures()
+    {
+        await using var host = await SyncTestHost.StartAsync();
+        await MakeVisitAsync(host, "Six");
+        var svc = host.Get<ISyncService>();
+        await svc.RunManualAsync("manual");
+        host.Cloud.Offline = true;
+        await svc.RunManualAsync("daily");                // fails: the server does not answer
+        host.Cloud.Offline = false;
+        await svc.RunManualAsync();                        // default trigger
+
+        var runs = await svc.GetRunHistoryAsync();
+        Assert.Equal(["manual", "daily", "manual"], runs.OrderBy(r => r.FinishedAt).Select(r => r.Trigger).ToArray());
+        var failed = runs.Single(r => r.Trigger == "daily");
+        Assert.False(failed.Succeeded);
+        Assert.Contains("safe on this computer", failed.Error);
+        Assert.True(runs.OrderBy(r => r.FinishedAt).First().Sent > 0);          // the first run sent the waiting changes; the third had nothing left
+    }
+
+    [Fact]
+    public async Task A_stopped_run_is_kept_as_stopped_and_only_the_last_30_are_kept()
+    {
+        await using var host = await SyncTestHost.StartAsync(configure: o => o.PushBatchSize = 1);
+        await MakeVisitAsync(host, "Seven");
+        var svc = host.Get<ISyncService>();
+        using var cts = new CancellationTokenSource();
+        host.Cloud.OnPush = op => { cts.Cancel(); return host.Cloud.Applied(op); };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => svc.RunManualAsync("daily", cts.Token));
+        var stopped = (await svc.GetRunHistoryAsync()).Single();
+        Assert.False(stopped.Succeeded);
+        Assert.Contains("Stopped", stopped.Error);
+
+        host.Cloud.OnPush = null;
+        for (var i = 0; i < 34; i++) await svc.RunManualAsync("manual");
+        var all = await svc.GetRunHistoryAsync();
+        Assert.Equal(30, all.Count);                                            // the oldest were dropped
+        Assert.True(all.SequenceEqual(all.OrderByDescending(r => r.FinishedAt))); // newest first
+    }
 }
 //JJQR - END

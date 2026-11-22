@@ -161,13 +161,8 @@ public sealed class ConnectionPanelPage : ContentPage
 
     async Task SyncNowAsync()
     {
-        _syncBtn.IsEnabled = false; _syncMsg.Text = "Syncing...";
-        try
-        {
-            var r = await _sp.GetRequiredService<ISyncService>().RunOnceAsync();
-            _syncMsg.Text = r.Succeeded ? $"Done. Sent {r.Acked}, received {r.Applied}." : "Sync did not finish: " + (r.Error ?? "the clinic server did not accept everything.");
-        }
-        catch (Exception ex) { _syncMsg.Text = "Sync did not finish: " + ex.Message; }
+        _syncBtn.IsEnabled = false; _syncMsg.Text = "";
+        try { await SyncResultPage.ShowAsync(_sp, "manual"); }   // step 3.2: the run and its result are shown on the results screen
         finally { _syncBtn.IsEnabled = true; Render(); }
     }
 }

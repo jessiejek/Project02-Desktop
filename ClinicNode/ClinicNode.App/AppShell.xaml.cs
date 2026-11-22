@@ -38,7 +38,7 @@ public partial class AppShell : Shell
         //JJQR - END
         RefreshSyncCommand = new Command(async () => await RefreshSyncAsync());
         // JJQR - AI (Nov 21, 2026) - Sync now + conflict review; ISyncStatus events arrive off the UI thread.
-        SyncNowCommand = new Command(() => _sync.RequestSync());
+        SyncNowCommand = new Command(async () => { try { await ClinicNode.App.Views.Shared.SyncResultPage.ShowAsync(_services, "manual"); } catch { /* the shell must not break */ } }); //JJQR - AI (Nov 22, 2026) - step 3.2 //JJQR - END
         OpenConflictsCommand = new Command(async () =>
         {
             try { await GoToAsync("sync-conflicts"); }

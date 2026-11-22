@@ -18,6 +18,10 @@ public interface ISyncService : ISyncStatusSource
     Task<SyncCycleResult> RunOnceAsync(CancellationToken ct = default);
     //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.1: an awaited run the user asked for (Sync now, first login of the day, before going Online). Checks first, sends everything waiting, receives, tops up queue numbers, and reports.
     Task<SyncCycleResult> RunManualAsync(CancellationToken ct = default) => RunOnceAsync(ct);
+    /// <summary>Same, and the run is kept in the history (last 30) under this name: manual | daily | switch | signout.</summary>
+    Task<SyncCycleResult> RunManualAsync(string trigger, CancellationToken ct = default) => RunManualAsync(ct);
+    /// <summary>The last 30 runs, newest first (step 3.2).</summary>
+    Task<IReadOnlyList<SyncRunRecord>> GetRunHistoryAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<SyncRunRecord>>([]);
     //JJQR - END
 }
 
@@ -178,6 +182,13 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
     private const string RevokedKey = "revoked";
     //JJQR - END
 
+    public async Task<IReadOnlyList<SyncRunRecord>> GetRunHistoryAsync(CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        await SyncLocalStore.EnsureSchemaAsync(db, ct);
+        return await SyncLocalStore.ListRunsAsync(db, SyncLocalStore.RunsKept, ct);
+    }
+
     public async Task<IReadOnlyList<SyncConflict>> GetOpenConflictsAsync(CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
@@ -239,7 +250,41 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
     }
 
     //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.1
-    public async Task<SyncCycleResult> RunManualAsync(CancellationToken ct = default)
+    public Task<SyncCycleResult> RunManualAsync(CancellationToken ct = default) => RunManualAsync("manual", ct);
+
+    public async Task<SyncCycleResult> RunManualAsync(string trigger, CancellationToken ct = default)
+    {
+        var started = DateTimeOffset.UtcNow;
+        SyncCycleResult result;
+        try { result = await RunManualCoreAsync(ct); }
+        catch (OperationCanceledException)
+        {
+            await RecordRunAsync(trigger, new SyncCycleResult(false, SyncFailureKind.None, "Stopped before it finished. What was already sent stays sent; the rest goes next time.") { StartedAt = started, FinishedAt = DateTimeOffset.UtcNow });
+            throw;
+        }
+        result = result with { StartedAt = result.StartedAt == default ? started : result.StartedAt, FinishedAt = result.FinishedAt == default ? DateTimeOffset.UtcNow : result.FinishedAt };
+        await RecordRunAsync(trigger, result);
+        return result;
+    }
+
+    private async Task RecordRunAsync(string trigger, SyncCycleResult r)
+    {
+        try
+        {
+            await using var db = await _factory.CreateDbContextAsync();
+            await SyncLocalStore.EnsureSchemaAsync(db);
+            await SyncLocalStore.AddRunAsync(db, new SyncRunRecord
+            {
+                StartedAt = r.StartedAt, FinishedAt = r.FinishedAt, Trigger = trigger, Succeeded = r.Succeeded,
+                Failure = r.Succeeded || r.Failure == SyncFailureKind.None ? null : r.Failure.ToString(), Error = r.Error,
+                Sent = r.Pushed, Accepted = r.Accepted, Merged = r.Merged, Conflicts = r.Conflicts, Rejected = r.Rejected,
+                NewReviewItems = r.NewReviewItems, StillWaiting = r.Succeeded ? r.StillWaiting : await _outbox.CountPendingAsync(db), Received = r.Received,
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Could not keep the sync run history ({Type}).", ex.GetType().Name); }
+    }
+
+    private async Task<SyncCycleResult> RunManualCoreAsync(CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try

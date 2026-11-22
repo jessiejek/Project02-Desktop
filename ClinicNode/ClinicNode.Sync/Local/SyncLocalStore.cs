@@ -12,6 +12,28 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ClinicNode.Sync.Local;
 
+//JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.2: one finished (or failed, or skipped) sync run, as kept on this computer
+public sealed record SyncRunRecord
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset FinishedAt { get; init; }
+    /// <summary>manual | daily | switch | signout</summary>
+    public string Trigger { get; init; } = "manual";
+    public bool Succeeded { get; init; }
+    public string? Failure { get; init; }
+    public string? Error { get; init; }
+    public int Sent { get; init; }
+    public int Accepted { get; init; }
+    public int Merged { get; init; }
+    public int Conflicts { get; init; }
+    public int Rejected { get; init; }
+    public int NewReviewItems { get; init; }
+    public int StillWaiting { get; init; }
+    public int Received { get; init; }
+}
+//JJQR - END
+
 public sealed record SyncConflict
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -71,6 +93,21 @@ public static class SyncLocalStore
                 resolved_at TEXT NULL
             );
             """, ct);
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.2: the last 30 sync runs, kept on this computer
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS node_sync_runs (
+                id TEXT NOT NULL PRIMARY KEY,
+                started_at TEXT NOT NULL,
+                finished_at TEXT NOT NULL,
+                trigger TEXT NOT NULL,
+                succeeded INTEGER NOT NULL,
+                failure TEXT NULL,
+                error TEXT NULL,
+                sent INTEGER NOT NULL, accepted INTEGER NOT NULL, merged INTEGER NOT NULL, conflicts INTEGER NOT NULL, rejected INTEGER NOT NULL,
+                new_review INTEGER NOT NULL, still_waiting INTEGER NOT NULL, received INTEGER NOT NULL
+            );
+            """, ct);
+        //JJQR - END
         //JJQR - AI (Nov 21, 2026)
         await db.Database.ExecuteSqlRawAsync(
             "CREATE TABLE IF NOT EXISTS node_sync_state (key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL);", ct);
@@ -295,6 +332,49 @@ public static class SyncLocalStore
         }
         return list;
     }
+
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.2: sync run history (the last 30 are kept)
+    public const int RunsKept = 30;
+
+    public static async Task AddRunAsync(ClinicAppDbContext db, SyncRunRecord r, CancellationToken ct = default)
+    {
+        await using (var cmd = await CommandAsync(db, """
+            INSERT INTO node_sync_runs (id, started_at, finished_at, trigger, succeeded, failure, error, sent, accepted, merged, conflicts, rejected, new_review, still_waiting, received)
+            VALUES ($id, $s, $f, $t, $ok, $fail, $err, $sent, $acc, $mer, $con, $rej, $new, $wait, $rec);
+            """, ct))
+        {
+            Add(cmd, "$id", r.Id.ToString()); Add(cmd, "$s", r.StartedAt.ToString("O")); Add(cmd, "$f", r.FinishedAt.ToString("O")); Add(cmd, "$t", r.Trigger);
+            Add(cmd, "$ok", r.Succeeded ? 1 : 0); Add(cmd, "$fail", r.Failure); Add(cmd, "$err", r.Error);
+            Add(cmd, "$sent", r.Sent); Add(cmd, "$acc", r.Accepted); Add(cmd, "$mer", r.Merged); Add(cmd, "$con", r.Conflicts); Add(cmd, "$rej", r.Rejected);
+            Add(cmd, "$new", r.NewReviewItems); Add(cmd, "$wait", r.StillWaiting); Add(cmd, "$rec", r.Received);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        await using var prune = await CommandAsync(db, "DELETE FROM node_sync_runs WHERE id NOT IN (SELECT id FROM node_sync_runs ORDER BY finished_at DESC LIMIT $k);", ct);
+        Add(prune, "$k", RunsKept);
+        await prune.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>Newest first.</summary>
+    public static async Task<IReadOnlyList<SyncRunRecord>> ListRunsAsync(ClinicAppDbContext db, int take = RunsKept, CancellationToken ct = default)
+    {
+        await using var cmd = await CommandAsync(db, """
+            SELECT id, started_at, finished_at, trigger, succeeded, failure, error, sent, accepted, merged, conflicts, rejected, new_review, still_waiting, received
+            FROM node_sync_runs ORDER BY finished_at DESC LIMIT $t;
+            """, ct);
+        Add(cmd, "$t", take);
+        var list = new List<SyncRunRecord>();
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+            list.Add(new SyncRunRecord
+            {
+                Id = Guid.Parse(r.GetString(0)), StartedAt = DateTimeOffset.Parse(r.GetString(1)), FinishedAt = DateTimeOffset.Parse(r.GetString(2)), Trigger = r.GetString(3),
+                Succeeded = r.GetInt32(4) == 1, Failure = r.IsDBNull(5) ? null : r.GetString(5), Error = r.IsDBNull(6) ? null : r.GetString(6),
+                Sent = r.GetInt32(7), Accepted = r.GetInt32(8), Merged = r.GetInt32(9), Conflicts = r.GetInt32(10), Rejected = r.GetInt32(11),
+                NewReviewItems = r.GetInt32(12), StillWaiting = r.GetInt32(13), Received = r.GetInt32(14),
+            });
+        return list;
+    }
+    //JJQR - END
 
     public static async Task<int> CountOpenConflictsAsync(ClinicAppDbContext db, CancellationToken ct = default)
     {
