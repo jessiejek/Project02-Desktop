@@ -44,6 +44,7 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
     private readonly ISyncBridge _sync;
     private readonly ILogger<OnlineFirstAuthService> _logger;
     private readonly TimeProvider _clock;
+    private readonly ClinicNode.Core.Sync.IWorkModeService? _mode; //JJQR - AI (Nov 22, 2026) - step 2.6 //JJQR - END
     private NodeSession? _apiSession;
     private DateTimeOffset _profileCheckedAt;
 
@@ -56,8 +57,10 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
         IDbContextFactory<ClinicAppDbContext> factory,
         ILogger<OnlineFirstAuthService> logger,
         ISyncBridge? sync = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        ClinicNode.Core.Sync.IWorkModeService? mode = null) //JJQR - AI (Nov 22, 2026) - step 2.6 //JJQR - END
     {
+        _mode = mode;
         _local = local;
         _apiAuth = apiAuth;
         _api = api;
@@ -77,10 +80,13 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
 
     public Task SetRememberedEmailAsync(string? email, CancellationToken ct = default) => _local.SetRememberedEmailAsync(email, ct);
 
+    private bool OfflineMode => _mode?.IsOffline == true; //JJQR - AI (Nov 22, 2026) - step 2.6 //JJQR - END
+
     public async Task<bool> IsLockedForOfflinePeriodAsync(CancellationToken ct = default)
     {
         // Online sessions are only locked by a revoke; the 7-day offline lock is for local sign-ins.
-        if (_apiSession is not null && _connectivity.IsOnline) return await _sync.IsRevokedAsync(ct);
+        // In Offline mode the 7-day rule applies even if the server happens to answer: the computer is working on its own copy (step 2.6, D9).
+        if (_apiSession is not null && _connectivity.IsOnline && !OfflineMode) return await _sync.IsRevokedAsync(ct);
         return await _local.IsLockedForOfflinePeriodAsync(ct);
     }
 
@@ -92,6 +98,16 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
         if (await _sync.IsRevokedAsync(ct))
             return new AuthResult(false, null, Revoked, Locked: true);
 
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.6: in Offline mode sign-in uses this computer only (no call to the server), as long as the 7-day rule allows it.
+        // If the 7 days are over, the one way back is to sign in through the server once (below), which the lock message tells the user.
+        if (OfflineMode && !await _local.IsLockedForOfflinePeriodAsync(ct))
+        {
+            await DropApiSessionAsync(callServer: false);
+            var offlineLogin = await _local.LoginAsync(email, password, rememberEmail, ct);
+            if (offlineLogin.Succeeded) SessionChanged?.Invoke();
+            return offlineLogin;
+        }
+        //JJQR - END
         ApiSession api;
         try
         {
@@ -102,7 +118,7 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
             // The ONLY local fallback: the clinic server could not be reached.
             _logger.LogInformation("Clinic server unreachable; signing in against the local node.");
             await DropApiSessionAsync(callServer: false);
-            var local = await _local.LoginAsync(email, password, rememberEmail, ct);
+            var local = await _local.LoginAsync(email, password, rememberEmail, ct); // gives the dated lock message when the 7 days are over
             if (local.Succeeded) SessionChanged?.Invoke();
             return local;
         }
@@ -223,7 +239,7 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
             var revoked = await _sync.IsRevokedAsync(ct);
             await DropApiSessionAsync(callServer: false);
             SessionChanged?.Invoke();
-            return revoked ? Revoked : OfflineTooLong;
+            return revoked ? Revoked : await _local.OfflineLockedMessageAsync(ct); //JJQR - AI (Nov 22, 2026) - step 2.6 //JJQR - END
         }
         if (now - _profileCheckedAt < ProfileRecheck) return null; // the shell checks often; the profile does not change often
         return await RefreshCurrentAsync(ct);

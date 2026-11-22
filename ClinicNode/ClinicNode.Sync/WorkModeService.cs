@@ -9,8 +9,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicNode.Sync;
 
-public sealed class WorkModeService(IDbContextFactory<ClinicAppDbContext> factory, IAuthService auth, ISyncBridge? sync = null) : IWorkModeService
+public sealed class WorkModeService : IWorkModeService
 {
+    private readonly IDbContextFactory<ClinicAppDbContext> factory;
+    private readonly Func<IAuthService> _auth; // looked up when needed: sign-in itself reads the work mode (step 2.6), so a direct dependency would be circular
+    private readonly ISyncBridge? sync;
+    private IAuthService auth => _auth();
+
+    public WorkModeService(IDbContextFactory<ClinicAppDbContext> factory, IAuthService auth, ISyncBridge? sync = null) : this(factory, () => auth, sync) { }
+
+    public WorkModeService(IDbContextFactory<ClinicAppDbContext> factory, Func<IAuthService> auth, ISyncBridge? sync = null)
+    {
+        this.factory = factory; _auth = auth; this.sync = sync;
+    }
+
     public const string StateKey = "work_mode";
     private readonly SemaphoreSlim _gate = new(1, 1);
     private volatile WorkModeInfo _info = new(WorkMode.Online, null, null);

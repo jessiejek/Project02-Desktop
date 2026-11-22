@@ -73,6 +73,19 @@ public sealed class AuthService : IAuthService
         return _clock.GetUtcNow() - identity.LastSuccessfulSyncAt.Value > _options.MaxOfflinePeriod;
     }
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.6 (D9): the lock message names the dates. Offline sign-in works for 7 days after the last successful sync; day 8 is locked until it syncs.
+    public async Task<string> OfflineLockedMessageAsync(CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var identity = await SyncOutbox.GetOrCreateIdentityAsync(db, ct);
+        const string Fallback = "This computer has been offline too long. Connect to the clinic server and sign in once so it can sync, then try again.";
+        if (identity.LastSuccessfulSyncAt is not { } last) return Fallback;
+        string Day(DateTimeOffset d) => d.ToOffset(ClinicApp.Domain.ClinicClock.Offset).ToString("MMM d");
+        var days = (int)_options.MaxOfflinePeriod.TotalDays;
+        return $"This computer last synced on {Day(last)}. It can be used offline for {days} days, so it had to sync by {Day(last + _options.MaxOfflinePeriod)}. Connect to the clinic server and sign in once so it can sync, then try again.";
+    }
+    //JJQR - END
+
     public async Task<AuthResult> LoginAsync(string email, string password, bool rememberEmail, CancellationToken ct = default)
     {
         email = email.Trim().ToLowerInvariant();
@@ -82,7 +95,7 @@ public sealed class AuthService : IAuthService
             if (await _sync.IsRevokedAsync(ct))
                 return new AuthResult(false, null, "This computer was disconnected from the cloud by an administrator. Contact the clinic administrator.", Locked: true);
             //JJQR - END
-            return new AuthResult(false, null, "This computer has been offline too long. Connect to the internet so it can sync, then try again.", Locked: true);
+            return new AuthResult(false, null, await OfflineLockedMessageAsync(ct), Locked: true); //JJQR - AI (Nov 22, 2026) - step 2.6 //JJQR - END
         }
 
         await using var db = await _factory.CreateDbContextAsync(ct);
@@ -203,7 +216,7 @@ public sealed class AuthService : IAuthService
             Current = null;
             if (await _sync.IsRevokedAsync(ct))
                 return "This computer was disconnected from the cloud by an administrator. Contact the clinic administrator.";
-            return "This computer has been offline too long. Connect to the internet so it can sync, then try again.";
+            return await OfflineLockedMessageAsync(ct); //JJQR - AI (Nov 22, 2026) - step 2.6 //JJQR - END
         }
         return await RefreshCurrentAsync(ct);
     }
