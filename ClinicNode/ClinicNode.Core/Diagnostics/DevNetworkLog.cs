@@ -72,6 +72,13 @@ public static class DevNetworkLog
     }
 }
 
+/// <summary>Lets several HttpClients share ONE connection pool. Disposing an HttpClient normally disposes its handler, which closed the shared pool for everybody ("Cannot access a disposed object: SocketsHttpHandler" at sign-in). This wrapper swallows the dispose; the shared pool lives as long as the app.</summary>
+public sealed class SharedHandlerLease : DelegatingHandler
+{
+    public SharedHandlerLease(HttpMessageHandler shared) : base(shared) { }
+    protected override void Dispose(bool disposing) { /* never dispose the shared handler */ }
+}
+
 /// <summary>Wraps the real handler and records each call. Health checks that succeed are not recorded (they run every few seconds and would bury everything else).</summary>
 public sealed class DevLogHandler : DelegatingHandler
 {
