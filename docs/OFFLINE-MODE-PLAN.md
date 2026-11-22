@@ -275,7 +275,7 @@ Goal: sync problems are visible to the admin on the web, and duplicates are merg
 | 0.1 | plan/step-0.1-baseline | (none yet: gh not logged in) | baseline file written; backend 4 failing, desktop 73 failing | |
 | 0.2 | be: plan/step-0.2-health-ready (d567a59); desktop: plan/step-0.2-health-ready | (none yet: gh not logged in) | backend 4 baseline failures only (+2 new passing); desktop Api tests 53 pass; desktop main suite same 73 baseline failures | |
 | 0.3 | be: plan/step-0.3-client-ids (24fb300); desktop: plan/step-0.3-client-ids | (none yet: gh not logged in) | backend 4 baseline failures only (+1 new passing); desktop Api tests 56 pass (3 new); desktop main suite: see below | |
-| 0.4 | | | | |
+| 0.4 | plan/step-0.4-registration-gate | (none yet: gh not logged in) | desktop Api tests 60 pass (4 new); main suite same 73 baseline failures; seen live: unregistered + API stopped, a save is refused with the message and the entries stay | owner to check the registered half at the gate |
 | 0.5 | | | | |
 | 0.6 gate | | | | |
 | 1.1 | | | | |
@@ -301,4 +301,5 @@ Change log:
 - 22 Nov 2026: first draft.
 - 22 Nov 2026: step 0.1 done; verification results V1-V10 recorded in section 11. Consequences: step 0.2 adds `/health/ready` (V2); step 0.3 also fixes patient-create idempotency on the backend (V3); step 2.4 must add a typed booklet receipt number (V5); Q1 default would change the V10 hard stop. No scope change.
 - 22 Nov 2026: step 0.2 done. Acceptance wording clarified (measured at the connection check, not the top-bar label). Found: the sync loop has its own probe (`SyncOptions.HealthPath`), changed too. Known behaviour: the first `/health/ready` right after the database restarts can report not ready once (the backend's pooled connection is dead), then recovers.
+- 22 Nov 2026: step 0.4 done. Gate applies only when a cloud address is configured (a stand-alone demo computer has nothing to register with). The refusal raises one dialog ("Can't save here yet") from the shell, whichever screen saved. The registered half of the acceptance (register, then the save works locally) is for the owner's gate: registering needs an admin token typed by the owner.
 - 22 Nov 2026: Phase 4 clarified (where review items live; case A server-created, case B desktop-uploaded; merge only on the server). No scope change.

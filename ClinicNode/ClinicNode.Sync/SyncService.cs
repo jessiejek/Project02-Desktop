@@ -119,6 +119,21 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
 
     public async Task RefreshAsync(CancellationToken ct = default) => await RefreshStatusAsync(ct);
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.4: "registered" = a cloud address is set AND this computer holds a node secret AND it is not revoked AND the app is not too old.
+    // No cloud address at all (a stand-alone demo computer) = nothing to register with, so saving locally stays allowed.
+    public async Task<string?> LocalSaveBlockedReasonAsync(CancellationToken ct = default)
+    {
+        if (!_cloud.IsConfigured) return null;
+        if (await IsRevokedAsync(ct))
+            return "This computer was disconnected from the clinic server by an admin, so it can't save changes. Ask an admin to register it again.";
+        if (_current.Phase == SyncPhase.NeedsUpdate)
+            return "This app is too old to sync with the clinic server. Update it before saving changes on this computer.";
+        if (_cloud is ClinicNode.Sync.Wire.ISyncNodeRegistration reg && !await reg.IsRegisteredAsync(ct))
+            return "Register this computer for sync first (Admin › Sync computers). Until then, changes made here can't be sent to the clinic server.";
+        return null;
+    }
+    //JJQR - END
+
     //JJQR - AI (Nov 21, 2026) - Core's ISyncBridge: login locks at once for a revoked node (flag survives restarts)
     public async Task<bool> IsRevokedAsync(CancellationToken ct = default)
     {

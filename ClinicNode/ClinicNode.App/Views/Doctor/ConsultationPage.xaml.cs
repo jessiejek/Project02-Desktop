@@ -1879,8 +1879,8 @@ public partial class ConsultationPage : ContentPage
             _savedLocalOnly = ClinicNode.Api.OnlineFirst.OnlineRouteStatus.LastWriteWasLocalOnly;
             if (_savedLocalOnly && !wasLocalOnly)
             {
-                var notRegistered = _serviceProvider.GetService<ClinicNode.Sync.ISyncStatus>()?.Phase is ClinicNode.Sync.SyncPhase.NotRegistered;
-                ShowToast("Saved on this computer only — the clinic server could not be reached." + (notRegistered ? " This computer is not registered for sync, so these changes will NOT reach the clinic server or other computers." : " They will be sent when the connection is back."), null, ++_noticeSeq);
+                //JJQR - AI (Nov 22, 2026) - step 0.4: a computer that is not registered can no longer reach this line (the save is refused with a clear message), so the notice only needs the connection wording
+                ShowToast("Saved on this computer only — the clinic server could not be reached. The changes will be sent when the connection is back.", null, ++_noticeSeq);
             }
             //JJQR - END
             if (_mode == "amend") _amendSavedAt = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ManilaZone()).ToString("h:mm tt", CultureInfo.GetCultureInfo("en-PH")) + " PHT";

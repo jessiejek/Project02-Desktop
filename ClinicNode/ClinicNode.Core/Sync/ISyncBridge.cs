@@ -10,7 +10,16 @@ public interface ISyncBridge
 
     /// <summary>True when the cloud revoked this node (403 node_revoked): login must lock at once.</summary>
     Task<bool> IsRevokedAsync(CancellationToken ct = default);
+
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.4: why a change may NOT be saved on this computer (null = it may). A computer that is not registered with the clinic server
+    // (or was revoked / needs an update) could never send what it saves, so the save is refused instead of quietly piling up. Default = allowed (fakes, stand-alone demo).
+    Task<string?> LocalSaveBlockedReasonAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
+    //JJQR - END
 }
+
+//JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.4: thrown instead of saving locally on a computer that cannot sync
+public sealed class LocalWriteBlockedException(string message) : InvalidOperationException(message);
+//JJQR - END
 
 public sealed class NoOpSyncBridge : ISyncBridge
 {

@@ -43,6 +43,10 @@ public sealed class CountingSync : ISyncBridge
     public int Calls;
     public void RequestSync() => Interlocked.Increment(ref Calls);
     public Task<bool> IsRevokedAsync(CancellationToken ct = default) => Task.FromResult(false);
+    //JJQR - AI (Nov 22, 2026) - step 0.4: a test sets this to pretend the computer is not registered
+    public string? BlockedReason { get; set; }
+    public Task<string?> LocalSaveBlockedReasonAsync(CancellationToken ct = default) => Task.FromResult(BlockedReason);
+    //JJQR - END
 }
 
 public sealed class ApiRig : IAsyncDisposable

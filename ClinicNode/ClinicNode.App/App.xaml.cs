@@ -69,6 +69,19 @@ public partial class App : Application
                 await shell.DisplayAlert("Database", "Could not open the local clinic database: " + ex.Message, "OK");
             }
         };
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.4: a save that was refused because this computer cannot sync (not registered / revoked / app too old) says why, once, whichever screen it came from
+        var lastBlockedAt = DateTimeOffset.MinValue;
+        ClinicNode.Api.OnlineFirst.OnlineRouteStatus.LocalWriteBlocked += reason =>
+        {
+            if (DateTimeOffset.UtcNow - lastBlockedAt < TimeSpan.FromSeconds(10)) return;
+            lastBlockedAt = DateTimeOffset.UtcNow;
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                try { await shell.DisplayAlertAsync("Can't save here yet", reason, "OK"); }
+                catch { /* the window may be closing */ }
+            });
+        };
+        //JJQR - END
         window.Destroying += (_, _) =>
         {
             try
