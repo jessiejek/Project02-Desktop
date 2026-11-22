@@ -405,19 +405,12 @@ public partial class ConsultationPage : ContentPage
     {
         if (_workspace is null) return;
         StepBar.Children.Clear();
-        var order = ConsultRules.VisibleOrder(_showMore, _section);
+        //JJQR - AI (Nov 22, 2026) - owner request: every step is always shown (no "More steps" / "Show fewer steps" toggle)
+        var order = ConsultRules.VisibleOrder(true, _section);
         var shown = order.Where(i => i != ConsultSteps.FeeSectionIndex).ToList();
         var n = 0;
         foreach (var i in shown) StepBar.Children.Add(StepPill(i, ++n));
-        var moreOn = _showMore || _section == ConsultSteps.VaccinationsSectionIndex;
-        var more = StepRow("", moreOn ? "Show fewer steps" : "More steps", false, () =>
-        {
-            _showMore = !(_showMore || _section == ConsultSteps.VaccinationsSectionIndex);
-            if (!_showMore && _section == ConsultSteps.VaccinationsSectionIndex) { _section = ConsultSteps.FollowUpSectionIndex; RenderSection(); }
-            RebuildSteps();
-            UpdateFooter();
-        }, muted: true);
-        StepBar.Children.Add(more);
+        //JJQR - END
         if (order.Contains(ConsultSteps.FeeSectionIndex)) StepBar.Children.Add(StepPill(ConsultSteps.FeeSectionIndex, ++n));
     }
 
