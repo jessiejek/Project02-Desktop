@@ -49,7 +49,9 @@ public sealed class PrintingOptions
     public bool KeepPdfCopies { get; set; }
 
     //JJQR - AI (Nov 21, 2026) - default: "Print" saves the document as a PDF and OPENS it in the computer's PDF viewer / browser, and you print from there (Cmd+P). Set false in printing.json to send straight to the macOS print system.
-    public bool OpenAsPdf { get; set; } = true;
+    //JJQR - AI (Nov 22, 2026) - owner: native printing. DEFAULT is now the macOS print dialog INSIDE the app (no Safari). If it cannot be shown, the app falls back to the browser page by itself. Set true in printing.json to go back to the browser.
+    public bool OpenAsPdf { get; set; } = false;
+    //JJQR - END
     //JJQR - AI (Nov 21, 2026) - with OpenAsPdf on: true (default) = open the document in the browser and pop the Print dialog automatically; false = just open the PDF file.
     public bool AutoPrintInBrowser { get; set; } = true;
     //JJQR - END

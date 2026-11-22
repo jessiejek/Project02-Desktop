@@ -36,8 +36,17 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
                 return;
             }
             //JJQR - END
-            await Printing.MacPrintRenderer.PrintPdfAsync(pdf, document.Title, grayscale: PrintPaper.KindOf(document.Page) == PaperKind.Roll,
-                showDialog, printerName, resolved.PaperPoints);
+            //JJQR - AI (Nov 22, 2026) - owner: native printing (the macOS print dialog opens inside the app). If macOS cannot show it, fall back to the browser page so a print is never lost.
+            try
+            {
+                await Printing.MacPrintRenderer.PrintPdfAsync(pdf, document.Title, grayscale: PrintPaper.KindOf(document.Page) == PaperKind.Roll,
+                    showDialog, printerName, resolved.PaperPoints);
+            }
+            catch (Exception)
+            {
+                OpenHtmlAndAutoPrint(document);
+            }
+            //JJQR - END
         });
 #elif WINDOWS
         await MainThread.InvokeOnMainThreadAsync(async () =>
