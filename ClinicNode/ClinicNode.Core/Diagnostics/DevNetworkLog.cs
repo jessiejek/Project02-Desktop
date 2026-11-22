@@ -75,7 +75,7 @@ public sealed class DevLogHandler : DelegatingHandler
         var url = uri is null ? "" : uri.PathAndQuery.Length > 160 ? uri.PathAndQuery[..160] + "..." : uri.PathAndQuery;
         var host = uri?.Host ?? "";
         var isHealth = url.StartsWith("/health", StringComparison.OrdinalIgnoreCase);
-        var counted = _area == "api" && !isHealth;
+        var counted = _area == "api" && !isHealth && !url.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase);
         if (counted) ApiActivity.Begin();
         try
         {

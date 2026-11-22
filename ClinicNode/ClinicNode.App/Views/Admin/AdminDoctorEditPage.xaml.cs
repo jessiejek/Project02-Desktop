@@ -10,7 +10,7 @@ public partial class AdminDoctorEditPage : ContentPage
     {
         InitializeComponent();
         BindingContext = _vm = vm;
-        Content = AdminDoctorFormView.Build(vm);
+        Content = ClinicNode.App.Controls.Skeleton.Overlay(AdminDoctorFormView.Build(vm), nameof(AdminDoctorEditViewModel.IsFirstLoad)); //JJQR - AI (Nov 22, 2026) - skeleton while the doctor loads //JJQR - END
     }
 
     protected override void OnAppearing()

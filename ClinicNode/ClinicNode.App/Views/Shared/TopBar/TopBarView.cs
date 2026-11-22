@@ -82,14 +82,24 @@ public sealed class TopBarView : Grid
         Children.Add(activity);
         void SyncActivity()
         {
-            var busy = ApiActivity.InFlight > 0;
-            MainThread.BeginInvokeOnMainThread(() =>
+            //JJQR - AI (Nov 22, 2026) - owner: the line was annoying on quick background checks. Show it only when a call has been waiting for more than 0.7 s; hide it as soon as nothing is waiting.
+            if (ApiActivity.InFlight > 0)
             {
-                if (busy == activity.IsVisible) return;
-                activity.IsVisible = busy;
-                if (busy) new Animation(v => activity.Progress = v, 0, 1).Commit(activity, "api-activity", 16, 1100, Easing.CubicInOut, repeat: () => true);
-                else { activity.AbortAnimation("api-activity"); activity.Progress = 0; }
-            });
+                if (activity.IsVisible) return;
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(700);
+                    if (ApiActivity.InFlight == 0) return;
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        if (activity.IsVisible || ApiActivity.InFlight == 0) return;
+                        activity.IsVisible = true;
+                        new Animation(v => activity.Progress = v, 0, 1).Commit(activity, "api-activity", 16, 1100, Easing.CubicInOut, repeat: () => true);
+                    });
+                });
+            }
+            else MainThread.BeginInvokeOnMainThread(() => { activity.AbortAnimation("api-activity"); activity.IsVisible = false; activity.Progress = 0; });
+            //JJQR - END
         }
         ApiActivity.Changed += SyncActivity;
         Unloaded += (_, _) => ApiActivity.Changed -= SyncActivity;

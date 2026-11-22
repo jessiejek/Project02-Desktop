@@ -22,6 +22,15 @@ public abstract class AdminViewModelBase : INotifyPropertyChanged
     }
     public bool IsNotBusy => !IsBusy;
 
+    //JJQR - AI (Nov 22, 2026) - owner: forms showed empty boxes for a few seconds while data loaded. True until the first load/save call finishes; pages overlay a skeleton while it is true.
+    bool _isFirstLoad = true;
+    public bool IsFirstLoad
+    {
+        get => _isFirstLoad;
+        private set { if (_isFirstLoad == value) return; _isFirstLoad = value; Raise(); }
+    }
+    //JJQR - END
+
     string? _error;
     public string? Error
     {
@@ -45,7 +54,7 @@ public abstract class AdminViewModelBase : INotifyPropertyChanged
         Error = null;
         try { await work(); }
         catch (Exception ex) { Error = ex.Message; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsFirstLoad = false; }
     }
 
     public static string Peso(decimal value) =>

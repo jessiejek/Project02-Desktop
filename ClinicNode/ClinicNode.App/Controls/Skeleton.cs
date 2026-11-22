@@ -18,6 +18,16 @@ public sealed class SkeletonBar : BoxView
 
 public static class Skeleton
 {
+    /// <summary>Puts a skeleton panel over <paramref name="content"/> while the bound bool (e.g. IsFirstLoad) is true, so a form never shows empty boxes while it loads.</summary>
+    public static View Overlay(View content, string isLoadingPath, int cards = 3)
+    {
+        var host = new VerticalStackLayout { Spacing = 24, Padding = new Thickness(24, 24), MaximumWidthRequest = 720, HorizontalOptions = LayoutOptions.Center };
+        for (var i = 0; i < cards; i++) host.Children.Add(Card(3));
+        var overlay = new Grid { BackgroundColor = ClinicTheme.Color("Background"), Children = { host } };
+        overlay.SetBinding(VisualElement.IsVisibleProperty, isLoadingPath);
+        return new Grid { Children = { content, overlay } };
+    }
+
     /// <summary>n list rows: a wide bar and a shorter one under it, like a name and a detail line.</summary>
     public static View Rows(int n = 5) 
     {
