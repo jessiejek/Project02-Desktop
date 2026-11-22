@@ -4,6 +4,7 @@
 using ClinicNode.Api.Http;
 using ClinicNode.App.Controls;
 using ClinicNode.App.Views.Staff;
+using ClinicNode.Core.Diagnostics;
 using ClinicNode.Core.Sync;
 using ClinicNode.Sync;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,6 +90,9 @@ public sealed class ConnectionPanelPage : ContentPage
         _modeBtn = StaffUi.Btn("", async () => await SwitchModeAsync(), "GhostButton");
         _syncBtn = StaffUi.Btn("Sync now", async () => await SyncNowAsync(), "PrimaryButton");
         var buttons = new HorizontalStackLayout { Spacing = 10, Children = { _modeBtn, _syncBtn } };
+        //JJQR - AI (Nov 22, 2026) - owner request: developer log button, only when the log is on (Debug builds)
+        if (DevNetworkLog.Enabled) buttons.Children.Add(StaffUi.Btn("Developer log", async () => await Navigation.PushModalAsync(new DevLogPage()), "GhostButton"));
+        //JJQR - END
         var body = new VerticalStackLayout
         {
             Spacing = 12,
