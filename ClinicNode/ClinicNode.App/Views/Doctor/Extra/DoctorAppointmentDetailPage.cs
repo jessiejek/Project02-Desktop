@@ -127,6 +127,18 @@ public sealed class DoctorAppointmentDetailPage : StaffLivePage
                 pair.Add(StaffUi.Btn("View Consultation", () => DoctorExtraUi.OpenConsultAsync(d.BookingId, "view"), "SecondaryButton"), 0);
                 pair.Add(StaffUi.Btn("Edit / Amend", () => DoctorExtraUi.OpenConsultAsync(d.BookingId, "amend")), 1);
                 actions.Children.Add(pair);
+                //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.4 (D6, Q3): the doctor marks the payment received, typing the receipt number from the booklet (Offline, and Online too)
+                if (d.PaymentLabel == "Unpaid" && d.AmountDue > 0)
+                {
+                    var markPaid = StaffUi.Btn("Mark payment received", async () =>
+                    {
+                        var paid = await RecordPaymentPage.ShowAsync(this, Svc<ClinicNode.Core.Staff.IStaffPaymentsService>(), d.BookingId, d.PatientName, "", d.AmountDue, receiptHint: false, bookletNumber: true);
+                        if (paid is not null) await LoadAsync();
+                    });
+                    markPaid.HorizontalOptions = LayoutOptions.Fill;
+                    actions.Children.Add(markPaid);
+                }
+                //JJQR - END
                 if (PrintButtons(d.BookingId, printable[d.BookingId], compact: false) is { Count: > 0 } pr)
                 {
                     actions.Children.Add(Divider());

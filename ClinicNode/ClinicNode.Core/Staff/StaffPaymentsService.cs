@@ -29,7 +29,10 @@ public sealed record CollectRow(
 
 public sealed record CollectBoard(int WaitingToPay, decimal TotalDue, int WaivedToConfirm, IReadOnlyList<CollectRow> Rows);
 
-public sealed record RecordPaymentInput(Guid BookingId, PaymentMethod Method, string? AmountReceivedText, string? ReferenceNumber, string? Notes);
+public sealed record RecordPaymentInput(Guid BookingId, PaymentMethod Method, string? AmountReceivedText, string? ReferenceNumber, string? Notes,
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.4 (D6): the booklet receipt number TYPED by the doctor. Null = the desk's automatic numbering (unchanged).
+    string? OrNumber = null);
+//JJQR - END
 
 public sealed record ReceiptView(
     Guid BookingId, string PatientName, string DoctorName, DateOnly VisitDate, decimal Amount,
@@ -105,6 +108,19 @@ public sealed class StaffPaymentsService : IStaffPaymentsService
         // Allocate the OR number in a serializable transaction first, then pass it into ConfirmAsync
         // (which saves on its own context). Reuses a number already reserved on this payment.
         string orNumber;
+        //JJQR - AI (Nov 22, 2026) - step 2.4: a number the doctor typed from the booklet is used as it is (no automatic numbering), after one check that it is not already on another payment on this computer
+        if (input.OrNumber is not null)
+        {
+            var typed = input.OrNumber.Trim();
+            if (typed.Length == 0) return StaffResult.Fail("Type the receipt number from your booklet.");
+            if (typed.Length > 100) return StaffResult.Fail("The receipt number must be 100 characters or fewer.");
+            var lower = typed.ToLower();
+            if (await db.Payments.AsNoTracking().AnyAsync(p => p.PaymentId != booking.Payment.PaymentId && p.OrNumber != null && p.OrNumber.ToLower() == lower, ct))
+                return StaffResult.Fail($"Receipt number {typed} is already used on another payment on this computer. Check the booklet and type a different number.");
+            orNumber = typed;
+        }
+        else
+        //JJQR - END
         await using (var write = await _factory.CreateDbContextAsync(ct))
         {
             var payment = await write.Payments.SingleOrDefaultAsync(p => p.PaymentId == booking.Payment.PaymentId, ct);

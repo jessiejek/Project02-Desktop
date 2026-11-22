@@ -84,8 +84,13 @@ public sealed class ApiStaffPaymentsService(IApiClient api, IDbContextFactory<Cl
         }
     }
 
-    public Task<StaffResult> RecordAsync(RecordPaymentInput input, CancellationToken ct = default) =>
-        MoneyAsync(() => RecordCoreAsync(input, null, ct));
+    public Task<StaffResult> RecordAsync(RecordPaymentInput input, CancellationToken ct = default)
+    {
+        //JJQR - AI (Nov 22, 2026) - step 2.4: a receipt number typed from the booklet goes to the server as it is
+        if (input.OrNumber is not null) return RecordWithOrAsync(input, input.OrNumber, ct);
+        //JJQR - END
+        return MoneyAsync(() => RecordCoreAsync(input, null, ct));
+    }
 
     /// <summary>Retry after 409 or_number_duplicate with the OR the desk typed (trimmed, required, max 100).</summary>
     public Task<StaffResult> RecordWithOrAsync(RecordPaymentInput input, string? orNumber, CancellationToken ct = default)

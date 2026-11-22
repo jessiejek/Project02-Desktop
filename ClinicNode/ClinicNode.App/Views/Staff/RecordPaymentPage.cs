@@ -12,7 +12,7 @@ public sealed class RecordPaymentPage : ContentPage
 
     private readonly TaskCompletionSource<decimal?> _done = new();
 
-    RecordPaymentPage(IStaffPaymentsService svc, Guid bookingId, string patientName, string patientCode, decimal amountDue, bool receiptHint)
+    RecordPaymentPage(IStaffPaymentsService svc, Guid bookingId, string patientName, string patientCode, decimal amountDue, bool receiptHint, bool bookletNumber = false)
     {
         Title = "Record payment";
         BackgroundColor = ClinicTheme.Color("Background");
@@ -27,6 +27,13 @@ public sealed class RecordPaymentPage : ContentPage
         var orEntry = new Entry { MaxLength = ClinicNode.Api.Services.ApiStaffPaymentsService.OrNumberMaxLength, IsSpellCheckEnabled = false, IsTextPredictionEnabled = false };
         var orField = StaffUi.Field("OR number", orEntry, "This OR number is already used on another payment. Type the OR number printed on this receipt.");
         orField.IsVisible = false;
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.4 (D6): the doctor types the number printed in the receipt booklet; the field is there from the start and required
+        if (bookletNumber)
+        {
+            orField = StaffUi.Field("Receipt number (from your booklet)", orEntry, "Type the number printed on the booklet receipt you hand to the patient.");
+            orEntry.Placeholder = "e.g. 000123";
+        }
+        //JJQR - END
         orEntry.TextChanged += (_, _) => StaffUi.Show(error, null);
         //JJQR - END
 
@@ -39,7 +46,14 @@ public sealed class RecordPaymentPage : ContentPage
             //JJQR - AI (21 Nov 2026) - typed-OR retry (online only) once the OR field is showing
             var input = new RecordPaymentInput(bookingId, Methods[Math.Max(0, method.SelectedIndex)].Method, amount.Text, reference.Text, notes.Text);
             StaffResult r;
-            if (orField.IsVisible)
+            if (bookletNumber)
+            {
+                var (booklet, bookletError) = ClinicNode.Api.Services.ApiStaffPaymentsService.CheckOrNumber(orEntry.Text);
+                if (booklet is null) { StaffUi.Show(error, "Type the receipt number from your booklet."); return; }
+                orEntry.Text = booklet;
+                r = await svc.RecordAsync(input with { OrNumber = booklet }); // this computer's own copy when Offline, the clinic server when Online; a number already used is refused either way
+            }
+            else if (orField.IsVisible)
             {
                 var (or, orError) = ClinicNode.Api.Services.ApiStaffPaymentsService.CheckOrNumber(orEntry.Text);
                 if (or is null) { StaffUi.Show(error, orError); return; }
@@ -49,7 +63,7 @@ public sealed class RecordPaymentPage : ContentPage
                 r = await ClinicNode.Api.Services.ApiStaffPaymentsService.Create(services).RecordWithOrAsync(input, or);
             }
             else r = await svc.RecordAsync(input);
-            if (!r.Succeeded && ClinicNode.Api.Services.PaymentOutcome.TryGetOrClash(r, out var clash))
+            if (!r.Succeeded && !bookletNumber && ClinicNode.Api.Services.PaymentOutcome.TryGetOrClash(r, out var clash))
             {
                 orEntry.Text = clash.OrNumber;
                 orField.IsVisible = true;
@@ -78,7 +92,7 @@ public sealed class RecordPaymentPage : ContentPage
                     StaffUi.Field("Amount received (₱)", amount, $"Collect exactly {StaffRules.Peso(amountDue)} — the amount the doctor set."),
                     StaffUi.Field("Reference number (optional)", reference, receiptHint ? "Shown on the printed receipt." : null),
                     StaffUi.Field("Notes (optional)", notes),
-                    orField, //JJQR - AI (21 Nov 2026) - shown only after 409 or_number_duplicate //JJQR - END
+                    orField, //JJQR - AI (21 Nov 2026) - shown only after 409 or_number_duplicate (always shown for the doctor's booklet number, step 2.4) //JJQR - END
                 }
             };
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, record } };
@@ -86,9 +100,9 @@ public sealed class RecordPaymentPage : ContentPage
     }
 
     /// <summary>Returns the amount recorded, or null when the desk backed out.</summary>
-    public static async Task<decimal?> ShowAsync(Page from, IStaffPaymentsService svc, Guid bookingId, string patientName, string patientCode, decimal amountDue, bool receiptHint = false)
+    public static async Task<decimal?> ShowAsync(Page from, IStaffPaymentsService svc, Guid bookingId, string patientName, string patientCode, decimal amountDue, bool receiptHint = false, bool bookletNumber = false)
     {
-        var p = new RecordPaymentPage(svc, bookingId, patientName, patientCode, amountDue, receiptHint);
+        var p = new RecordPaymentPage(svc, bookingId, patientName, patientCode, amountDue, receiptHint, bookletNumber);
         await from.Navigation.PushModalAsync(p);
         return await p._done.Task;
     }
