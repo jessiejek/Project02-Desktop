@@ -216,6 +216,14 @@ Goal: the owner chooses Offline for the day; the app shows the real connection q
 ### Step 1.6 Phase 1 gate
 Owner: switch modes, restart, stop and start the API, stop and start Docker, watch the monitor and suggestions; confirm nothing switches by itself. Record "Phase 1 OK" in section 12, including the owner's verdict on the thresholds (Q6).
 
+**Owner test script (22 Nov, on your Mac, signed in as the doctor; the app must be the build from `plan/step-1.5-top-bar-panel`):**
+1. **G1 mode and restart.** Tap the pill at the top (dot + "Online"), press "Switch to Offline mode". The pill must read "Offline mode". Quit the app, open it again: still "Offline mode". Switch back to Online.
+2. **G2 nothing happens by itself.** Stop the API (Ctrl+C on the backend window). In Online mode wait 2 minutes. A box "Connection is poor. Switch to Offline mode?" may appear: press **Not now**. The pill must still say "Online". Start the API again.
+3. **G3 refused save.** With the API stopped and Online mode, press a save (for example Running Late on Today). You must see "Not saved ... Nothing was saved". Press Cancel and check nothing changed.
+4. **G4 database down.** Stop Docker (`docker stop clinic-mssql`). Within about 20 seconds the dot turns red and the panel says "Down" with "Database not ready on the clinic server". Start Docker again; note how long it takes to go back to Good (see the Q6 note in the log below).
+5. **G5 Offline stays quiet.** In Offline mode with the API running, keep working for a few minutes: nothing is sent by itself; "Sync now" in the panel sends it.
+Tell me the verdict on the thresholds (Q6): too jumpy, too slow, or fine.
+
 ## 8. Phases 2 to 5
 
 ### Phase 2: The doctor's offline day
