@@ -60,6 +60,10 @@ public sealed class HttpCloudSyncClient : ICloudSyncClient, ISyncNodeRegistratio
         {
             Timeout = Timeout.InfiniteTimeSpan, // per-request timeouts below
         };
+        //JJQR - AI (Nov 22, 2026) - owner: the web is fast, the desktop is slow. A browser sends many requests over ONE HTTP/2 connection; this client used HTTP/1.1, so every parallel request opened its own connection (about 0.6 s of setup each). Ask for HTTP/2 (falls back to 1.1 if the server cannot).
+        _http.DefaultRequestVersion = System.Net.HttpVersion.Version20;
+        _http.DefaultVersionPolicy = System.Net.Http.HttpVersionPolicy.RequestVersionOrLower;
+        //JJQR - END
     }
 
     /// <summary>DI constructor: local node id from node_identity.</summary>

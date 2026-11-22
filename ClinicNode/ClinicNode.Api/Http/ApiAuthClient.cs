@@ -33,6 +33,10 @@ public sealed class ApiAuthClient : IApiAuthClient, IDisposable
         _tokens = tokens;
         _connectivity = connectivity;
         _http = new HttpClient(options.HttpHandlerFactory?.Invoke() ?? new SocketsHttpHandler { ConnectTimeout = options.RequestTimeout }, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
+        //JJQR - AI (Nov 22, 2026) - owner: the web is fast, the desktop is slow. A browser sends many requests over ONE HTTP/2 connection; this client used HTTP/1.1, so every parallel request opened its own connection (about 0.6 s of setup each). Ask for HTTP/2 (falls back to 1.1 if the server cannot).
+        _http.DefaultRequestVersion = System.Net.HttpVersion.Version20;
+        _http.DefaultVersionPolicy = System.Net.Http.HttpVersionPolicy.RequestVersionOrLower;
+        //JJQR - END
     }
 
     public async Task<ApiSession> LoginAsync(string email, string password, CancellationToken ct = default)

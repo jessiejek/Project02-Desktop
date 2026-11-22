@@ -18,6 +18,23 @@ public sealed class SkeletonBar : BoxView
 
 public static class Skeleton
 {
+    /// <summary>Covers the page with a skeleton and returns the action that removes it (also removed by itself after 15 s). For pages that load by their own code, not through a base class.</summary>
+    public static Action CoverPage(ContentPage page)
+    {
+        var inner = page.Content;
+        if (inner is null) return () => { };
+        var stack = new VerticalStackLayout { Spacing = 24, Padding = new Thickness(24), MaximumWidthRequest = 900, HorizontalOptions = LayoutOptions.Center };
+        stack.Children.Add(new SkeletonBar(24, 240));
+        stack.Children.Add(Card(3));
+        stack.Children.Add(Rows(5));
+        var overlay = new Grid { BackgroundColor = ClinicTheme.Color("Background"), Children = { stack } };
+        page.Content = null;
+        page.Content = new Grid { Children = { inner, overlay } };
+        void Hide() => overlay.IsVisible = false;
+        page.Dispatcher.StartTimer(TimeSpan.FromSeconds(15), () => { Hide(); return false; });
+        return Hide;
+    }
+
     /// <summary>Admin pages: wraps the page content ONCE with a skeleton that shows until the page's view-model finishes its first load (IsFirstLoad), or after 15 s at the latest.</summary>
     public static void WrapAdminPage(ContentPage page)
     {

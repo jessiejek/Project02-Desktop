@@ -98,6 +98,7 @@ public sealed class TodayPage : ContentPage
             e => e.DoctorId is null || DoctorId is not { } me || e.DoctorId == me);
         _hub.Attach();
         //JJQR - END
+        _hideSkeleton ??= ClinicNode.App.Controls.Skeleton.CoverPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
         _ = ReloadAsync();
     }
 
@@ -122,6 +123,9 @@ public sealed class TodayPage : ContentPage
             _body.Children.Add(ClinicTheme.Text("This login can sign in as Doctor but has no staff profile on the server, so the dashboard cannot load. Ask your clinic administrator to link your account to a doctor profile.", "MutedBody"));
             return;
         }
+        //JJQR - AI (Nov 22, 2026) - the two server reads do not depend on each other: ask for both at the same time (was one after the other)
+        var analyticsTask = LoadAnalyticsAsync(id);
+        //JJQR - END
         try { _data = await _dash.GetAsync(id); _loadError = false; }
         catch (Exception ex)
         {
@@ -130,9 +134,11 @@ public sealed class TodayPage : ContentPage
             _loadError = true;
             // JJQR - END
         }
-        await LoadAnalyticsAsync(id);
+        await analyticsTask;
         Render();
+        _hideSkeleton?.Invoke(); //JJQR - AI (Nov 22, 2026) - first load done //JJQR - END
     }
+    private Action? _hideSkeleton; //JJQR - AI (Nov 22, 2026) //JJQR - END
 
     async Task LoadAnalyticsAsync(Guid id)
     {

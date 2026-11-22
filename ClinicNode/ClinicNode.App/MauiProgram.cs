@@ -117,7 +117,7 @@ public static class MauiProgram
             services.TryAddSingleton<INodeCredentialStore, InMemoryNodeCredentialStore>();
         services.AddClinicNodeSync(host.UsePlatformStores ? o => o.HttpHandlerFactory = () => new DevLogHandler("sync", new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) }) : null); //JJQR - AI (Nov 22, 2026) - developer log //JJQR - END
         // JJQR - AI (Nov 21, 2026) - online-first: API client + connectivity monitor + Api-or-Local routers (docs/ONLINE-FIRST.md). The URL is the same one sync uses.
-        ClinicNode.Api.OnlineFirst.ApiServiceCollectionExtensions.AddClinicNodeOnlineFirst(services, sp => sp.GetRequiredService<ISyncEndpoint>().BaseUrl, host.UsePlatformStores ? o => o.HttpHandlerFactory = () => new DevLogHandler("api", new SocketsHttpHandler { ConnectTimeout = o.RequestTimeout }) : null); //JJQR - AI (Nov 22, 2026) - developer log //JJQR - END
+        ClinicNode.Api.OnlineFirst.ApiServiceCollectionExtensions.AddClinicNodeOnlineFirst(services, sp => sp.GetRequiredService<ISyncEndpoint>().BaseUrl, host.UsePlatformStores ? o => o.HttpHandlerFactory = () => new DevLogHandler("api", SharedApiHandler(o.RequestTimeout)) : null); //JJQR - AI (Nov 22, 2026) - developer log //JJQR - END
         // JJQR - END
         //JJQR - AI (21 Nov 2026) - wave-end wiring (allen0): online-first modules. Order matters: after AddClinicNodeOnlineFirst; nothing calls AddClinicNodeAdmin() after AddAdminModule.
         ClinicNode.App.Shared.SharedModule.AddClinicNodeShared(services, host.UsePlatformStores);
@@ -215,6 +215,19 @@ public static class MauiProgram
         services.AddSingleton<AppShell>();
         return services;
     }
+
+    //JJQR - AI (Nov 22, 2026) - ONE connection pool for the three API clients (health, calls, sign-in): one TLS setup, HTTP/2 multiplexing, kept warm. Before, each client opened and paid for its own connection.
+    static SocketsHttpHandler? _sharedApi;
+    static SocketsHttpHandler SharedApiHandler(TimeSpan connectTimeout) => _sharedApi ??= new SocketsHttpHandler
+    {
+        ConnectTimeout = connectTimeout,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+        EnableMultipleHttp2Connections = true,
+        KeepAlivePingPolicy = HttpKeepAlivePingPolicy.WithActiveRequests,
+        KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+    };
+    //JJQR - END
 
     static bool IsDemo()
     {

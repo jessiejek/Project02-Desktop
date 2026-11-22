@@ -57,6 +57,10 @@ public sealed class ApiConnectivity : IApiConnectivity, IApiHealthDetail, IApiPr
     {
         _options = options;
         _http = new HttpClient(options.HttpHandlerFactory?.Invoke() ?? new SocketsHttpHandler { ConnectTimeout = options.PingTimeout }, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
+        //JJQR - AI (Nov 22, 2026) - owner: the web is fast, the desktop is slow. A browser sends many requests over ONE HTTP/2 connection; this client used HTTP/1.1, so every parallel request opened its own connection (about 0.6 s of setup each). Ask for HTTP/2 (falls back to 1.1 if the server cannot).
+        _http.DefaultRequestVersion = System.Net.HttpVersion.Version20;
+        _http.DefaultVersionPolicy = System.Net.Http.HttpVersionPolicy.RequestVersionOrLower;
+        //JJQR - END
     }
 
     public bool IsOnline { get { lock (_gate) return _online == true; } }
