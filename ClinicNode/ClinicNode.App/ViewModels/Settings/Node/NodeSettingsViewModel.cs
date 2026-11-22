@@ -59,6 +59,7 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
     readonly string _version;
     readonly string _machine;
     readonly TimeProvider _clock;
+    readonly Func<string?>? _sessionToken; //JJQR - AI (Nov 22, 2026) //JJQR - END
     readonly TimeSpan _pollInterval;
     readonly Func<TimeSpan, CancellationToken, Task> _delay;
     CancellationTokenSource? _connectionWatch;
@@ -66,8 +67,10 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
     public NodeSettingsViewModel(ISyncEndpoint endpoint, ISyncNodeRegistration registration, ISyncService sync, PrintingOptions printing,
         NodeOptions node, DatabaseEncryptionResult encryption, INodeSettingsDialogs dialogs, NodeBackupCoordinator? backup = null,
         Action<Action>? ui = null, Action? quit = null, string appVersion = "", string machineName = "",
-        TimeProvider? clock = null, TimeSpan? connectionPollInterval = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
+        TimeProvider? clock = null, TimeSpan? connectionPollInterval = null, Func<TimeSpan, CancellationToken, Task>? delay = null,
+        Func<string?>? sessionToken = null) //JJQR - AI (Nov 22, 2026) - owner: use the online admin sign-in when no token is pasted //JJQR - END
     {
+        _sessionToken = sessionToken;
         _endpoint = endpoint;
         _registration = registration;
         _sync = sync;
@@ -307,8 +310,11 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
     {
         RegisterError = null;
         var token = AdminToken?.Trim() ?? "";
+        //JJQR - AI (Nov 22, 2026) - owner: nobody should have to find a token; when the box is empty, use the admin's online sign-in (the server still checks the role)
+        if (token.Length == 0) token = _sessionToken?.Invoke()?.Trim() ?? "";
+        //JJQR - END
         var name = NodeName?.Trim() ?? "";
-        if (token.Length == 0 || name.Length == 0) { RegisterError = "Admin access token and computer name are required."; return; }
+        if (token.Length == 0 || name.Length == 0) { RegisterError = "Sign in online as an admin (or paste an admin access token) and enter a computer name."; return; }
         if (!await RunAsync(nameof(IsRegisterBusy), v => IsRegisterBusy = v)) return;
         try
         {

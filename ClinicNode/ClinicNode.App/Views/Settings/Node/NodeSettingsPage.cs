@@ -15,10 +15,10 @@ public sealed class NodeSettingsPage : ContentPage, INodeSettingsDialogs
     readonly NodeSettingsViewModel _vm;
 
     public NodeSettingsPage(ISyncEndpoint endpoint, ISyncNodeRegistration registration, ISyncService sync, PrintingOptions printing,
-        NodeOptions node, DatabaseEncryptionResult encryption, NodeBackupCoordinator backup)
+        NodeOptions node, DatabaseEncryptionResult encryption, NodeBackupCoordinator backup, ClinicNode.Api.Http.IApiTokenStore? session = null)
     {
         _vm = new NodeSettingsViewModel(endpoint, registration, sync, printing, node, encryption, this, backup,
-            appVersion: AppInfo.Current.VersionString, machineName: ClinicNode.App.Services.ComputerName.Get());
+            appVersion: AppInfo.Current.VersionString, machineName: ClinicNode.App.Services.ComputerName.Get(), sessionToken: () => session?.AccessToken);
         BindingContext = _vm;
         Title = "This computer";
         BackgroundColor = ClinicTheme.Color("Background");
@@ -167,7 +167,7 @@ public sealed class NodeSettingsPage : ContentPage, INodeSettingsDialogs
         var status = Bound(nameof(NodeSettingsViewModel.RegistrationStatus), "MutedBody");
         var error = Bound(nameof(NodeSettingsViewModel.RegisterError), "ErrorText", nameof(NodeSettingsViewModel.HasRegisterError));
         return Card("Register this node",
-            "Paste a cloud admin access token to register this computer for sync. The node secret is stored in the system keychain.",
+            "Signed in online as an admin? Just press Register: your sign-in is used. Otherwise paste an admin access token. The node secret is stored in the system keychain.",
             status,
             ClinicTheme.Text("Admin access token", "FieldLabel"), BoundEntry(nameof(NodeSettingsViewModel.AdminToken), "Admin access token", password: true),
             ClinicTheme.Text("Computer name", "FieldLabel"), BoundEntry(nameof(NodeSettingsViewModel.NodeName), "Name for this computer"),
