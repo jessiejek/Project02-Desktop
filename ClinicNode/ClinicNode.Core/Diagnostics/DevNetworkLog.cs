@@ -10,6 +10,16 @@ namespace ClinicNode.Core.Diagnostics;
 
 public sealed record DevNetworkEntry(DateTimeOffset At, string Area, string Method, string Url, int Status, long Ms, string? Error);
 
+/// <summary>How many calls to the clinic server are waiting for an answer right now (background health checks and sync are not counted). The top bar shows a thin progress line while this is above 0.</summary>
+public static class ApiActivity
+{
+    private static int _inFlight;
+    public static int InFlight => Volatile.Read(ref _inFlight);
+    public static event Action? Changed;
+    internal static void Begin() { Interlocked.Increment(ref _inFlight); Changed?.Invoke(); }
+    internal static void End() { Interlocked.Decrement(ref _inFlight); Changed?.Invoke(); }
+}
+
 public static class DevNetworkLog
 {
     public const int Max = 400;
@@ -26,6 +36,7 @@ public static class DevNetworkLog
 
     public static void Add(DevNetworkEntry e)
     {
+        if (!Enabled) return;
         Queue.Enqueue(e);
         while (Queue.Count > Max && Queue.TryDequeue(out _)) { }
         Changed?.Invoke();
@@ -64,6 +75,8 @@ public sealed class DevLogHandler : DelegatingHandler
         var url = uri is null ? "" : uri.PathAndQuery.Length > 160 ? uri.PathAndQuery[..160] + "..." : uri.PathAndQuery;
         var host = uri?.Host ?? "";
         var isHealth = url.StartsWith("/health", StringComparison.OrdinalIgnoreCase);
+        var counted = _area == "api" && !isHealth;
+        if (counted) ApiActivity.Begin();
         try
         {
             var res = await base.SendAsync(request, ct).ConfigureAwait(false);
@@ -86,6 +99,7 @@ public sealed class DevLogHandler : DelegatingHandler
             DevNetworkLog.Add(new DevNetworkEntry(DateTimeOffset.UtcNow, _area, request.Method.Method, host + url, 0, sw.ElapsedMilliseconds, ex.GetType().Name + ": " + ex.Message));
             throw;
         }
+        finally { if (counted) ApiActivity.End(); }
     }
 }
 //JJQR - END

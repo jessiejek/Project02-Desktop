@@ -5,6 +5,7 @@
 //JJQR - AI (21 Nov 2026) - allen0 I-1: wiring note resolved; wired by allen0 21 Nov 2026 (MauiProgram.cs / AppShell.xaml.cs). //JJQR - END
 using ClinicApp.Domain.Enums;
 using ClinicNode.App.Controls;
+using ClinicNode.Core.Diagnostics;
 using ClinicNode.App.Views.Staff;
 using ClinicNode.Core.Auth;
 using ClinicNode.Core.Events;
@@ -75,6 +76,24 @@ public sealed class TopBarView : Grid
         search.Focused += async (_, _) => { search.Unfocus(); await OpenSearchAsync(); };
         PlaceIn(search, 0);
 
+        //JJQR - AI (Nov 22, 2026) - owner request: a thin moving line under the top bar whenever the app is waiting on the clinic server
+        var activity = new ProgressBar { HeightRequest = 3, VerticalOptions = LayoutOptions.End, HorizontalOptions = LayoutOptions.Fill, ProgressColor = ClinicTheme.Color("Primary"), BackgroundColor = Colors.Transparent, IsVisible = false, InputTransparent = true };
+        Grid.SetColumnSpan((BindableObject)activity, 7);
+        Children.Add(activity);
+        void SyncActivity()
+        {
+            var busy = ApiActivity.InFlight > 0;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (busy == activity.IsVisible) return;
+                activity.IsVisible = busy;
+                if (busy) new Animation(v => activity.Progress = v, 0, 1).Commit(activity, "api-activity", 16, 1100, Easing.CubicInOut, repeat: () => true);
+                else { activity.AbortAnimation("api-activity"); activity.Progress = 0; }
+            });
+        }
+        ApiActivity.Changed += SyncActivity;
+        Unloaded += (_, _) => ApiActivity.Changed -= SyncActivity;
+        //JJQR - END
         PlaceIn(_modePill, 1); //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
         PlaceIn(_badgeHost, 2);
 

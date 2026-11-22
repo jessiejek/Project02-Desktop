@@ -632,7 +632,7 @@ public sealed class TodayPage : ContentPage
             col.Children.Add(ClinicTheme.Text("Pick a start and end date to see totals for that range.", "MutedBody"));
         //JJQR - AI (21 Nov 2026)
         else if (_range == Range.Custom && _loadingCustom)
-            col.Children.Add(ClinicTheme.Text("Loading…", "MutedBody"));
+            col.Children.Add(ClinicNode.App.Controls.Skeleton.Card(4)); //JJQR - AI (Nov 22, 2026) - skeleton //JJQR - END
         //JJQR - END
         else if (_analytics is { } a)
         {

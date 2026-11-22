@@ -140,6 +140,10 @@ public sealed class DoctorPatientsPage : StaffLivePage
         var empty = _pending ? "Loading patients…"
             : !string.IsNullOrEmpty(_search.Text) ? "No patients match this search. Try another name or ID."
             : "Patients will appear here after they book with you.";
+        //JJQR - AI (Nov 22, 2026) - skeleton rows while the patient list loads
+        if (_pending) _list.Children.Add(ClinicNode.App.Controls.Skeleton.Rows(7));
+        else
+        //JJQR - END
         _list.Children.Add(ClinicUi.Table(columns, filtered.Skip((_page - 1) * size).Take(size).Cast<object>(), empty, o => _ = StaffUi.PushAsync<DoctorPatientChartPage>(this, ((DoctorPatientRow)o).PatientId)));
 
         // pagination footer: total label, ‹ 1 2 3 ›

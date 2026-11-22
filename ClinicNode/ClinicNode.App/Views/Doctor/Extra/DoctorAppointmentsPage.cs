@@ -147,7 +147,7 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
     private View Focus()
     {
         View content;
-        if (_vm.Loading) content = Muted("Loading today's queue…", "MutedBody");
+        if (_vm.Loading) content = ClinicNode.App.Controls.Skeleton.Card(3); //JJQR - AI (Nov 22, 2026) - skeleton //JJQR - END
         else if (_vm.Focus is { } f)
         {
             var (_, label) = DoctorExtraRules.ActionFor(f.Status);
@@ -232,7 +232,7 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
 
         // body: loading / unavailable / table / empty
         if (_vm.Loading)
-            col.Children.Add(Muted("Loading appointments…", "MutedBody"));
+            col.Children.Add(ClinicNode.App.Controls.Skeleton.Rows(6)); //JJQR - AI (Nov 22, 2026) - skeleton //JJQR - END
         else if (_vm.Error is not null && !_vm.Loaded)
             col.Children.Add(Muted("Appointments are unavailable. Use Try again above to reload them.", "MutedBody"));
         else if (shown.Count > 0)
