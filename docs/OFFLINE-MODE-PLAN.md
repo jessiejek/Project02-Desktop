@@ -153,7 +153,29 @@ Scope is only the flows the offline plan uses: walk-in check-in, patient quick-r
 - **Acceptance:** each state can be produced on the owner's Mac (stop API; revoke the node; force a failing item) and the badge shows the right word.
 
 ### Step 0.6 Phase 0 gate
-Owner tests, in order: (1) health check with Docker stopped and started; (2) unregistered computer blocked, registered computer allowed; (3) lost-reply test shows one booking; (4) badge shows Sync problem for a stuck item. All tests green except the baseline. Record "Phase 0 OK" in section 12.
+Owner tests, in order. Run the backend from the local branch `plan/phase-0-integration` (it contains steps 0.2 and 0.3) and the desktop from branch `plan/step-0.5-sync-problem`.
+
+**T1 health check**
+1. `curl -s -w "\n%{http_code}\n" http://localhost:5055/health/ready` shows `"db_ok":true` and 200.
+2. `docker stop clinic-mssql`, wait 3 s, run the same curl: `"db_ok":false` and **503 in about 2 seconds**.
+3. `docker start clinic-mssql`, wait about 15 s: 200 again. (The first answer right after the restart can still say not ready once.)
+
+**T2 registration gate**
+1. On this unregistered computer, stop the backend. In the desktop, as Doctor, open a visit, change a note, press Save & next. Expected: a box "Can't save here yet: Register this computer for sync first (Admin > Sync computers)…", and your typed text is still on the screen.
+2. Start the backend. Register this computer: Admin > Register this node (needs an admin access token; I can put one on your clipboard for you to paste, as the field cannot be typed into by me).
+3. Stop the backend again, repeat the save. Expected: it saves, with the notice "Saved on this computer only…", and the top bar reads "Offline, N changes waiting".
+
+**T3 lost reply**
+1. Quit the desktop. Start it with `CLINIC_NODE_TEST_DROP_RESPONSES=1`: `cd Project02-desktop/ClinicNode; open -n --env CLINIC_NODE_CLOUD_URL=http://localhost:5055 --env CLINIC_NODE_DEMO=0 --env CLINIC_NODE_TEST_DROP_RESPONSES=1 "ClinicNode.App/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/Clinic Node.app"`.
+2. As Doctor: New walk-in consult for a QA-Test patient and check in. Then press Sync now (top bar menu).
+3. In the web staff queue for today: **exactly one** booking for that patient (not two).
+4. Quit and restart the desktop normally afterwards (without the switch).
+
+**T4 "Sync problem" word**
+1. Quit the desktop. `sqlite3 ~/Library/Containers/ph.clinicnode.app/Data/Library/ClinicNode/clinic-node.db "UPDATE node_sync_outbox SET attempts=10 WHERE acked_at IS NULL AND rowid=(SELECT MIN(rowid) FROM node_sync_outbox WHERE acked_at IS NULL);"` (needs at least one waiting change; make one with T2 step 3 first).
+2. Start the desktop with the backend running. The top bar reads **Sync problem**. To undo: set `attempts=0` the same way.
+
+All tests green except the baseline. Record "Phase 0 OK" in section 12.
 
 ## 7. Phase 1: Offline mode, monitor, suggestions
 
