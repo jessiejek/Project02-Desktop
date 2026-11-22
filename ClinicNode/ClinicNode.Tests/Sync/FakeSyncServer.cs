@@ -11,6 +11,9 @@ namespace ClinicNode.Tests.Sync;
 public sealed class FakeSyncServer : HttpMessageHandler
 {
     public bool Offline { get; set; }
+    //JJQR - AI (Nov 22, 2026) - step 5.1: make the pull answer with an error (a server whose database dropped after the push went through)
+    public HttpStatusCode? PullStatus { get; set; }
+    //JJQR - END
     //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side): what the desktop uploaded to the review list; set ReviewUploadFails to simulate an old server / a failure
     public List<JsonObject> ReviewUploads { get; } = new();
     public bool ReviewUploadFails { get; set; }
@@ -115,6 +118,7 @@ public sealed class FakeSyncServer : HttpMessageHandler
 
         if (path == "/api/sync/pull")
         {
+            if (PullStatus is { } ps) return new HttpResponseMessage(ps);
             var q = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
             PullCursors.Add(q["since"]);
             if (PullPages.TryDequeue(out var page))
