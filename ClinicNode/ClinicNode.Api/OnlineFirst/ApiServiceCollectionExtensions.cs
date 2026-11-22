@@ -29,6 +29,11 @@ public static class ApiServiceCollectionExtensions
             if (o.AutoStart) c.Start(); // background health loop: no App.xaml.cs change needed
             return c;
         });
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.3: the connection monitor (observes only; a connectivity without probe events just gives it nothing to record)
+        services.TryAddSingleton<ConnectionMonitor>(sp => new ConnectionMonitor(
+            sp.GetRequiredService<IApiConnectivity>(), sp.GetRequiredService<IApiConnectivity>() as IApiProbeSource ?? new NoProbeSource()));
+        services.TryAddSingleton<IConnectionMonitor>(sp => sp.GetRequiredService<ConnectionMonitor>());
+        //JJQR - END
         services.TryAddSingleton<IApiAuthClient>(sp => new ApiAuthClient(sp.GetRequiredService<ApiOptions>(), sp.GetRequiredService<IApiTokenStore>(), sp.GetRequiredService<IApiConnectivity>()));
         services.TryAddSingleton<IApiClient>(sp => new ApiClient(sp.GetRequiredService<ApiOptions>(), sp.GetRequiredService<IApiTokenStore>(), sp.GetRequiredService<IApiAuthClient>(), sp.GetRequiredService<IApiConnectivity>()));
         return services;

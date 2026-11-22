@@ -26,7 +26,21 @@ public interface IApiHealthDetail
 }
 //JJQR - END
 
-public sealed class ApiConnectivity : IApiConnectivity, IApiHealthDetail, IDisposable
+//JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.3: every health check leaves one sample the connection monitor can keep
+public sealed record HealthSample(DateTimeOffset At, int Ms, int? HttpStatus, bool? DatabaseOk, string? ErrorKind)
+{
+    /// <summary>The server answered AND its database is ready.</summary>
+    public bool Ok => ErrorKind is null;
+}
+
+public interface IApiProbeSource
+{
+    /// <summary>Raised after every health check (any thread), whoever asked for it.</summary>
+    event Action<HealthSample>? ProbeCompleted;
+}
+//JJQR - END
+
+public sealed class ApiConnectivity : IApiConnectivity, IApiHealthDetail, IApiProbeSource, IDisposable
 {
     private readonly ApiOptions _options;
     private readonly HttpClient _http;
@@ -49,6 +63,7 @@ public sealed class ApiConnectivity : IApiConnectivity, IApiHealthDetail, IDispo
     public bool? DatabaseReady { get { lock (_gate) return _databaseReady; } }
     public int LastCheckMs { get { lock (_gate) return _lastCheckMs; } }
     public event Action<bool>? Changed;
+    public event Action<HealthSample>? ProbeCompleted; //JJQR - AI (Nov 22, 2026) - step 1.3 //JJQR - END
 
     public async Task<bool> EnsureCheckedAsync(CancellationToken ct = default)
     {
@@ -81,26 +96,33 @@ public sealed class ApiConnectivity : IApiConnectivity, IApiHealthDetail, IDispo
                 using var cts = new CancellationTokenSource(_options.PingTimeout);
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 bool? dbReady = null;
+                int? status = null; string? errorKind = null; //JJQR - AI (Nov 22, 2026) - step 1.3 //JJQR - END
                 try
                 {
                     //JJQR - AI (Nov 22, 2026) - step 0.2: "online" now means the API answers AND its database is ready (/health/ready: 503 = database not answering).
                     // An older server without that route (404) falls back to the plain /health, and then the database state is simply unknown.
                     using var res = await _http.GetAsync(baseUrl + "/health/ready", cts.Token);
+                    status = (int)res.StatusCode;
                     if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
                         using var legacy = await _http.GetAsync(baseUrl + "/health", cts.Token);
                         ok = legacy.IsSuccessStatusCode;
+                        status = (int)legacy.StatusCode;
+                        if (!ok) errorKind = "http_" + status;
                     }
                     else
                     {
                         ok = res.IsSuccessStatusCode;
                         dbReady = ok;
+                        if (!ok) errorKind = res.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable ? "database_not_ready" : "http_" + status;
                     }
                     //JJQR - END
                 }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException or IOException) { ok = false; }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException or IOException)
+                { ok = false; errorKind = ex is HttpRequestException ? "unreachable" : "timeout"; }
                 sw.Stop();
                 lock (_gate) { _databaseReady = dbReady; _lastCheckMs = (int)sw.ElapsedMilliseconds; }
+                try { ProbeCompleted?.Invoke(new HealthSample(DateTimeOffset.UtcNow, (int)sw.ElapsedMilliseconds, status, dbReady, ok ? null : errorKind ?? "unreachable")); } catch { /* a listener must never break the check */ }
             }
             Set(ok);
         }
