@@ -64,6 +64,13 @@ public sealed class ApiClient : IApiClient, IDisposable
             if (res.Status == HttpStatusCode.Unauthorized && _tokens.RefreshToken is not null && await _auth.TryRefreshAsync(ct))
                 res = await AttemptAsync(method, uri, json, ct, sentVersion); // one retry with the fresh token
             VisitVersions.Remember(visit?.BookingId, visit?.Session, method, (int)res.Status is >= 200 and < 300, (int)res.Status, res.Version, res.BookingHeader, res.ConsultationHeader);
+            //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3, DEBUG BUILDS ONLY: CLINIC_NODE_TEST_DROP_RESPONSES=1 throws away the answer of every successful POST, as if the reply was lost on the way back.
+            // The server HAS saved the record; the desktop believes the call failed and falls back to a local save. Used to prove no duplicate booking or patient appears.
+#if DEBUG
+            if (method == HttpMethod.Post && (int)res.Status is >= 200 and < 300 && Environment.GetEnvironmentVariable("CLINIC_NODE_TEST_DROP_RESPONSES") == "1")
+                throw new ApiOfflineException("TEST: the reply was dropped (CLINIC_NODE_TEST_DROP_RESPONSES=1).");
+#endif
+            //JJQR - END
             if ((int)res.Status is >= 200 and < 300)
             {
                 _connectivity?.ReportSuccess();

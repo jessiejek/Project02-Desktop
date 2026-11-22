@@ -17,7 +17,9 @@ public sealed record PatientPage(IReadOnlyList<StaffPatientRow> Items, int Total
 }
 
 /// <summary>Web <c>BLANK_QUICK_REGISTER</c> fields (Register a new patient dialog).</summary>
-public sealed record QuickRegisterForm(string FirstName, string? MiddleName, string LastName, DateOnly? DateOfBirth, SexType? Sex, string? ContactNumber, string? Address);
+public sealed record QuickRegisterForm(string FirstName, string? MiddleName, string LastName, DateOnly? DateOfBirth, SexType? Sex, string? ContactNumber, string? Address,
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: made by the screen once per registration attempt
+    Guid? PatientId = null);
 
 public sealed record PatientBookingRow(Guid BookingId, string DoctorName, DateOnly AppointmentDate, BookingStatus Status);
 public sealed record PatientRecordRow(Guid ConsultationId, DateOnly? AppointmentDate, string ChiefComplaint, IReadOnlyList<string> Diagnoses);
@@ -92,7 +94,7 @@ public sealed class StaffPatientsService : IStaffPatientsService
         {
             var created = await _patients.CreateAsync(new NewPatientRequest(
                 f.FirstName.Trim(), f.LastName.Trim(), f.DateOfBirth!.Value, f.Sex!.Value,
-                f.MiddleName, f.ContactNumber, f.Address), ct);
+                f.MiddleName, f.ContactNumber, f.Address, PatientId: f.PatientId), ct); //JJQR - AI (Nov 22, 2026) - step 0.3 //JJQR - END
             return (StaffResult.Ok(created.PatientId), ToRow(created));
         }
         catch (Exception)

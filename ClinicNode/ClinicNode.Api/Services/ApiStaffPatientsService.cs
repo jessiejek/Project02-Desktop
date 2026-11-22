@@ -55,6 +55,7 @@ public sealed partial class ApiStaffPatientsService(IApiClient api) : IStaffPati
         {
             created = await api.SendAsync<PatientDto>(HttpMethod.Post, "/api/patients", new
             {
+                patient_id = f.PatientId ?? Guid.Empty, //JJQR - AI (Nov 22, 2026) - step 0.3: the desktop's own id (Guid.Empty = the server makes one, as before) //JJQR - END
                 first_name = TitleCase(f.FirstName.Trim()),
                 middle_name = string.IsNullOrWhiteSpace(f.MiddleName) ? null : TitleCase(f.MiddleName.Trim()),
                 last_name = TitleCase(f.LastName.Trim()),

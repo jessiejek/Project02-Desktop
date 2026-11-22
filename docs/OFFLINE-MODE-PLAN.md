@@ -134,7 +134,7 @@ Scope is only the flows the offline plan uses: walk-in check-in, patient quick-r
 - Add `BookingId` and `PaymentId` to `WalkInRequest`; add `PatientId` to the quick-register form.
 - The screen creates the IDs once, before the call. `QueueService.CheckInWalkInAsync` and `PatientService` (local) use the given IDs instead of `Guid.NewGuid()`. The Api services send `booking_id`, `payment_id`, `patient_id` (the server already accepts them).
 - A repeat of the same ID must return the existing record, not create another (confirm on the server in V3).
-- **Acceptance (lost reply):** the API saves the record but the reply is dropped; the desktop retries locally; after sync the web shows exactly one booking and one payment for that patient.
+- **Acceptance (lost reply):** the API saves the record but the reply is dropped; the desktop retries locally; after sync the web shows exactly one booking and one payment for that patient. For the owner's test a **debug-build-only** switch exists: start the desktop with `CLINIC_NODE_TEST_DROP_RESPONSES=1` and every successful POST's reply is thrown away. It is compiled out of release builds.
 - **Tests:** a desktop test with a fake handler that saves and then times out; a backend test that a repeated `booking_id` / `patient_id` creates one row.
 
 ### Step 0.4 Registration gate
@@ -274,7 +274,7 @@ Goal: sync problems are visible to the admin on the web, and duplicates are merg
 |---|---|---|---|---|
 | 0.1 | plan/step-0.1-baseline | (none yet: gh not logged in) | baseline file written; backend 4 failing, desktop 73 failing | |
 | 0.2 | be: plan/step-0.2-health-ready (d567a59); desktop: plan/step-0.2-health-ready | (none yet: gh not logged in) | backend 4 baseline failures only (+2 new passing); desktop Api tests 53 pass; desktop main suite same 73 baseline failures | |
-| 0.3 | | | | |
+| 0.3 | be: plan/step-0.3-client-ids (24fb300); desktop: plan/step-0.3-client-ids | (none yet: gh not logged in) | backend 4 baseline failures only (+1 new passing); desktop Api tests 56 pass (3 new); desktop main suite: see below | |
 | 0.4 | | | | |
 | 0.5 | | | | |
 | 0.6 gate | | | | |

@@ -154,6 +154,12 @@ public sealed class WalkInWizardViewModel
         Changed?.Invoke();
     }
 
+    //JJQR - AI (Nov 22, 2026) - step 0.3
+    Guid _attemptPatientId;
+    Guid _attemptBookingId;
+    Guid _attemptPaymentId;
+    //JJQR - END
+
     /// <summary>"Check in and get queue number": issues the R-/S- ticket on this node. Does NOT open a consult.</summary>
     public async Task<bool> CheckInAsync()
     {
@@ -164,7 +170,10 @@ public sealed class WalkInWizardViewModel
         try
         {
             //JJQR - AI (21 Nov 2026) - online-first walk-in check-in
-            var request = new WalkInRequest(Patient.PatientId, null, VisitType, MedCertRequested, Discount);
+            //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: the booking and payment ids are made ONCE per check-in attempt and reused if the button is pressed again, so a lost reply / retry returns the same booking
+            if (_attemptPatientId != Patient.PatientId) { _attemptPatientId = Patient.PatientId; _attemptBookingId = Guid.NewGuid(); _attemptPaymentId = Guid.NewGuid(); }
+            var request = new WalkInRequest(Patient.PatientId, null, VisitType, MedCertRequested, Discount, null, _attemptBookingId, _attemptPaymentId);
+            //JJQR - END
             var r = _walkIn is not null ? await _walkIn.CheckInWalkInAsync(request) : await _queue.CheckInWalkInAsync(request);
             //JJQR - END
             if (!r.Succeeded || r.Ticket is null)
@@ -173,6 +182,7 @@ public sealed class WalkInWizardViewModel
                 return false;
             }
             Ticket = r.Ticket;
+            _attemptPatientId = Guid.Empty; //JJQR - AI (Nov 22, 2026) - step 0.3: the next walk-in gets new ids //JJQR - END
             Step = WalkInStep.Done;
             return true;
         }

@@ -23,6 +23,8 @@ public sealed class ApiStaffWalkInService(IApiClient api) : IStaffWalkInService
             t = await api.SendAsync<TicketDto>(HttpMethod.Post, "/api/queue", new
             {
                 patient_id = request.PatientId,
+                booking_id = request.BookingId, //JJQR - AI (Nov 22, 2026) - step 0.3: the desktop's ids; the server returns the same booking for a repeat (safe retry) //JJQR - END
+                payment_id = request.PaymentId,
                 visit_type = request.VisitType.ToString(),
                 med_cert_requested = request.MedCertRequested,
                 discount_category = string.IsNullOrWhiteSpace(request.DiscountCategory) ? null : request.DiscountCategory,

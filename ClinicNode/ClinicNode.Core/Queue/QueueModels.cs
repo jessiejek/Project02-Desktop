@@ -38,7 +38,10 @@ public sealed record WalkInRequest(
     VisitType VisitType = VisitType.New,
     bool MedCertRequested = false,
     string? DiscountCategory = null,
-    string? Notes = null);
+    string? Notes = null,
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: ids made by the DESKTOP before the call, so the API call and a local fallback of the SAME request use the same ids (a lost reply cannot create a second booking)
+    Guid? BookingId = null,
+    Guid? PaymentId = null);
 
 public sealed record WalkInTicket(
     Guid BookingId,

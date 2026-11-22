@@ -39,10 +39,13 @@ public sealed class QuickRegisterPage : ContentPage
         portal.CheckedChanged += (_, e) => portalNote.IsVisible = e.Value;
         //JJQR - END
 
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: ONE patient id for this registration dialog, so pressing Register again after a failure or a lost reply cannot create a second patient
+        var registrationId = Guid.NewGuid();
+        //JJQR - END
         QuickRegisterForm Form() => new(first.Text ?? "", middle.Text, last.Text ?? "",
             dob.Date is { } d ? DateOnly.FromDateTime(d) : null,
             sexIndex switch { 0 => SexType.Male, 1 => SexType.Female, _ => null },
-            contact.Text, address.Text);
+            contact.Text, address.Text, registrationId);
 
         Button? register = null;
         var cancel = StaffUi.Btn("Cancel", async () => { if (_registering) return; _done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");

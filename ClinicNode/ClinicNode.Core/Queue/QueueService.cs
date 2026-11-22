@@ -124,6 +124,24 @@ public sealed class QueueService : IQueueService
         var arrival = ClinicClock.TimeNow;
         var now = DateTimeOffset.UtcNow;
         var fee = ClinicFees.Compute(settings, request.VisitType, request.MedCertRequested, discount);
+        //JJQR - AI (Nov 22, 2026) - step 0.3: the caller's ids when given; the same booking id again for the same patient is a retry, so return that booking's ticket instead of a second booking
+        var bookingId = request.BookingId is { } rb && rb != Guid.Empty ? rb : Guid.NewGuid();
+        var paymentId = request.PaymentId is { } rp && rp != Guid.Empty ? rp : Guid.NewGuid();
+        if (request.BookingId is { } retryId && retryId != Guid.Empty)
+        {
+            var existing = await db.Bookings.AsNoTracking().Include(b => b.Payment).SingleOrDefaultAsync(b => b.BookingId == retryId, ct);
+            if (existing is not null)
+            {
+                if (existing.PatientId != patient.PatientId) return QueueActionResult.Fail("That booking id belongs to another patient.");
+                var qn = existing.QueueNumber ?? "";
+                return QueueActionResult.OkTicket(new WalkInTicket(
+                    existing.BookingId, existing.Payment?.PaymentId ?? paymentId, qn,
+                    QueueLane.IsPriority(qn) ? QueueLane.Priority : QueueLane.Regular, QueueLane.IsPriority(qn),
+                    $"{patient.FirstName} {patient.LastName}".Trim(), patient.PatientCode, doctor.StaffAccount?.FullName ?? "",
+                    settings.ClinicName, settings.Address, existing.VisitType, existing.TotalFee, existing.CreatedAt));
+            }
+        }
+        //JJQR - END
         //JJQR - AI (21 Nov 2026) - TASK C: numbers come only from this computer's reserved block; QueueSequencer only when no source is registered
         var queueNumber = _numbers is null
             ? await QueueSequencer.NextForPatientAsync(db, today, patient.PatientId, discount, ct)
@@ -132,8 +150,6 @@ public sealed class QueueService : IQueueService
         //JJQR - END
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var bookingId = Guid.NewGuid();
-        var paymentId = Guid.NewGuid();
         db.Bookings.Add(new Booking
         {
             BookingId = bookingId,

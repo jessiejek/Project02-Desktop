@@ -79,8 +79,11 @@ public sealed class ApiRig : IAsyncDisposable
         rig.DoctorId = (await db.Doctors.Include(d => d.StaffAccount).AsNoTracking().FirstAsync(d => d.StaffAccount!.Email == "doctor@clinic.test")).DoctorId;
         if (signedIn) rig.Tokens.Set("access-1", "refresh-1");
         // default server: healthy /health, everything else 404 until the test scripts it
-        rig.Http.Route = r => r.RequestUri!.AbsolutePath == "/health" && healthy ? FakeHandler.Status(HttpStatusCode.OK)
-            : r.RequestUri!.AbsolutePath == "/health" ? throw new HttpRequestException("connection refused") : FakeHandler.Status(HttpStatusCode.NotFound);
+        //JJQR - AI (Nov 22, 2026) - step 0.2: the monitor asks /health/ready; a healthy fake server answers both it and the plain /health
+        bool IsHealth(HttpRequestMessage r) => r.RequestUri!.AbsolutePath is "/health" or "/health/ready";
+        rig.Http.Route = r => IsHealth(r) && healthy ? FakeHandler.Status(HttpStatusCode.OK)
+            : IsHealth(r) ? throw new HttpRequestException("connection refused") : FakeHandler.Status(HttpStatusCode.NotFound);
+        //JJQR - END
         return rig;
     }
 

@@ -51,7 +51,8 @@ public sealed class VisitStarter : IVisitStarter
     public async Task<Guid> StartWalkInConsultAsync(Guid patientId, Guid doctorId, string? discountCategory, CancellationToken ct = default)
     {
         _ = _auth.Current; // must be signed in so CreatedByUserId and later consult gates have an actor
-        var result = await _queue.CheckInWalkInAsync(new WalkInRequest(patientId, doctorId, DiscountCategory: discountCategory), ct);
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: the ids are made here, before the call, so an API attempt and a local fallback of this same request use the same ids //JJQR - END
+        var result = await _queue.CheckInWalkInAsync(new WalkInRequest(patientId, doctorId, DiscountCategory: discountCategory, BookingId: Guid.NewGuid(), PaymentId: Guid.NewGuid()), ct);
         if (!result.Succeeded || result.BookingId is null)
             throw new InvalidOperationException(result.Error ?? "Could not start the walk-in visit.");
         return result.BookingId.Value;

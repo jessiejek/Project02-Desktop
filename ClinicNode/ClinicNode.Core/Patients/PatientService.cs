@@ -22,7 +22,9 @@ public sealed record NewPatientRequest(
     string? MiddleName = null,
     string? ContactNumber = null,
     string? Address = null,
-    string? DiscountCategory = null);
+    string? DiscountCategory = null,
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: id made by the desktop before the call (the same id again = a retry, never a second patient)
+    Guid? PatientId = null);
 
 public interface IPatientService
 {
@@ -103,11 +105,16 @@ public sealed class PatientService : IPatientService
     public async Task<Patient> CreateAsync(NewPatientRequest request, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
+        //JJQR - AI (Nov 22, 2026) - step 0.3: a patient with the given id already exists = this is a retry, return it
+        if (request.PatientId is { } givenId && givenId != Guid.Empty
+            && await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.PatientId == givenId, ct) is { } already)
+            return already;
+        //JJQR - END
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var now = DateTimeOffset.UtcNow;
         var patient = new Patient
         {
-            PatientId = Guid.NewGuid(),
+            PatientId = request.PatientId is { } pid && pid != Guid.Empty ? pid : Guid.NewGuid(), //JJQR - AI (Nov 22, 2026) - step 0.3 //JJQR - END
             PatientCode = await _codes.NextAsync(db, ct),
             FirstName = request.FirstName.Trim(),
             MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
