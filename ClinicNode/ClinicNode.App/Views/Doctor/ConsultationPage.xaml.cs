@@ -145,7 +145,11 @@ public partial class ConsultationPage : ContentPage
         base.OnDisappearing();
         _autosave?.Stop();
         //JJQR - AI (Nov 22, 2026) - leaving (Back / sidebar) with unsaved typing silently threw it away unless the 30 s autosave had fired: save the draft on the way out //JJQR - END
-        if (_mode == "complete" && !_busy && Dirty) _ = SaveAsync(goNext: false, silent: true);
+        var leaving = _mode == "complete" && !_busy && Dirty ? SaveAsync(goNext: false, silent: true) : Task.CompletedTask;
+        //JJQR - AI (Nov 22, 2026) - stale-form protection: the visit session ends once that last save is done (and only if the visit was not opened again meanwhile)
+        var visitId = D.BookingId; var visitGen = ClinicNode.Api.Http.VisitVersions.GenerationOf(visitId);
+        _ = leaving.ContinueWith(_ => ClinicNode.Api.Http.VisitVersions.End(visitId, visitGen), TaskScheduler.Default);
+        //JJQR - END
         //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
         GapDisappearing();
         //JJQR - END

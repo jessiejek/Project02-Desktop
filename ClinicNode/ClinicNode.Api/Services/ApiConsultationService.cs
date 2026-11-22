@@ -42,6 +42,7 @@ public sealed class ApiConsultationService(IApiClient api) : IConsultationServic
 
     public async Task<ConsultationWorkspace> LoadByBookingAsync(Guid bookingId, CancellationToken ct = default)
     {
+        VisitVersions.Begin(bookingId); //JJQR - AI (Nov 22, 2026) - opening a visit starts a fresh stale-form session; the reads below record the version this screen is based on //JJQR - END
         var booking = await api.GetAsync<Booking>($"/api/bookings/{bookingId:D}", null, ct)
                       ?? throw new InvalidOperationException("Booking not found.");
         var consult = await TryGetAsync<Consultation>($"/api/consultations/by-booking/{bookingId:D}", null, ct);

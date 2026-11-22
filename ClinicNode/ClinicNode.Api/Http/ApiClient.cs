@@ -53,23 +53,38 @@ public sealed class ApiClient : IApiClient, IDisposable
         var uri = Build(baseUrl, path, query);
         var json = body is null ? null : JsonSerializer.Serialize(body, ApiJson.Data);
 
-        var res = await AttemptAsync(method, uri, json, ct);
-        if (res.Status == HttpStatusCode.Unauthorized && _tokens.RefreshToken is not null && await _auth.TryRefreshAsync(ct))
-            res = await AttemptAsync(method, uri, json, ct); // one retry with the fresh token
-        if ((int)res.Status is >= 200 and < 300)
+        //JJQR - AI (Nov 22, 2026) - stale-form protection: saves of an open visit carry the version we last saw and run one at a time (see VisitVersions)
+        var visit = VisitVersions.For(path, query);
+        var isWrite = method == HttpMethod.Put || method == HttpMethod.Delete;
+        if (visit is not null && isWrite) await visit.Value.Session.Gate.WaitAsync(ct);
+        try
         {
-            _connectivity?.ReportSuccess();
-            return res.Text;
+            var sentVersion = isWrite ? visit?.Session.Version : null;
+            var res = await AttemptAsync(method, uri, json, ct, sentVersion);
+            if (res.Status == HttpStatusCode.Unauthorized && _tokens.RefreshToken is not null && await _auth.TryRefreshAsync(ct))
+                res = await AttemptAsync(method, uri, json, ct, sentVersion); // one retry with the fresh token
+            VisitVersions.Remember(visit?.BookingId, visit?.Session, method, (int)res.Status is >= 200 and < 300, (int)res.Status, res.Version, res.BookingHeader, res.ConsultationHeader);
+            if ((int)res.Status is >= 200 and < 300)
+            {
+                _connectivity?.ReportSuccess();
+                return res.Text;
+            }
+            throw Map(res.Status, res.Text);
         }
-        throw Map(res.Status, res.Text);
+        finally
+        {
+            if (visit is not null && isWrite) visit.Value.Session.Gate.Release();
+        }
+        //JJQR - END
     }
 
-    private sealed record Raw(HttpStatusCode Status, string Text);
+    private sealed record Raw(HttpStatusCode Status, string Text, string? Version = null, string? BookingHeader = null, string? ConsultationHeader = null);
 
-    private async Task<Raw> AttemptAsync(HttpMethod method, Uri uri, string? json, CancellationToken ct)
+    private async Task<Raw> AttemptAsync(HttpMethod method, Uri uri, string? json, CancellationToken ct, string? visitVersion = null)
     {
         using var req = new HttpRequestMessage(method, uri);
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (!string.IsNullOrEmpty(visitVersion)) req.Headers.TryAddWithoutValidation(VisitVersions.VersionHeader, visitVersion); //JJQR - AI (Nov 22, 2026) //JJQR - END
         if (_tokens.AccessToken is { Length: > 0 } t) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
         if (json is not null) req.Content = new StringContent(json, Encoding.UTF8, "application/json");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -78,7 +93,8 @@ public sealed class ApiClient : IApiClient, IDisposable
         {
             using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseContentRead, timeout.Token);
             var text = await res.Content.ReadAsStringAsync(timeout.Token);
-            return new Raw(res.StatusCode, text);
+            static string? H(HttpResponseMessage r, string n) => r.Headers.TryGetValues(n, out var v) ? v.FirstOrDefault() : null;
+            return new Raw(res.StatusCode, text, H(res, VisitVersions.VersionHeader), H(res, VisitVersions.BookingHeader), H(res, VisitVersions.ConsultationHeader));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
