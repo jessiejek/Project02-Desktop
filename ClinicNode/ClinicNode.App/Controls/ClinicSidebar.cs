@@ -91,7 +91,7 @@ public sealed class ClinicSidebar : Grid
             nav.Children.Add(block);
         }
 
-        var logout = BuildRow("Logout", "logout", isActive: false, action: async () => await _shell.SignOutAsync());
+        var logout = BuildRow("Logout", "logout", isActive: false, action: async () => await _shell.UserSignOutAsync()); //JJQR - AI (Nov 22, 2026) - step 3.5 //JJQR - END
         var footer = new VerticalStackLayout
         {
             Padding = new Thickness(8, 16, 8, 0),

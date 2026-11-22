@@ -154,6 +154,9 @@ public sealed class ConnectionPanelPage : ContentPage
     async Task SwitchModeAsync()
     {
         var target = _mode.Mode == WorkMode.Offline ? WorkMode.Online : WorkMode.Offline;
+        //JJQR - AI (Nov 22, 2026) - step 3.5: going back Online syncs what is waiting first, and asks if some is still waiting
+        if (target == WorkMode.Online && !await SyncGuard.ConfirmLeavingAsync(_sp, "switch", "Switch anyway, items stay queued")) return;
+        //JJQR - END
         var r = await _mode.SetAsync(target);
         if (!r.Succeeded) await DisplayAlertAsync("Can't switch", r.Error ?? "", "OK");
         Render();

@@ -282,6 +282,13 @@ public partial class AppShell : Shell
         //JJQR - END
     }
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.5: the Logout button: sync what is waiting first, ask if some is still waiting. Forced sign-outs (revoked, expired) do not ask.
+    public async Task UserSignOutAsync()
+    {
+        if (await ClinicNode.App.Views.Shared.SyncGuard.ConfirmLeavingAsync(_services, "signout", "Sign out anyway")) await SignOutAsync();
+    }
+    //JJQR - END
+
     public async Task SignOutAsync()
     {
         // JJQR - AI (Nov 21, 2026)
