@@ -13,11 +13,21 @@ public sealed record DevNetworkEntry(DateTimeOffset At, string Area, string Meth
 /// <summary>How many calls to the clinic server are waiting for an answer right now (background health checks and sync are not counted). The top bar shows a thin progress line while this is above 0.</summary>
 public static class ApiActivity
 {
-    private static int _inFlight;
-    public static int InFlight => Volatile.Read(ref _inFlight);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, long> Started = new();
+    private static long _next;
+    public static int InFlight => Started.Count;
     public static event Action? Changed;
-    internal static void Begin() { Interlocked.Increment(ref _inFlight); Changed?.Invoke(); }
-    internal static void End() { Interlocked.Decrement(ref _inFlight); Changed?.Invoke(); }
+
+    /// <summary>How long the OLDEST waiting call has been waiting. The top bar shows its line only when ONE call is slow (more than 1.5 s), so quick background checks and refreshes never light it up.</summary>
+    public static TimeSpan OldestWait()
+    {
+        long oldest = long.MaxValue;
+        foreach (var v in Started.Values) if (v < oldest) oldest = v;
+        return oldest == long.MaxValue ? TimeSpan.Zero : Stopwatch.GetElapsedTime(oldest);
+    }
+
+    internal static long Begin() { var id = Interlocked.Increment(ref _next); Started[id] = Stopwatch.GetTimestamp(); Changed?.Invoke(); return id; }
+    internal static void End(long id) { Started.TryRemove(id, out _); Changed?.Invoke(); }
 }
 
 public static class DevNetworkLog
@@ -76,7 +86,7 @@ public sealed class DevLogHandler : DelegatingHandler
         var host = uri?.Host ?? "";
         var isHealth = url.StartsWith("/health", StringComparison.OrdinalIgnoreCase);
         var counted = _area == "api" && !isHealth && !url.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase);
-        if (counted) ApiActivity.Begin();
+        var activityId = counted ? ApiActivity.Begin() : 0;
         try
         {
             var res = await base.SendAsync(request, ct).ConfigureAwait(false);
@@ -99,7 +109,7 @@ public sealed class DevLogHandler : DelegatingHandler
             DevNetworkLog.Add(new DevNetworkEntry(DateTimeOffset.UtcNow, _area, request.Method.Method, host + url, 0, sw.ElapsedMilliseconds, ex.GetType().Name + ": " + ex.Message));
             throw;
         }
-        finally { if (counted) ApiActivity.End(); }
+        finally { if (counted) ApiActivity.End(activityId); }
     }
 }
 //JJQR - END
