@@ -148,7 +148,7 @@ public sealed class ConnectionPanelPage : ContentPage
         var offline = _mode.Mode == WorkMode.Offline;
         _modeBtn.Text = offline ? "Switch to Online" : "Switch to Offline mode";
         _modeBtn.IsEnabled = _mode.CanSwitch;
-        _modeNote.Text = _mode.CanSwitch ? "" : "Only the doctor or an admin can switch the work mode.";
+        _modeNote.Text = _mode.CanSwitch ? "" : "Only the doctor can switch the work mode.";
     }
 
     async Task SwitchModeAsync()

@@ -33,6 +33,9 @@ public partial class AppShell : Shell
         _sync = sync;
         _services = services;
         BindingContext = this;
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.1: when the mode changes, re-check the session at once (Staff/Admin are signed out in Offline mode)
+        if (services.GetService<ClinicNode.Core.Sync.IWorkModeService>() is { } workMode) workMode.Changed += (_, _) => _ = CheckSessionAsync();
+        //JJQR - END
         RefreshSyncCommand = new Command(async () => await RefreshSyncAsync());
         // JJQR - AI (Nov 21, 2026) - Sync now + conflict review; ISyncStatus events arrive off the UI thread.
         SyncNowCommand = new Command(() => _sync.RequestSync());

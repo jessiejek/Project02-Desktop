@@ -76,14 +76,15 @@ public class WorkModeTests
     }
 
     [Fact]
-    public async Task An_admin_can_switch()
+    public async Task An_admin_cannot_switch_because_Offline_mode_would_lock_the_admin_out()
     {
         await using var host = await TestHost.StartAsync();
         var mode = Make(host);
         await mode.InitializeAsync();
         await host.LoginAdminAsync();
-        Assert.True(mode.CanSwitch);
-        Assert.True((await mode.SetAsync(WorkMode.Offline)).Succeeded);
+        Assert.False(mode.CanSwitch);
+        Assert.False((await mode.SetAsync(WorkMode.Offline)).Succeeded);
+        Assert.Equal(WorkMode.Online, mode.Mode);
     }
 
     [Fact]

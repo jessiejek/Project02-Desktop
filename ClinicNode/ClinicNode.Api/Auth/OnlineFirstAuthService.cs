@@ -32,6 +32,9 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
     public const string NoPatientPortal = "The patient portal is not available in the clinic node.";
     public const string Expired = "Your session has expired. Please sign in again.";
     public const string Revoked = "This computer was disconnected from the cloud by an administrator. Contact the clinic administrator.";
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.1 (owner Q2): in Offline mode only the doctor uses the computer, so every change is under the doctor's account
+    public const string OfflineDoctorOnly = "This computer is in Offline mode. Only the doctor can use it until it is switched back to Online.";
+    //JJQR - END
     public const string OfflineTooLong = "This computer has been offline too long. Connect to the internet so it can sync, then try again.";
     private static readonly TimeSpan ProfileRecheck = TimeSpan.FromMinutes(5);
 
@@ -104,6 +107,11 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
         {
             await DropApiSessionAsync(callServer: false);
             var offlineLogin = await _local.LoginAsync(email, password, rememberEmail, ct);
+            if (offlineLogin.Succeeded && offlineLogin.Session!.Role != UserRole.Doctor)
+            {
+                await _local.LogoutAsync(ct);                       // step 2.1: Staff and Admin are blocked in Offline mode
+                return new AuthResult(false, null, OfflineDoctorOnly, Locked: true);
+            }
             if (offlineLogin.Succeeded) SessionChanged?.Invoke();
             return offlineLogin;
         }
@@ -139,6 +147,11 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
             return new AuthResult(false, null, error);
         }
 
+        if (OfflineMode && session.Role != UserRole.Doctor)             // step 2.1: the way back through the server is for the doctor too
+        {
+            await DropApiSessionAsync(callServer: true);
+            return new AuthResult(false, null, OfflineDoctorOnly, Locked: true);
+        }
         await _local.LogoutAsync(ct); // never two sessions at once
         _apiSession = session;
         _profileCheckedAt = _clock.GetUtcNow();
@@ -208,6 +221,15 @@ public sealed class OnlineFirstAuthService : IAuthService, IOnlineAuthSession
 
     public async Task<string?> ValidateCurrentAsync(CancellationToken ct = default)
     {
+        //JJQR - AI (Nov 22, 2026) - step 2.1: a Staff or Admin session that is open when the computer goes Offline is ended (the shell shows the message and returns to sign-in)
+        if (OfflineMode && Current is { Role: not UserRole.Doctor })
+        {
+            await DropApiSessionAsync(callServer: false);
+            await _local.LogoutAsync(ct);
+            SessionChanged?.Invoke();
+            return OfflineDoctorOnly;
+        }
+        //JJQR - END
         var session = _apiSession;
         if (session is null) return await _local.ValidateCurrentAsync(ct);
 

@@ -29,7 +29,9 @@ public sealed class WorkModeService : IWorkModeService
 
     public WorkMode Mode => _info.Mode;
     public WorkModeInfo Info => _info;
-    public bool CanSwitch => auth.Current is { IsDoctor: true } or { IsAdmin: true };
+    //JJQR - AI (Nov 22, 2026) - step 2.1 (owner Q2): Staff and Admin cannot use the computer in Offline mode, so an Admin switching to Offline would lock themselves out. Only the doctor switches.
+    public bool CanSwitch => auth.Current is { IsDoctor: true };
+    //JJQR - END
     public event EventHandler<WorkModeInfo>? Changed;
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -48,7 +50,7 @@ public sealed class WorkModeService : IWorkModeService
     {
         var who = auth.Current;
         if (who is null) return new(false, Mode, "Sign in first.");
-        if (!(who.IsDoctor || who.IsAdmin)) return new(false, Mode, "Only the doctor or an admin can switch the work mode.");
+        if (!who.IsDoctor) return new(false, Mode, "Only the doctor can switch the work mode.");
 
         await _gate.WaitAsync(ct);
         try

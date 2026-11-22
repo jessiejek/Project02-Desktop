@@ -82,5 +82,45 @@ public class OfflineLoginTests
         Assert.False(r.Succeeded);                                          // the fake server refused here; what matters is that it WAS asked
         Assert.Contains(rig.Http.Requests, x => x.PathAndQuery == "/api/auth/login");
     }
+
+    // ── step 2.1 (owner Q2): in Offline mode only the doctor uses the computer ────
+    [Theory]
+    [InlineData("staff@clinic.test")]
+    [InlineData("admin@clinic.test")]
+    public async Task In_Offline_mode_Staff_and_Admin_cannot_sign_in(string email)
+    {
+        await using var rig = await StartAsync();
+        await rig.GoOfflineAsync();
+        var auth = MakeAuth(rig);
+        var r = await auth.LoginAsync(email, DevDataSeeder.DevPassword, false);
+        Assert.False(r.Succeeded);
+        Assert.Equal(OnlineFirstAuthService.OfflineDoctorOnly, r.Error);
+        Assert.Null(auth.Current);                                      // no session was left behind
+    }
+
+    [Fact]
+    public async Task A_staff_session_that_is_open_while_the_computer_is_Offline_is_ended()
+    {
+        await using var rig = await StartAsync();
+        var local = (AuthService)rig.Get<IAuthService>();
+        await rig.GoOfflineAsync();                                     // the doctor (signed in by the rig) switches the computer
+        // a staff session that got through some other way (for example resumed at app start while the saved mode is Offline)
+        Assert.True((await local.LoginAsync("staff@clinic.test", DevDataSeeder.DevPassword, false)).Succeeded);
+        var auth = MakeAuth(rig);
+        Assert.NotNull(auth.Current);
+
+        Assert.Equal(OnlineFirstAuthService.OfflineDoctorOnly, await auth.ValidateCurrentAsync());
+        Assert.Null(auth.Current);
+    }
+
+    [Fact]
+    public async Task The_doctor_keeps_working_in_Offline_mode()
+    {
+        await using var rig = await StartAsync();
+        var auth = MakeAuth(rig);
+        await rig.GoOfflineAsync();
+        Assert.True((await auth.LoginAsync("doctor@clinic.test", DevDataSeeder.DevPassword, false)).Succeeded);
+        Assert.Null(await auth.ValidateCurrentAsync());
+    }
 }
 //JJQR - END

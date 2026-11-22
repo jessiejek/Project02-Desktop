@@ -15,7 +15,7 @@ public interface IWorkModeService
     WorkModeInfo Info { get; }
     bool IsOffline => Mode == WorkMode.Offline;
 
-    /// <summary>True when the signed-in user may switch: Doctor or Admin. Staff and signed-out never.</summary>
+    /// <summary>True when the signed-in user may switch: the Doctor only (owner Q2: Staff and Admin cannot use the computer in Offline mode). Staff, Admin and signed-out never.</summary>
     bool CanSwitch { get; }
 
     /// <summary>Raised after the mode really changed (any thread).</summary>
