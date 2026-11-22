@@ -10,24 +10,48 @@ public static class NativeUiEnhancements
     /// <summary>The button stays disabled this long after a click, so a double click (or a nervous second click) cannot start the same work twice.</summary>
     const int DebounceMs = 800;
 
-    sealed class HoverPointer : UIPointerInteractionDelegate
-    {
-        public override UIPointerStyle? GetStyleForRegion(UIPointerInteraction interaction, UIPointerRegion region)
-        {
-            var view = interaction.View;
-            if (view is null) return null;
-            if (view is UIControl { Enabled: false }) return null; // disabled things do not get the hand
-            return UIPointerStyle.Create(UIPointerHoverEffect.Create(new UITargetedPreview(view)), (UIPointerShape?)null);
-        }
-    }
+    //JJQR - AI (Nov 22, 2026) - owner: the cursor did not become a hand over clickable things (Apple's UIPointerInteraction only draws a highlight on Mac). The real hand is AppKit's NSCursor.pointingHandCursor, which a Mac Catalyst app can reach through the Objective-C runtime.
+    // A hover recognizer on every clickable view sets the hand while the mouse is over it and the arrow when it leaves. Disabled controls keep the arrow.
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.dylib", EntryPoint = "objc_msgSend")]
+    static extern IntPtr Msg(IntPtr receiver, IntPtr selector);
 
-    static readonly HoverPointer Pointer = new();
+    static readonly IntPtr NSCursorClass = ObjCRuntime.Class.GetHandle("NSCursor");
+    static readonly IntPtr SelPointingHand = ObjCRuntime.Selector.GetHandle("pointingHandCursor");
+    static readonly IntPtr SelArrow = ObjCRuntime.Selector.GetHandle("arrowCursor");
+    static readonly IntPtr SelSet = ObjCRuntime.Selector.GetHandle("set");
+
+    static void SetCursor(bool hand)
+    {
+        try
+        {
+            if (NSCursorClass == IntPtr.Zero) return;
+            var cursor = Msg(NSCursorClass, hand ? SelPointingHand : SelArrow);
+            if (cursor != IntPtr.Zero) Msg(cursor, SelSet);
+        }
+        catch (Exception) { /* the cursor shape is cosmetic; never break the app for it */ }
+    }
 
     static void AddPointer(UIView view)
     {
-        if (view.Interactions.OfType<UIPointerInteraction>().Any()) return;
-        view.AddInteraction(new UIPointerInteraction(Pointer));
+        if (view.GestureRecognizers?.OfType<UIHoverGestureRecognizer>().Any(h => h.Name == "clinic-hand") == true) return;
+        var hover = new UIHoverGestureRecognizer(g =>
+        {
+            switch (g.State)
+            {
+                case UIGestureRecognizerState.Began:
+                case UIGestureRecognizerState.Changed:
+                    SetCursor(!(g.View is UIControl { Enabled: false }));
+                    break;
+                case UIGestureRecognizerState.Ended:
+                case UIGestureRecognizerState.Cancelled:
+                    SetCursor(false);
+                    break;
+            }
+        })
+        { Name = "clinic-hand", CancelsTouchesInView = false };
+        view.AddGestureRecognizer(hover);
     }
+    //JJQR - END
 
     public static void Register()
     {

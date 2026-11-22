@@ -291,6 +291,15 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
     public string? RegistrationStatus { get => _registrationStatus; private set => Set(ref _registrationStatus, value); }
     public string? RegisterError { get => _registerError; private set { Set(ref _registerError, value); Raise(nameof(HasRegisterError)); } }
     public bool HasRegisterError => !string.IsNullOrEmpty(_registerError);
+    //JJQR - AI (Nov 22, 2026) - owner: show something GREEN and positive when this computer is already registered, not a red "node_exists" error
+    string? _registerOk;
+    public string? RegisterOk { get => _registerOk; private set { Set(ref _registerOk, value); Raise(nameof(HasRegisterOk)); } }
+    public bool HasRegisterOk => !string.IsNullOrEmpty(_registerOk);
+    bool _registeredNow;
+    public bool IsRegisteredNow { get => _registeredNow; private set { Set(ref _registeredNow, value); Raise(nameof(IsNotRegisteredNow)); } }
+    public bool IsNotRegisteredNow => !_registeredNow;
+    public string RegisteredBadge => "✓  This computer is registered for cloud sync";
+    //JJQR - END
     public bool IsRegisterBusy { get => _registerBusy; private set { Set(ref _registerBusy, value); if (!value) _running.Remove(nameof(IsRegisterBusy)); Raise(nameof(IsRegisterIdle)); } }
     public bool IsRegisterIdle => !_registerBusy;
     public ICommand RegisterCommand { get; }
@@ -299,8 +308,10 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
     {
         try
         {
-            RegistrationStatus = await _registration.IsRegisteredAsync()
-                ? "This computer is registered for cloud sync. Registering again replaces its secret."
+            var registered = await _registration.IsRegisteredAsync();
+            IsRegisteredNow = registered; //JJQR - AI (Nov 22, 2026) //JJQR - END
+            RegistrationStatus = registered
+                ? "This computer is registered. Nothing more to do here; register again only if sync says this computer is not accepted."
                 : "This computer is not registered for cloud sync yet.";
         }
         catch (Exception ex) { RegistrationStatus = "Could not read registration status: " + ex.Message; }
@@ -309,6 +320,7 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
     public async Task RegisterAsync()
     {
         RegisterError = null;
+        RegisterOk = null;
         var token = AdminToken?.Trim() ?? "";
         //JJQR - AI (Nov 22, 2026) - owner: nobody should have to find a token; when the box is empty, use the admin's online sign-in (the server still checks the role)
         if (token.Length == 0) token = _sessionToken?.Invoke()?.Trim() ?? "";
@@ -326,11 +338,20 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
                 AdminToken = "";
                 _sync.RequestSyncIfAvailable();
             }
+            else if (IsAlreadyRegisteredError(r.Error)) { RegisterOk = "✓  This computer is already registered. You don't need to register it again."; IsRegisteredNow = true; _sync.RequestSyncIfAvailable(); }
             else RegisterError = r.Error ?? "Registration failed.";
         }
-        catch (Exception ex) { RegisterError = ex.Message; }
+        catch (Exception ex)
+        {
+            if (IsAlreadyRegisteredError(ex.Message)) { RegisterOk = "✓  This computer is already registered. You don't need to register it again."; IsRegisteredNow = true; }
+            else RegisterError = ex.Message;
+        }
         finally { IsRegisterBusy = false; }
     }
+
+    //JJQR - AI (Nov 22, 2026) - the server answers 409 {"error":"node_exists"} when a computer with this name is already registered: that is good news, not an error
+    static bool IsAlreadyRegisteredError(string? text) => !string.IsNullOrEmpty(text) && (text.Contains("node_exists", StringComparison.OrdinalIgnoreCase) || text.Contains("HTTP 409", StringComparison.OrdinalIgnoreCase));
+    //JJQR - END
 
     static string DeviceName() => Environment.OSVersion.Platform.ToString() + " " + Environment.OSVersion.VersionString;
 
