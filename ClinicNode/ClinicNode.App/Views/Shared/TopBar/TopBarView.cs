@@ -76,44 +76,7 @@ public sealed class TopBarView : Grid
         search.Focused += async (_, _) => { search.Unfocus(); await OpenSearchAsync(); };
         PlaceIn(search, 0);
 
-        //JJQR - AI (Nov 22, 2026) - owner request: a thin moving line under the top bar whenever the app is waiting on the clinic server
-        var activity = new ProgressBar { HeightRequest = 3, VerticalOptions = LayoutOptions.End, HorizontalOptions = LayoutOptions.Fill, ProgressColor = ClinicTheme.Color("Primary"), BackgroundColor = Colors.Transparent, IsVisible = false, InputTransparent = true };
-        Grid.SetColumnSpan((BindableObject)activity, 7);
-        Children.Add(activity);
-        var watching = 0;
-        void SyncActivity()
-        {
-            //JJQR - AI (Nov 22, 2026) - owner: NOT for pings or background refreshes. The line shows only while ONE call has been waiting more than 1.5 s, and hides the moment nothing is waiting.
-            if (ApiActivity.InFlight == 0 || Interlocked.Exchange(ref watching, 1) == 1) return;
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    while (ApiActivity.InFlight > 0)
-                    {
-                        var slow = ApiActivity.OldestWait() > TimeSpan.FromSeconds(1.5);
-                        MainThread.BeginInvokeOnMainThread(() =>
-                        {
-                            if (slow && !activity.IsVisible)
-                            {
-                                activity.IsVisible = true;
-                                new Animation(v => activity.Progress = v, 0, 1).Commit(activity, "api-activity", 16, 1100, Easing.CubicInOut, repeat: () => true);
-                            }
-                            else if (!slow && activity.IsVisible) { activity.AbortAnimation("api-activity"); activity.IsVisible = false; activity.Progress = 0; }
-                        });
-                        await Task.Delay(300);
-                    }
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref watching, 0);
-                    MainThread.BeginInvokeOnMainThread(() => { activity.AbortAnimation("api-activity"); activity.IsVisible = false; activity.Progress = 0; });
-                }
-            });
-            //JJQR - END
-        }
-        ApiActivity.Changed += SyncActivity;
-        Unloaded += (_, _) => ApiActivity.Changed -= SyncActivity;
+        //JJQR - AI (Nov 22, 2026) - owner: the moving line under the top bar was REMOVED (annoying; it also stayed on). Skeletons on empty screens stay.
         //JJQR - END
         PlaceIn(_modePill, 1); //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
         PlaceIn(_badgeHost, 2);
