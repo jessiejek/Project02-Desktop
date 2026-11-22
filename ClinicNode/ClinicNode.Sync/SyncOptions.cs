@@ -13,7 +13,10 @@ public sealed class SyncOptions
 
     public string PushPath { get; set; } = "/api/sync/push";
     public string PullPath { get; set; } = "/api/sync/pull";
-    public string HealthPath { get; set; } = "/health";
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.2: probe /health/ready (API AND database); an older server without it (404) is probed on LegacyHealthPath
+    public string HealthPath { get; set; } = "/health/ready";
+    public string LegacyHealthPath { get; set; } = "/health";
+    //JJQR - END
     public string TokenPath { get; set; } = "/api/sync/token";
 
     /// <summary>Operations per push call (contract max 200).</summary>

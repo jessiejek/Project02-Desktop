@@ -197,6 +197,13 @@ public sealed class HttpCloudSyncClient : ICloudSyncClient, ISyncNodeRegistratio
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(_options.PingTimeout);
             using var resp = await _http.GetAsync(Url(_options.HealthPath), cts.Token);
+            //JJQR - AI (Nov 22, 2026) - step 0.2: 503 = the database is not answering (not reachable); 404 = an older server without /health/ready, so ask the plain /health
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                using var legacy = await _http.GetAsync(Url(_options.LegacyHealthPath), cts.Token);
+                return (int)legacy.StatusCode < 500;
+            }
+            //JJQR - END
             return (int)resp.StatusCode < 500;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

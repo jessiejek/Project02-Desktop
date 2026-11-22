@@ -126,7 +126,7 @@ Goal: close the holes that would make an offline day unsafe, before adding any m
 ### Step 0.2 Health check that includes the database
 - First decide, from V2, whether `GET /api/version` is suitable (anonymous, answers when the database is down, not rate-limited). If yes, use it and add nothing to the backend. If no, add `GET /health/ready` (anonymous) returning `{status, db_ok, db_ms, server_time, version}` and HTTP 503 when the database fails (backend branch only; no migration).
 - Desktop: `ApiConnectivity` calls the chosen endpoint, so "online" means API **and** database.
-- **Acceptance:** with the API up and Docker `clinic-mssql` stopped, the desktop reports "not ready" within 10 seconds; restarting Docker returns it to ready.
+- **Acceptance:** with the API up and Docker `clinic-mssql` stopped, the **connection check** (`ApiConnectivity` and the sync loop's probe) reports "not ready" within 10 seconds; restarting Docker returns it to ready. The **top-bar label** is not part of this step (step 0.5 and Phase 1 change it): for a computer that is not registered for sync it prints a fixed "Online · not registered for sync" and does not read the probe.
 - **Tests:** backend test for the endpoint (database up / down); desktop fake-handler test for each answer.
 
 ### Step 0.3 Client-made IDs
@@ -273,7 +273,7 @@ Goal: sync problems are visible to the admin on the web, and duplicates are merg
 | Step | Branch | PR | Tests | Owner OK |
 |---|---|---|---|---|
 | 0.1 | plan/step-0.1-baseline | (none yet: gh not logged in) | baseline file written; backend 4 failing, desktop 73 failing | |
-| 0.2 | | | | |
+| 0.2 | be: plan/step-0.2-health-ready (d567a59); desktop: plan/step-0.2-health-ready | (none yet: gh not logged in) | backend 4 baseline failures only (+2 new passing); desktop Api tests 53 pass; desktop main suite same 73 baseline failures | |
 | 0.3 | | | | |
 | 0.4 | | | | |
 | 0.5 | | | | |
@@ -300,4 +300,5 @@ Any change to scope, order, a decision, or a threshold is made here, with the da
 Change log:
 - 22 Nov 2026: first draft.
 - 22 Nov 2026: step 0.1 done; verification results V1-V10 recorded in section 11. Consequences: step 0.2 adds `/health/ready` (V2); step 0.3 also fixes patient-create idempotency on the backend (V3); step 2.4 must add a typed booklet receipt number (V5); Q1 default would change the V10 hard stop. No scope change.
+- 22 Nov 2026: step 0.2 done. Acceptance wording clarified (measured at the connection check, not the top-bar label). Found: the sync loop has its own probe (`SyncOptions.HealthPath`), changed too. Known behaviour: the first `/health/ready` right after the database restarts can report not ready once (the backend's pooled connection is dead), then recovers.
 - 22 Nov 2026: Phase 4 clarified (where review items live; case A server-created, case B desktop-uploaded; merge only on the server). No scope change.

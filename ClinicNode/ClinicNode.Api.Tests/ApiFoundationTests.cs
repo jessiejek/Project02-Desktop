@@ -126,7 +126,7 @@ public class ApiFoundationTests
     {
         var (_, http, _, conn, _) = Make();
         var up = true;
-        http.Route = r => r.RequestUri!.AbsolutePath == "/health" && up ? FakeHandler.Status(HttpStatusCode.OK) : throw new HttpRequestException("down");
+        http.Route = r => r.RequestUri!.AbsolutePath == "/health/ready" && up ? FakeHandler.Status(HttpStatusCode.OK) : throw new HttpRequestException("down"); //JJQR - AI (Nov 22, 2026) - step 0.2: the ping is /health/ready //JJQR - END
         var events = new List<bool>();
         conn.Changed += events.Add;
 
@@ -139,8 +139,48 @@ public class ApiFoundationTests
         up = true;
         Assert.True(await conn.CheckNowAsync());
         Assert.Equal([true, false, true], events);
-        Assert.All(http.Paths, p => Assert.Equal("/health", p));
+        Assert.All(http.Paths, p => Assert.Equal("/health/ready", p));
     }
+
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.2: "online" means the API answers AND the database is ready
+    [Fact]
+    public async Task Database_not_ready_counts_as_not_online_and_is_reported()
+    {
+        var (_, http, _, conn, _) = Make();
+        http.Route = r => r.RequestUri!.AbsolutePath == "/health/ready" ? FakeHandler.Text("{\"db_ok\":false}", HttpStatusCode.ServiceUnavailable) : FakeHandler.Status(HttpStatusCode.OK);
+        Assert.False(await conn.CheckNowAsync());
+        Assert.False(conn.IsOnline);
+        Assert.False(conn.DatabaseReady);   // API answered, database did not
+    }
+
+    [Fact]
+    public async Task Database_ready_is_online_and_reported()
+    {
+        var (_, http, _, conn, _) = Make();
+        http.Route = _ => FakeHandler.Status(HttpStatusCode.OK);
+        Assert.True(await conn.CheckNowAsync());
+        Assert.True(conn.DatabaseReady);
+    }
+
+    [Fact]
+    public async Task An_older_server_without_health_ready_falls_back_to_health()
+    {
+        var (_, http, _, conn, _) = Make();
+        http.Route = r => r.RequestUri!.AbsolutePath == "/health" ? FakeHandler.Status(HttpStatusCode.OK) : FakeHandler.Status(HttpStatusCode.NotFound);
+        Assert.True(await conn.CheckNowAsync());
+        Assert.Null(conn.DatabaseReady);    // unknown: that server cannot tell us
+        Assert.Equal(["/health/ready", "/health"], http.Paths.ToArray());
+    }
+
+    [Fact]
+    public async Task Server_unreachable_is_not_online_and_database_unknown()
+    {
+        var (_, http, _, conn, _) = Make();
+        http.Route = _ => throw new HttpRequestException("down");
+        Assert.False(await conn.CheckNowAsync());
+        Assert.Null(conn.DatabaseReady);
+    }
+    //JJQR - END
 
     [Fact]
     public async Task Concurrent_checks_share_one_ping()
@@ -148,7 +188,7 @@ public class ApiFoundationTests
         var (_, http, _, conn, _) = Make();
         http.Route = _ => FakeHandler.Status(HttpStatusCode.OK);
         await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => conn.EnsureCheckedAsync()));
-        Assert.InRange(http.Requests.Count(r => r.PathAndQuery == "/health"), 1, 2);
+        Assert.InRange(http.Requests.Count(r => r.PathAndQuery == "/health/ready"), 1, 2); //JJQR - AI (Nov 22, 2026) - step 0.2 //JJQR - END
     }
 
     [Fact]

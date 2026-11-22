@@ -88,6 +88,13 @@ public sealed class FileSyncEndpoint : ISyncEndpoint
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(_options.PingTimeout);
             using var resp = await http.GetAsync(new Uri(new Uri(target + "/"), _options.HealthPath.TrimStart('/')), cts.Token);
+            //JJQR - AI (Nov 22, 2026) - step 0.2: older server without /health/ready (404) → plain /health
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                using var legacy = await http.GetAsync(new Uri(new Uri(target + "/"), _options.LegacyHealthPath.TrimStart('/')), cts.Token);
+                return (int)legacy.StatusCode < 500;
+            }
+            //JJQR - END
             return (int)resp.StatusCode < 500;
         }
         catch (Exception) when (!ct.IsCancellationRequested)

@@ -16,12 +16,24 @@ public interface IApiConnectivity
     void Start();
 }
 
-public sealed class ApiConnectivity : IApiConnectivity, IDisposable
+//JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.2: what the last health check found (API answering, database answering, how long it took). Used by the connection monitor (Phase 1).
+public interface IApiHealthDetail
+{
+    /// <summary>null until the first check; false when the API answered but reported its database as not ready; null when the server is an older build without /health/ready.</summary>
+    bool? DatabaseReady { get; }
+    /// <summary>Round trip of the last check in milliseconds (0 before the first check).</summary>
+    int LastCheckMs { get; }
+}
+//JJQR - END
+
+public sealed class ApiConnectivity : IApiConnectivity, IApiHealthDetail, IDisposable
 {
     private readonly ApiOptions _options;
     private readonly HttpClient _http;
     private readonly object _gate = new();
     private bool? _online;
+    private bool? _databaseReady; //JJQR - AI (Nov 22, 2026) - step 0.2 //JJQR - END
+    private int _lastCheckMs;
     private int _failures;
     private Task<bool>? _inflight;
     private CancellationTokenSource? _loop;
@@ -34,6 +46,8 @@ public sealed class ApiConnectivity : IApiConnectivity, IDisposable
     }
 
     public bool IsOnline { get { lock (_gate) return _online == true; } }
+    public bool? DatabaseReady { get { lock (_gate) return _databaseReady; } }
+    public int LastCheckMs { get { lock (_gate) return _lastCheckMs; } }
     public event Action<bool>? Changed;
 
     public async Task<bool> EnsureCheckedAsync(CancellationToken ct = default)
@@ -65,12 +79,28 @@ public sealed class ApiConnectivity : IApiConnectivity, IDisposable
             if (baseUrl is not null)
             {
                 using var cts = new CancellationTokenSource(_options.PingTimeout);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                bool? dbReady = null;
                 try
                 {
-                    using var res = await _http.GetAsync(baseUrl + "/health", cts.Token);
-                    ok = res.IsSuccessStatusCode;
+                    //JJQR - AI (Nov 22, 2026) - step 0.2: "online" now means the API answers AND its database is ready (/health/ready: 503 = database not answering).
+                    // An older server without that route (404) falls back to the plain /health, and then the database state is simply unknown.
+                    using var res = await _http.GetAsync(baseUrl + "/health/ready", cts.Token);
+                    if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        using var legacy = await _http.GetAsync(baseUrl + "/health", cts.Token);
+                        ok = legacy.IsSuccessStatusCode;
+                    }
+                    else
+                    {
+                        ok = res.IsSuccessStatusCode;
+                        dbReady = ok;
+                    }
+                    //JJQR - END
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException or IOException) { ok = false; }
+                sw.Stop();
+                lock (_gate) { _databaseReady = dbReady; _lastCheckMs = (int)sw.ElapsedMilliseconds; }
             }
             Set(ok);
         }
