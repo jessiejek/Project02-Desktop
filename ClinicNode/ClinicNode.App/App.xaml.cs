@@ -145,6 +145,20 @@ public partial class App : Application
         if (_services.GetService<ClinicNode.Sync.SyncService>() is { } syncService)
             syncService.ManualRunCompleted += r => { if (r.Succeeded) ClinicNode.Api.Http.VisitVersions.ClearAll(); };
         //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.4: quitting (menu or Cmd-Q) first syncs what is waiting; if something is still waiting, ask. Not intercepted: the red window button and Dock > Quit (see the plan, spike V7).
+#if MACCATALYST
+        ClinicNode.App.AppDelegate.ConfirmQuitAsync = () => MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            var status = _services.GetRequiredService<ISyncStatus>();
+            if (status.PendingCount == 0) return true;
+            await ClinicNode.App.Views.Shared.SyncResultPage.ShowAsync(_services, "close", skippable: true);
+            await status.RefreshAsync();
+            var left = status.PendingCount;
+            if (left == 0) return true;
+            return await shell.DisplayAlertAsync("Changes not synced", $"{left} change{(left == 1 ? " is" : "s are")} not on the clinic server yet. They are safe on this computer and will go next time you sync. Quit anyway?", "Quit anyway", "Stay");
+        });
+#endif
+        //JJQR - END
         window.Destroying += (_, _) =>
         {
             try
