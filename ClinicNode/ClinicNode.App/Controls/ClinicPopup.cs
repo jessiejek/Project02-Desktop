@@ -25,6 +25,19 @@ public static class ClinicPopup
 
     static Point PositionIn(Grid root, VisualElement v)
     {
+        //JJQR - AI (Nov 22, 2026) - owner: the date picker opened at the TOP-LEFT of the window when its field is inside a dialog. Adding up layout offsets gives ~0 there. Ask the native view where the field really is, relative to the popup root.
+#if MACCATALYST
+        try
+        {
+            if (v.Handler?.PlatformView is UIKit.UIView ui && root.Handler?.PlatformView is UIKit.UIView rootUi && ui.Window is not null)
+            {
+                var r = ui.ConvertRectToView(ui.Bounds, rootUi);
+                if (r.Width > 0 && r.Height > 0) return new Point(r.X, r.Y);
+            }
+        }
+        catch { /* fall back to the layout walk below */ }
+#endif
+        //JJQR - END
         double x = 0, y = 0;
         Element? e = v;
         while (e is VisualElement ve && !ReferenceEquals(ve, root))

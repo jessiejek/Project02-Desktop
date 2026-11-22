@@ -230,6 +230,7 @@ public partial class AppShell : Shell
                 AddFlyout("Receipt clashes", "admin-or-clashes", typeof(AdminOrClashesPage));
                 //JJQR - END
                 AddFlyout("Register this node", "admin-register-node", typeof(AdminRegisterNodePage));
+                AddFlyout("My account", "admin-profile", typeof(Views.Staff.StaffProfilePage)); //JJQR - AI (Nov 22, 2026) - owner: the admin could not change their password; the profile page (name, email, change password) is now in the admin menu //JJQR - END
                 //JJQR - AI (Nov 21, 2026) - allen5: this-computer settings (admin only; can change the sync URL)
                 AddFlyout("This computer", "node-settings", typeof(ClinicNode.App.Views.Settings.Node.NodeSettingsPage));
                 //JJQR - END
@@ -260,6 +261,7 @@ public partial class AppShell : Shell
                         //JJQR - AI (Nov 21, 2026) - allen5: this-computer settings (admin only)
                         new ClinicNavItem("This computer", "node-settings", true, "settings"),
                         //JJQR - END
+                        new ClinicNavItem("My account", "admin-profile", true, "account_circle"), //JJQR - AI (Nov 22, 2026) - change password //JJQR - END
                     ]),
                 ];
                 firstRoute = "admin-home";

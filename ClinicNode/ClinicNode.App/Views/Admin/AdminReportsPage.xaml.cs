@@ -19,6 +19,7 @@ public partial class AdminReportsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        ClinicNode.App.Controls.Skeleton.WrapAdminPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
         Render();
         await _vm.LoadWebAsync();
         Render();

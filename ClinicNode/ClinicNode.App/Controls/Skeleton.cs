@@ -18,6 +18,18 @@ public sealed class SkeletonBar : BoxView
 
 public static class Skeleton
 {
+    /// <summary>Admin pages: wraps the page content ONCE with a skeleton that shows until the page's view-model finishes its first load (IsFirstLoad), or after 15 s at the latest.</summary>
+    public static void WrapAdminPage(ContentPage page)
+    {
+        if (page.Content is null || page.ClassId == "skeleton-wrapped") return;
+        page.ClassId = "skeleton-wrapped";
+        var wrapped = Overlay(page.Content, "IsFirstLoad", 3);
+        page.Content = null;
+        page.Content = wrapped;
+        if (wrapped is Grid g && g.Children.Count > 1 && g.Children[1] is View overlay)
+            page.Dispatcher.StartTimer(TimeSpan.FromSeconds(15), () => { overlay.IsVisible = false; return false; });
+    }
+
     /// <summary>Puts a skeleton panel over <paramref name="content"/> while the bound bool (e.g. IsFirstLoad) is true, so a form never shows empty boxes while it loads.</summary>
     public static View Overlay(View content, string isLoadingPath, int cards = 3)
     {

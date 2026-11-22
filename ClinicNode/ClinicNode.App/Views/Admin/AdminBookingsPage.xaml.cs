@@ -265,6 +265,7 @@ public partial class AdminBookingsPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        ClinicNode.App.Controls.Skeleton.WrapAdminPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
         //JJQR - AI (21 Nov 2026) - keep live refresh after navigating away and back
         _vm.Attach();
         //JJQR - END
