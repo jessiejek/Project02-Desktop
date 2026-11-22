@@ -24,6 +24,14 @@ public sealed class TopBarView : Grid
     private readonly IClinicEventBus _events;
     private readonly ContentView _badgeHost = new() { VerticalOptions = LayoutOptions.Center };
     private readonly Button _syncChip;
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.5: [dot  Online | Offline mode  42 ms] opens the connection panel
+    private readonly Ellipse _qualityDot = new() { WidthRequest = 9, HeightRequest = 9, VerticalOptions = LayoutOptions.Center, Fill = new SolidColorBrush(ClinicTheme.Color("OnSurfaceVariant")) };
+    private readonly Label _modeText = new() { FontSize = 12, FontFamily = ClinicTheme.FontSemiBold, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurface") };
+    private readonly Label _latencyText = new() { FontSize = 12, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
+    private readonly Border _modePill = new() { VerticalOptions = LayoutOptions.Center, Padding = new Thickness(10, 5), StrokeShape = new RoundRectangle { CornerRadius = 14 }, StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant") };
+    private ClinicNode.Api.Http.IConnectionMonitor? _monitor;
+    private ClinicNode.Core.Sync.IWorkModeService? _workMode;
+    //JJQR - END
     private readonly Label _nameLabel;
     private readonly Ellipse _dot = new()
     {
@@ -49,6 +57,7 @@ public sealed class TopBarView : Grid
             new ColumnDefinition(GridLength.Star),
             new ColumnDefinition(GridLength.Auto),
             new ColumnDefinition(GridLength.Auto),
+            new ColumnDefinition(GridLength.Auto), //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.5: mode pill + status dot //JJQR - END
             new ColumnDefinition(GridLength.Auto),
             new ColumnDefinition(GridLength.Auto),
             new ColumnDefinition(GridLength.Auto),
@@ -66,7 +75,8 @@ public sealed class TopBarView : Grid
         search.Focused += async (_, _) => { search.Unfocus(); await OpenSearchAsync(); };
         PlaceIn(search, 0);
 
-        PlaceIn(_badgeHost, 1);
+        PlaceIn(_modePill, 1); //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
+        PlaceIn(_badgeHost, 2);
 
         _syncChip = StaffUi.Btn("Online", async () => await OpenSyncMenuAsync(), "GhostButton");
         _syncChip.VerticalOptions = LayoutOptions.Center;
@@ -75,7 +85,17 @@ public sealed class TopBarView : Grid
         //JJQR - END
         _syncChip.LineBreakMode = LineBreakMode.TailTruncation;
         SemanticProperties.SetDescription(_syncChip, "Sync status");
-        PlaceIn(_syncChip, 2);
+        PlaceIn(_syncChip, 3);
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.5
+        _monitor = sp.GetService<ClinicNode.Api.Http.IConnectionMonitor>();
+        _workMode = sp.GetService<ClinicNode.Core.Sync.IWorkModeService>();
+        _modePill.Content = new HorizontalStackLayout { Spacing = 7, Children = { _qualityDot, _modeText, _latencyText } };
+        _modePill.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await Shell.Current.Navigation.PushModalAsync(new ConnectionPanelPage(_sp))) });
+        SemanticProperties.SetDescription(_modePill, "Connection and work mode. Opens the connection panel.");
+        _modePill.IsVisible = _monitor is not null && _workMode is not null;
+        if (_monitor is not null) _monitor.Changed += OnMonitor;
+        if (_workMode is not null) _workMode.Changed += OnWorkMode;
+        //JJQR - END
 
         var bell = new Button
         {
@@ -85,14 +105,14 @@ public sealed class TopBarView : Grid
         };
         SemanticProperties.SetDescription(bell, "Notifications");
         bell.Clicked += async (_, _) => await Shell.Current.Navigation.PushModalAsync(new NotificationsPage(_sp, () => _ = RefreshAsync()));
-        PlaceIn(new Grid { Children = { bell, _dot }, VerticalOptions = LayoutOptions.Center }, 3);
+        PlaceIn(new Grid { Children = { bell, _dot }, VerticalOptions = LayoutOptions.Center }, 4);
 
         var name = _auth.Current?.FullName ?? "";
         _nameLabel = ClinicTheme.Text(name, "LabelMd");
         _nameLabel.VerticalOptions = LayoutOptions.Center;
         _nameLabel.LineBreakMode = LineBreakMode.TailTruncation;
         _nameLabel.MaximumWidthRequest = 160;
-        PlaceIn(_nameLabel, 4);
+        PlaceIn(_nameLabel, 5);
         var initials = string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
         PlaceIn(new Border
         {
@@ -112,7 +132,7 @@ public sealed class TopBarView : Grid
                 FontSize = 13,
                 TextColor = ClinicTheme.Color("OnSurfaceVariant"),
             },
-        }, 5);
+        }, 6);
 
         _events.Changed += OnEvent;
         _sync.PropertyChanged += OnSync;
@@ -125,6 +145,24 @@ public sealed class TopBarView : Grid
         SizeChanged += (_, _) => ApplyNarrowLayout();
         _ = RefreshAsync();
     }
+
+    //JJQR - AI (Nov 22, 2026) - step 1.5
+    void OnMonitor() => MainThread.BeginInvokeOnMainThread(ApplyModePill);
+    void OnWorkMode(object? s, ClinicNode.Core.Sync.WorkModeInfo i) => MainThread.BeginInvokeOnMainThread(ApplyModePill);
+
+    void ApplyModePill()
+    {
+        if (_monitor is null || _workMode is null) return;
+        var st = _monitor.Status;
+        var offline = _workMode.Mode == ClinicNode.Core.Sync.WorkMode.Offline;
+        _modeText.Text = offline ? "Offline mode" : "Online";
+        _qualityDot.Fill = new SolidColorBrush(ClinicTheme.Color(ConnectionColors.KeyOf(st.Quality)));
+        var last = _monitor.Samples.Count > 0 ? _monitor.Samples[^1] : null;
+        _latencyText.Text = last is { Ok: true } ? last.Ms + " ms" : ConnectionColors.Word(st.Quality);
+        _modePill.BackgroundColor = offline ? ClinicTheme.Color("PrimarySubtle") : Colors.Transparent;
+        SemanticProperties.SetDescription(_modePill, $"{_modeText.Text}. Connection {ConnectionColors.Word(st.Quality)}. {st.Reason} Opens the connection panel.");
+    }
+    //JJQR - END
 
     void OnEvent(ClinicEvent ev) => MainThread.BeginInvokeOnMainThread(() => { _ = RefreshAsync(); });
     void OnSync(object? s, System.ComponentModel.PropertyChangedEventArgs e) => MainThread.BeginInvokeOnMainThread(() => _ = RefreshAsync());
@@ -149,6 +187,8 @@ public sealed class TopBarView : Grid
         {
             _events.Changed -= OnEvent;
             _sync.PropertyChanged -= OnSync;
+            if (_monitor is not null) _monitor.Changed -= OnMonitor; //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
+            if (_workMode is not null) _workMode.Changed -= OnWorkMode;
             if (_indicator is not null) _indicator.Changed -= OnIndicator; //JJQR - AI (21 Nov 2026) //JJQR - END
             //JJQR - AI (21 Nov 2026)
             if (_auth is ClinicNode.Api.Auth.IOnlineAuthSession online) online.SessionChanged -= OnSessionChanged;
@@ -162,6 +202,7 @@ public sealed class TopBarView : Grid
         try
         {
             _syncChip.Text = CompactSyncLabel();
+            ApplyModePill(); //JJQR - AI (Nov 22, 2026) - step 1.5 //JJQR - END
             SemanticProperties.SetDescription(_syncChip, _sync.Banner);
             var session = _auth.Current;
             if (session is null) return;
