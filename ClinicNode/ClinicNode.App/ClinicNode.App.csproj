@@ -13,8 +13,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>Clinic Node</ApplicationTitle>
     <ApplicationId>ph.clinicnode.app</ApplicationId>
-    <ApplicationDisplayVersion>0.2.2</ApplicationDisplayVersion>
-    <ApplicationVersion>4</ApplicationVersion>
+    <ApplicationDisplayVersion>0.2.3</ApplicationDisplayVersion>
+    <ApplicationVersion>5</ApplicationVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
