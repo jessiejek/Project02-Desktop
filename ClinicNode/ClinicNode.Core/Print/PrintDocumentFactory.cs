@@ -99,20 +99,20 @@ public sealed class PrintDocumentFactory : IPrintDocumentFactory
     public async Task<PrintDocument> QueueSlipAsync(Guid bookingId, CancellationToken ct = default)
     {
         var ctx = await LoadAsync(bookingId, ct);
-        if (string.IsNullOrWhiteSpace(ctx.QueueNumber))
-            throw new InvalidOperationException("This booking has no queue number yet.");
+        //JJQR - AI (Nov 22, 2026) - step 2.3/2.5: no number yet = paper queue
+        var number = string.IsNullOrWhiteSpace(ctx.QueueNumber) ? "PAPER QUEUE" : ctx.QueueNumber;
         var lane = QueueLane.IsPriority(ctx.QueueNumber) ? "Priority lane (Senior / PWD)" : "Regular lane";
         var body = $"""
             <div class="slip">
               <div class="clinic">{Esc(ctx.ClinicName)}</div>
-              <div class="qn">{Esc(ctx.QueueNumber)}</div>
+              <div class="qn">{Esc(number)}</div>
               <div class="lane">{Esc(lane)}</div>
               <div class="who">{Esc(ctx.PatientName)}</div>
               <div class="meta">{Esc(ctx.PatientCode)} · {Esc(ctx.DoctorName)}</div>
               <div class="meta">{Fmt(ctx.AppointmentDate)} · {Esc(ctx.VisitType)}</div>
             </div>
             """;
-        return new PrintDocument($"Queue slip {ctx.QueueNumber}", PrintSpec.QueueSlip, Shell(PrintSpec.QueueSlip, "Queue slip", ctx, body, letterheadGap: false));
+        return new PrintDocument($"Queue slip {number}", PrintSpec.QueueSlip, Shell(PrintSpec.QueueSlip, "Queue slip", ctx, body, letterheadGap: false));
     }
 
     // JJQR - AI (Nov 21, 2026) - stub; the App registers ClinicFormsPrintDocumentFactory for real receipts

@@ -114,14 +114,13 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
         var b = await LoadBookingAsync(db, bookingId, ct);
-        if (string.IsNullOrWhiteSpace(b.QueueNumber))
-            throw new InvalidOperationException("This booking has no queue number yet.");
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.3/2.5: a paper-queue booking has no number yet; its slip says PAPER QUEUE (it used to refuse to print)
         var clinic = await ClinicAsync(db, ct);
         var ticket = new QueueSlipData
         {
             ClinicName = clinic.ClinicName,
             ClinicAddress = clinic.Address,
-            QueueNumber = b.QueueNumber!,
+            QueueNumber = b.QueueNumber ?? "",
             IsPriority = QueueLane.IsPriority(b.QueueNumber),
             PatientName = $"{b.Patient.FirstName} {b.Patient.LastName}".Trim(),
             PatientCode = b.Patient.PatientCode,
