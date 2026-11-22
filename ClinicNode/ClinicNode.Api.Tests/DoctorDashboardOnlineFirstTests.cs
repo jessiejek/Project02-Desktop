@@ -103,6 +103,7 @@ public class DoctorDashboardOnlineFirstTests
     public async Task Offline_write_uses_the_local_service_which_queues_it_in_the_outbox()
     {
         await using var rig = await Rig(healthy: false);
+        await rig.GoOfflineAsync(); //JJQR - AI (Nov 22, 2026) - step 1.2: the doctor chose Offline mode //JJQR - END
         var before = await PendingAsync(rig);
         var r = await rig.Get<IDoctorDashboardService>().SetDayStatusAsync(rig.DoctorId, DoctorDayStatusEnum.UnavailableToday);
         Assert.True(r.Succeeded, r.Error);

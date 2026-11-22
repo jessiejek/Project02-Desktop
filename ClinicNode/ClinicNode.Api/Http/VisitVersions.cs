@@ -31,6 +31,10 @@ public static partial class VisitVersions
         return s.Generation;
     }
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2: forget every remembered visit version (the work mode changed, so what was read before no longer describes the visit)
+    public static void ClearAll() { Sessions.Clear(); ConsultationToBooking.Clear(); }
+    //JJQR - END
+
     public static int GenerationOf(Guid bookingId) => Sessions.TryGetValue(bookingId, out var s) ? s.Generation : 0;
 
     /// <summary>Call when the visit page closes. Does nothing if the visit was opened again meanwhile.</summary>

@@ -85,6 +85,30 @@ public partial class App : Application
             });
         };
         //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2 (rule R1): an Online-mode save that could not reach the clinic server was NOT saved. Say so, and let the doctor or an admin switch to Offline mode.
+        var lastFailedAt = DateTimeOffset.MinValue;
+        ClinicNode.Api.OnlineFirst.OnlineRouteStatus.OnlineWriteFailed += reason =>
+        {
+            if (DateTimeOffset.UtcNow - lastFailedAt < TimeSpan.FromSeconds(5)) return;
+            lastFailedAt = DateTimeOffset.UtcNow;
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                try
+                {
+                    var mode = _services.GetRequiredService<ClinicNode.Core.Sync.IWorkModeService>();
+                    if (mode.CanSwitch)
+                    {
+                        var go = await shell.DisplayAlertAsync("Not saved", reason, "Switch to Offline mode", "Cancel");
+                        if (!go) return;
+                        var r = await mode.SetAsync(ClinicNode.Core.Sync.WorkMode.Offline);
+                        await shell.DisplayAlertAsync(r.Succeeded ? "Offline mode is on" : "Can't switch", r.Succeeded ? "Press the save again. It will be kept on this computer and sent to the clinic server when you sync." : r.Error ?? "", "OK");
+                    }
+                    else await shell.DisplayAlertAsync("Not saved", "Could not save: the clinic server cannot be reached. Nothing was saved. Ask the doctor to switch this computer to Offline mode, or try again.", "OK");
+                }
+                catch { /* the window may be closing */ }
+            });
+        };
+        //JJQR - END
         window.Destroying += (_, _) =>
         {
             try

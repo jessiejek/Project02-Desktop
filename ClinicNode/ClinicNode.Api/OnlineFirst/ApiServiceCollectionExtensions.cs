@@ -50,7 +50,8 @@ public static class ApiServiceCollectionExtensions
             hasApiSession: () => sp.GetRequiredService<IApiTokenStore>().AccessToken is { Length: > 0 },
             dropApiSession: () => sp.GetRequiredService<IApiTokenStore>().Clear(),
             //JJQR - AI (21 Nov 2026) - API reads → local DB (registered by AddClinicNodeLiveSync; null = no mirroring)
-            mirror: sp.GetService<IOnlineReadMirror>()));
+            mirror: sp.GetService<IOnlineReadMirror>(),
+            workMode: sp.GetService<IWorkModeService>())); //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
             //JJQR - END
         return services;
     }

@@ -2,6 +2,7 @@
 // Background sync loop: probe connectivity, run a cycle, back off on failure (1s..5min, jitter),
 // poll every SyncOptions.PollInterval while healthy, wake early on RequestSync().
 // MAUI does not run IHostedService: the App calls ISyncLoop.Start() after LocalDatabase.InitializeAsync().
+using ClinicNode.Core.Sync;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -25,8 +26,12 @@ public sealed class SyncLoop : ISyncLoop, IHostedService, IAsyncDisposable
     private CancellationTokenSource? _cts;
     private Task? _task;
 
-    public SyncLoop(SyncService sync, ICloudSyncClient cloud, SyncOptions options, ILogger<SyncLoop> logger)
+    private readonly IWorkModeService? _mode; //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2: in Offline mode the background loop does nothing; sync is the button and the first-login sync //JJQR - END
+
+    public SyncLoop(SyncService sync, ICloudSyncClient cloud, SyncOptions options, ILogger<SyncLoop> logger, IWorkModeService? mode = null)
     {
+        _mode = mode;
+        if (_mode is not null) _mode.Changed += (_, _) => RequestSync(); // back to Online: sync starts at once
         _sync = sync;
         _cloud = cloud;
         _options = options;
@@ -72,7 +77,13 @@ public sealed class SyncLoop : ISyncLoop, IHostedService, IAsyncDisposable
             TimeSpan wait;
             try
             {
-                if (!_cloud.IsConfigured)
+                if (_mode?.IsOffline == true)
+                {
+                    // Offline mode: no probing, no push, no pull. The status is only recounted so the badge shows how many changes are waiting.
+                    await _sync.RefreshStatusAsync(ct);
+                    wait = _options.PollInterval;
+                }
+                else if (!_cloud.IsConfigured)
                 {
                     await _sync.RefreshStatusAsync(ct);
                     wait = _options.PollInterval;

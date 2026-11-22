@@ -289,6 +289,86 @@ public class ApiFoundationTests
         Assert.Equal(0, sync.Calls); // a failed api write is not "a successful write → pull"
     }
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2: Offline never calls the API; Online refuses (R1) instead of saving quietly
+    private static (IToy Proxy, Toy Api, Toy Local, CountingSync Sync, FakeWorkMode Mode) ModeRouter(WorkMode mode, bool apiThrowsOffline = false, bool online = true)
+    {
+        var api = new Toy("api", apiThrowsOffline); var local = new Toy("local"); var sync = new CountingSync(); var wm = new FakeWorkMode(mode);
+        return (OnlineFirstProxy<IToy>.Create(api, local, new FakeConn(online), sync, () => true, workMode: wm), api, local, sync, wm);
+    }
+
+    [Fact]
+    public async Task Offline_mode_never_calls_the_api_even_when_the_server_is_up()
+    {
+        var (p, api, local, sync, _) = ModeRouter(WorkMode.Offline, online: true);
+        Assert.Equal("local:GetNameAsync", await p.GetNameAsync());
+        Assert.Equal("local:SaveNameAsyncBob", await p.SaveNameAsync("Bob"));
+        await p.TouchAsync();
+        Assert.Equal("local:ApproveAsync", await p.ApproveAsync());
+        Assert.Empty(api.Calls);
+        Assert.Equal(0, sync.Calls);                         // no automatic sync in Offline mode
+        Assert.True(OnlineRouteStatus.LastWriteWasLocalOnly);
+    }
+
+    [Fact]
+    public async Task Offline_mode_says_an_api_only_feature_is_not_available()
+    {
+        var (p, api, _, _, _) = ModeRouter(WorkMode.Offline);
+        var ex = await Assert.ThrowsAsync<ApiOfflineException>(() => p.ResetPasswordAsync());
+        Assert.Equal(OnlineRouteStatus.NotAvailableOffline, ex.Message);
+        Assert.Empty(api.Calls);
+    }
+
+    [Fact]
+    public async Task Online_mode_with_the_server_down_refuses_a_write_and_saves_nothing()
+    {
+        var (p, api, local, sync, _) = ModeRouter(WorkMode.Online, online: false);
+        string? shown = null; void On(string r) => shown = r;
+        OnlineRouteStatus.OnlineWriteFailed += On;
+        try
+        {
+            var ex = await Assert.ThrowsAsync<OnlineWriteFailedException>(() => p.SaveNameAsync("Bob"));
+            Assert.Contains("Nothing was saved", ex.Message);
+            Assert.Equal(ex.Message, shown);
+            await Assert.ThrowsAsync<OnlineWriteFailedException>(() => p.TouchAsync());
+        }
+        finally { OnlineRouteStatus.OnlineWriteFailed -= On; }
+        Assert.Empty(local.Calls);
+        Assert.Empty(api.Calls);
+        Assert.Equal(0, sync.Calls);
+    }
+
+    [Fact]
+    public async Task Online_mode_with_a_lost_reply_refuses_a_write_but_still_reads_from_the_local_copy()
+    {
+        var (p, api, local, _, _) = ModeRouter(WorkMode.Online, apiThrowsOffline: true);
+        await Assert.ThrowsAsync<OnlineWriteFailedException>(() => p.SaveNameAsync("Ann"));
+        Assert.Equal("local:GetNameAsync", await p.GetNameAsync());        // a read is still answered from this computer
+        Assert.DoesNotContain(local.Calls, c => c.StartsWith(nameof(IToy.SaveNameAsync)));
+    }
+
+    [Fact]
+    public async Task Switching_the_mode_changes_the_route_at_once_and_a_device_only_method_is_unaffected()
+    {
+        var (p, api, local, _, wm) = ModeRouter(WorkMode.Online, online: true);
+        Assert.Equal("api:SaveNameAsyncA", await p.SaveNameAsync("A"));
+        await wm.SetAsync(WorkMode.Offline);
+        Assert.Equal("local:SaveNameAsyncB", await p.SaveNameAsync("B"));
+        Assert.Equal("local:PrintAsync", await p.PrintAsync());
+        await wm.SetAsync(WorkMode.Online);
+        Assert.Equal("api:SaveNameAsyncC", await p.SaveNameAsync("C"));
+    }
+
+    [Fact]
+    public void Visit_versions_can_all_be_forgotten_when_the_mode_changes()
+    {
+        var booking = Guid.NewGuid();
+        VisitVersions.Begin(booking);
+        Assert.NotEqual(0, VisitVersions.GenerationOf(booking));
+        VisitVersions.ClearAll();
+        Assert.Equal(0, VisitVersions.GenerationOf(booking));
+    }
+    //JJQR - END
+
     [Fact]
     public async Task Router_ApiOnly_never_falls_back_and_LocalOnly_never_calls_the_api()
     {

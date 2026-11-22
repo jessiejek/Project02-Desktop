@@ -3,6 +3,7 @@
 using System.Net;
 using System.Text.Json;
 using ClinicNode.Api.OnlineFirst;
+using ClinicNode.Core.Sync;
 using ClinicNode.Sync;
 using ClinicNode.Sync.Local;
 using ClinicNode.Api.Services;
@@ -48,13 +49,19 @@ public class ClientIdLostReplyTests
         var request = new WalkInRequest(patient.PatientId, rig.DoctorId, BookingId: bookingId, PaymentId: paymentId);
         var walkIn = rig.Get<IStaffWalkInService>();
 
+        // step 1.2 (rule R1): Online mode no longer saves quietly after a lost reply. The save is refused and nothing is kept here...
+        await Assert.ThrowsAsync<OnlineWriteFailedException>(() => walkIn.CheckInWalkInAsync(request));
+        await using (var db0 = await rig.Get<IDbContextFactory<ClinicAppDbContext>>().CreateDbContextAsync())
+            Assert.Equal(0, await db0.Bookings.CountAsync(b => b.BookingId == bookingId));
+        // ...the doctor switches to Offline mode and presses the same button again: the SAME ids go into the local copy
+        await rig.GoOfflineAsync();
         var first = await walkIn.CheckInWalkInAsync(request);
 
         Assert.True(first.Succeeded, first.Error);
         var sent = rig.Http.Requests.Single(r => r.PathAndQuery == "/api/queue" && r.Method == HttpMethod.Post);
-        Assert.Equal(bookingId.ToString(), Field(sent.Body, "booking_id"));      // what the server received
+        Assert.Equal(bookingId.ToString(), Field(sent.Body, "booking_id"));      // what the server received (the lost reply)
         Assert.Equal(paymentId.ToString(), Field(sent.Body, "payment_id"));
-        Assert.Equal(bookingId, first.Ticket!.BookingId);                        // what the local fallback saved: the SAME id
+        Assert.Equal(bookingId, first.Ticket!.BookingId);                        // what the local save kept: the SAME id
         await using var db = await rig.Get<IDbContextFactory<ClinicAppDbContext>>().CreateDbContextAsync();
         Assert.Equal(1, await db.Bookings.CountAsync(b => b.BookingId == bookingId));
         Assert.True(await db.Payments.AnyAsync(p => p.PaymentId == paymentId && p.BookingId == bookingId));
@@ -74,6 +81,7 @@ public class ClientIdLostReplyTests
         var b = await rig.Get<IPatientService>().CreateAsync(new NewPatientRequest("Pat", "Two", new DateOnly(1991, 2, 2), SexType.Female));
         rig.Http.Route = _ => throw new HttpRequestException("down");
         await ReserveBlockAsync(rig);
+        await rig.GoOfflineAsync(); //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         var id = Guid.NewGuid();
         var walkIn = rig.Get<IStaffWalkInService>();
         Assert.True((await walkIn.CheckInWalkInAsync(new WalkInRequest(a.PatientId, rig.DoctorId, BookingId: id))).Succeeded);
@@ -91,6 +99,8 @@ public class ClientIdLostReplyTests
         var form = new QuickRegisterForm("Ana", null, "Lopez", new DateOnly(1992, 5, 5), SexType.Female, "09170000000", "Cebu", patientId);
         var svc = rig.Get<IStaffPatientsService>();
 
+        await Assert.ThrowsAsync<OnlineWriteFailedException>(() => svc.QuickRegisterAsync(form));   // step 1.2 (R1): Online + lost reply = refused, nothing kept
+        await rig.GoOfflineAsync();
         var (result, row) = await svc.QuickRegisterAsync(form);
 
         Assert.True(result.Succeeded, result.Error);

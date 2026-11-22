@@ -9,6 +9,7 @@ using ClinicNode.Api.Auth;
 using ClinicNode.Api.Http;
 using ClinicNode.Api.Live;
 using ClinicNode.Core.Auth;
+using ClinicNode.Core.Sync;
 using ClinicNode.Sync;
 
 namespace ClinicNode.App.Shared;
@@ -23,12 +24,15 @@ public sealed class LiveSyncCoordinator : IDisposable
     private readonly IAuthService _auth;
     private readonly object _gate = new();
     private readonly StandaloneVaccinationPush? _vaccines; //JJQR - AI (21 Nov 2026) //JJQR - END
+    private readonly IWorkModeService? _mode; //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2 //JJQR - END
     private bool _started;
     private CancellationTokenSource? _cts;
 
     public LiveSyncCoordinator(IClinicLiveEvents hub, IApiConnectivity connectivity, ISyncStatus sync, IAuthService auth,
-        StandaloneVaccinationPush? vaccines = null) //JJQR - AI (21 Nov 2026) - + standalone vaccination push //JJQR - END
+        StandaloneVaccinationPush? vaccines = null, //JJQR - AI (21 Nov 2026) - + standalone vaccination push //JJQR - END
+        IWorkModeService? mode = null) //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2 //JJQR - END
     {
+        _mode = mode;
         _hub = hub; _connectivity = connectivity; _sync = sync; _auth = auth;
         _vaccines = vaccines; //JJQR - AI (21 Nov 2026) //JJQR - END
     }
@@ -45,17 +49,29 @@ public sealed class LiveSyncCoordinator : IDisposable
         _hub.Resync += Pull;
         _connectivity.Changed += OnConnectivity;
         if (_auth is IOnlineAuthSession online) online.SessionChanged += OnSessionChanged;
+        if (_mode is not null) _mode.Changed += OnModeChanged; //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         _ = SafetyNetAsync(_cts.Token);
         _connectivity.Start();
         OnSessionChanged();
         Pull(); // startup catch-up from the saved cursor
     }
 
+    private bool OfflineMode => _mode?.IsOffline == true; //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
+
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2: Offline = the live connection is closed and nothing is pulled or pushed by itself; Online = it starts again. Remembered visit versions are dropped either way.
+    private void OnModeChanged(object? sender, WorkModeInfo info)
+    {
+        ClinicNode.Api.Http.VisitVersions.ClearAll();
+        if (info.Mode == WorkMode.Offline) _ = _hub.StopAsync();
+        else { OnSessionChanged(); Pull(); }
+    }
+    //JJQR - END
+
     private void OnHubEvent(ClinicHubEvent e) => Pull();
 
     private void OnConnectivity(bool online)
     {
-        if (!online) return;
+        if (!online || OfflineMode) return;
         Pull();                        // catch-up + push of everything queued while offline
         if (IsOnlineSession) _hub.Start();
     }
@@ -63,6 +79,7 @@ public sealed class LiveSyncCoordinator : IDisposable
     private void OnSessionChanged()
     {
         _vaccines?.ClearSessionBlocks(); //JJQR - AI (21 Nov 2026) - TASK 3: rows parked by a 401 may go up after a new sign-in //JJQR - END
+        if (OfflineMode) return; //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         if (IsOnlineSession) _hub.Start();
         else if (_auth.Current is null) _ = _hub.StopAsync();
     }
@@ -71,6 +88,7 @@ public sealed class LiveSyncCoordinator : IDisposable
 
     private void Pull()
     {
+        if (OfflineMode) return; //JJQR - AI (Nov 22, 2026) - step 1.2: Offline mode never reaches out by itself //JJQR - END
         try { _sync.RequestSync(); } catch (Exception) { /* never break a screen */ }
         //JJQR - AI (21 Nov 2026) - standalone vaccinations go up via POST /api/patient-vaccinations (user session), only online + signed in online;
         // rows whose patient is not in the cloud yet wait for a later run (the sync cycle pushes the patient first).
@@ -92,6 +110,7 @@ public sealed class LiveSyncCoordinator : IDisposable
         _hub.Resync -= Pull;
         _connectivity.Changed -= OnConnectivity;
         if (_auth is IOnlineAuthSession online) online.SessionChanged -= OnSessionChanged;
+        if (_mode is not null) _mode.Changed -= OnModeChanged; //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
     }
 }
 

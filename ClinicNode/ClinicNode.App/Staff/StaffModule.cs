@@ -47,7 +47,8 @@ public static class StaffModule
                 sp.GetRequiredService<ApiStaffProfileService>(), sp.GetRequiredService<StaffProfileService>(),
                 sp.GetRequiredService<IApiConnectivity>(), sp.GetService<ISyncBridge>(),
                 hasApiSession: () => sp.GetRequiredService<IApiTokenStore>().AccessToken is { Length: > 0 },
-                dropApiSession: () => sp.GetRequiredService<IApiTokenStore>().Clear()),
+                dropApiSession: () => sp.GetRequiredService<IApiTokenStore>().Clear(),
+                workMode: sp.GetService<ClinicNode.Core.Sync.IWorkModeService>()), //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
             sp.GetRequiredService<IAuthService>()));
 
         // ── pages & view-models (TryAdd: harmless next to the lines already in MauiProgram) ────────────

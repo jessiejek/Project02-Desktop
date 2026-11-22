@@ -49,8 +49,28 @@ public sealed class CountingSync : ISyncBridge
     //JJQR - END
 }
 
+//JJQR - AI (Nov 22, 2026) - step 1.2: a work mode a test can flip without a signed-in user
+public sealed class FakeWorkMode(WorkMode mode = WorkMode.Online) : IWorkModeService
+{
+    public WorkMode Mode { get; set; } = mode;
+    public WorkModeInfo Info => new(Mode, null, null);
+    public bool CanSwitch => true;
+    public event EventHandler<WorkModeInfo>? Changed;
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<WorkModeChangeResult> SetAsync(WorkMode target, CancellationToken ct = default) { Mode = target; Changed?.Invoke(this, Info); return Task.FromResult(new WorkModeChangeResult(true, target, null)); }
+}
+//JJQR - END
+
 public sealed class ApiRig : IAsyncDisposable
 {
+    //JJQR - AI (Nov 22, 2026) - step 1.2: the way to work without the server is now the doctor switching to Offline mode (no silent fallback)
+    public async Task GoOfflineAsync()
+    {
+        var r = await Get<IWorkModeService>().SetAsync(WorkMode.Offline);
+        Assert.True(r.Succeeded, r.Error);
+    }
+    //JJQR - END
+
     public FakeHandler Http { get; } = new();
     public CountingSync Sync { get; } = new();
     public ServiceProvider Services { get; private set; } = null!;

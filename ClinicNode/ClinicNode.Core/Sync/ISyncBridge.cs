@@ -21,6 +21,10 @@ public interface ISyncBridge
 public sealed class LocalWriteBlockedException(string message) : InvalidOperationException(message);
 //JJQR - END
 
+//JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2 (rule R1): in ONLINE mode a save that cannot reach the clinic server is NOT kept on this computer. It throws this, the shell offers "Switch to Offline mode".
+public sealed class OnlineWriteFailedException(string message) : InvalidOperationException(message);
+//JJQR - END
+
 public sealed class NoOpSyncBridge : ISyncBridge
 {
     public void RequestSync() { }

@@ -36,6 +36,7 @@ public class RegistrationGateTests
         await using var rig = await StartAsync();
         var patient = await rig.Get<IPatientService>().CreateAsync(new NewPatientRequest("Gate", "Test", new DateOnly(1990, 1, 1), SexType.Male));
         await ReserveBlockAsync(rig);
+        await rig.GoOfflineAsync();                                             // step 1.2: the doctor chose Offline (a computer that cannot sync would not have been allowed to; it was registered then lost that)
         rig.Sync.BlockedReason = "Register this computer for sync first.";
         rig.Http.Route = _ => throw new HttpRequestException("down");
         string? shown = null;
@@ -57,18 +58,20 @@ public class RegistrationGateTests
     public async Task Unregistered_computer_also_refuses_when_the_session_is_offline_only()
     {
         await using var rig = await ApiRig.StartAsync(s => s.AddOnlineFirst<IStaffPatientsService, ApiStaffPatientsService, StaffPatientsService>(), signedIn: false);
+        await rig.GoOfflineAsync();
         rig.Sync.BlockedReason = "Register this computer for sync first.";
         var form = new QuickRegisterForm("No", null, "Save", new DateOnly(1990, 1, 1), SexType.Male, null, null, Guid.NewGuid());
         await Assert.ThrowsAsync<LocalWriteBlockedException>(() => rig.Get<IStaffPatientsService>().QuickRegisterAsync(form));
     }
 
     [Fact]
-    public async Task Registered_computer_still_saves_locally_when_the_server_is_down()
+    public async Task Registered_computer_in_Offline_mode_saves_locally()
     {
         await using var rig = await StartAsync();
         var patient = await rig.Get<IPatientService>().CreateAsync(new NewPatientRequest("Gate", "Ok", new DateOnly(1990, 1, 1), SexType.Male));
         await ReserveBlockAsync(rig);
         rig.Sync.BlockedReason = null;                                          // registered
+        await rig.GoOfflineAsync();
         rig.Http.Route = _ => throw new HttpRequestException("down");
         var r = await rig.Get<IStaffWalkInService>().CheckInWalkInAsync(new WalkInRequest(patient.PatientId, rig.DoctorId, BookingId: Guid.NewGuid()));
         Assert.True(r.Succeeded, r.Error);

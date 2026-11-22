@@ -21,6 +21,11 @@ public static class OnlineRouteStatus
     public static event Action<string>? LocalWriteBlocked;
     internal static void RaiseLocalWriteBlocked(string reason) => LocalWriteBlocked?.Invoke(reason);
     //JJQR - END
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2 (rule R1): raised when an ONLINE-mode save could not reach the clinic server and was NOT saved. The shell offers "Switch to Offline mode".
+    public static event Action<string>? OnlineWriteFailed;
+    internal static void RaiseOnlineWriteFailed(string reason) => OnlineWriteFailed?.Invoke(reason);
+    public const string NotAvailableOffline = "Not available in Offline mode.";
+    //JJQR - END
 }
 //JJQR - END
 
@@ -35,10 +40,13 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
     //JJQR - AI (21 Nov 2026) - owner rule: every successful API read is mirrored into the local SQLite copy
     private IOnlineReadMirror? _mirror;
     //JJQR - END
+    private IWorkModeService? _mode; //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2 (null = old behaviour, for fakes) //JJQR - END
 
     public static T Create(T api, T local, IApiConnectivity connectivity, ISyncBridge? sync = null, Func<bool>? hasApiSession = null, Action? dropApiSession = null,
         //JJQR - AI (21 Nov 2026)
-        IOnlineReadMirror? mirror = null)
+        IOnlineReadMirror? mirror = null,
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2
+        IWorkModeService? workMode = null)
         //JJQR - END
     {
         var proxy = Create<T, OnlineFirstProxy<T>>();
@@ -47,6 +55,7 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
         if (hasApiSession is not null) p._hasApiSession = hasApiSession;
         p._dropApiSession = dropApiSession;
         p._mirror = mirror; //JJQR - AI (21 Nov 2026) //JJQR - END
+        p._mode = workMode; //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         return proxy;
     }
 
@@ -76,6 +85,28 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
     }
     //JJQR - END
 
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.2. OFFLINE mode: the API is never called (reads and writes use this computer's copy; an API-only feature says it is not available).
+    // ONLINE mode (rule R1): a write that cannot reach the clinic server is refused with a clear message, never quietly kept on this computer.
+    private bool IsOfflineMode => _mode?.IsOffline == true;
+
+    private async Task<object?> OfflineCallAsync(MethodInfo m, object?[]? args, OnlineRoute route)
+    {
+        if (route == OnlineRoute.ApiOnly) throw new ApiOfflineException(OnlineRouteStatus.NotAvailableOffline);
+        await GuardLocalWriteAsync(m); // still refused on a computer that cannot sync (step 0.4)
+        LastRoute = "local";
+        if (IsWrite(m)) OnlineRouteStatus.LastWriteWasLocalOnly = true;
+        return Call(_local, m, args); // a Task; the caller awaits it. No sync request here: in Offline mode sync is a button, not automatic.
+    }
+
+    private void FailOnlineWrite(MethodInfo m, string why)
+    {
+        if (_mode is null || !IsWrite(m) || RouteOf(m) == OnlineRoute.LocalOnly) return;
+        var message = "Could not save: " + why + " Nothing was saved. Try again, or switch to Offline mode to keep working on this computer.";
+        OnlineRouteStatus.RaiseOnlineWriteFailed(message);
+        throw new OnlineWriteFailedException(message);
+    }
+    //JJQR - END
+
     private static OnlineRoute RouteOf(MethodInfo m) => m.GetCustomAttribute<OnlineRouteAttribute>()?.Route ?? OnlineRoute.Auto;
 
     private static readonly string[] ReadPrefixes = ["Get", "List", "Search", "Find", "Count", "Is", "Has", "Load", "Query", "Read", "Preview", "Build", "Can", "Lookup", "Fetch"];
@@ -101,9 +132,11 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
     {
         var route = RouteOf(m);
         if (route == OnlineRoute.LocalOnly) { LastRoute = "local"; return await (Task<TResult>)Call(_local, m, args)!; }
+        if (IsOfflineMode) return await (Task<TResult>)(await OfflineCallAsync(m, args, route))!; //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         if (!_hasApiSession() || !await _connectivity.EnsureCheckedAsync())
         {
             if (route == OnlineRoute.ApiOnly) throw new ApiOfflineException("This needs a connection to the clinic server and an online sign-in.");
+            FailOnlineWrite(m, "the clinic server cannot be reached."); //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
             await GuardLocalWriteAsync(m); //JJQR - AI (Nov 22, 2026) - step 0.4 //JJQR - END
             LastRoute = "local"; if (IsWrite(m)) OnlineRouteStatus.LastWriteWasLocalOnly = true; return await (Task<TResult>)Call(_local, m, args)!;
         }
@@ -117,9 +150,9 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
             //JJQR - END
             return result;
         }
-        catch (ApiOfflineException) when (route != OnlineRoute.ApiOnly) { _connectivity.ReportNetworkFailure(); }
+        catch (ApiOfflineException) when (route != OnlineRoute.ApiOnly) { _connectivity.ReportNetworkFailure(); FailOnlineWrite(m, "the clinic server did not answer."); } //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         catch (ApiNotSupportedException) when (route != OnlineRoute.ApiOnly) { }
-        catch (ApiUnauthorizedException) when (route != OnlineRoute.ApiOnly) { _dropApiSession?.Invoke(); } // the API session is gone (refresh failed): carry on locally until the next online sign-in
+        catch (ApiUnauthorizedException) when (route != OnlineRoute.ApiOnly) { _dropApiSession?.Invoke(); FailOnlineWrite(m, "your sign-in to the clinic server ended."); } // the API session is gone (refresh failed): reads carry on locally until the next online sign-in
         await GuardLocalWriteAsync(m); //JJQR - AI (Nov 22, 2026) - step 0.4: the API did not answer; saving here only helps if this computer can sync //JJQR - END
         LastRoute = "local";
         if (IsWrite(m)) OnlineRouteStatus.LastWriteWasLocalOnly = true; //JJQR - AI (Nov 22, 2026) - QA high #3 //JJQR - END
@@ -134,9 +167,11 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
     {
         var route = RouteOf(m);
         if (route == OnlineRoute.LocalOnly) { LastRoute = "local"; await (Task)Call(_local, m, args)!; return; }
+        if (IsOfflineMode) { await (Task)(await OfflineCallAsync(m, args, route))!; return; } //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         if (!_hasApiSession() || !await _connectivity.EnsureCheckedAsync())
         {
             if (route == OnlineRoute.ApiOnly) throw new ApiOfflineException("This needs a connection to the clinic server and an online sign-in.");
+            FailOnlineWrite(m, "the clinic server cannot be reached."); //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
             await GuardLocalWriteAsync(m); //JJQR - AI (Nov 22, 2026) - step 0.4 //JJQR - END
             LastRoute = "local"; await (Task)Call(_local, m, args)!; return;
         }
@@ -147,9 +182,9 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
             if (IsWrite(m)) _sync?.RequestSync();
             return;
         }
-        catch (ApiOfflineException) when (route != OnlineRoute.ApiOnly) { _connectivity.ReportNetworkFailure(); }
+        catch (ApiOfflineException) when (route != OnlineRoute.ApiOnly) { _connectivity.ReportNetworkFailure(); FailOnlineWrite(m, "the clinic server did not answer."); } //JJQR - AI (Nov 22, 2026) - step 1.2 //JJQR - END
         catch (ApiNotSupportedException) when (route != OnlineRoute.ApiOnly) { }
-        catch (ApiUnauthorizedException) when (route != OnlineRoute.ApiOnly) { _dropApiSession?.Invoke(); } // the API session is gone (refresh failed): carry on locally until the next online sign-in
+        catch (ApiUnauthorizedException) when (route != OnlineRoute.ApiOnly) { _dropApiSession?.Invoke(); FailOnlineWrite(m, "your sign-in to the clinic server ended."); } // the API session is gone (refresh failed): carry on locally until the next online sign-in
         await GuardLocalWriteAsync(m); //JJQR - AI (Nov 22, 2026) - step 0.4 //JJQR - END
         LastRoute = "local";
         await (Task)Call(_local, m, args)!;
