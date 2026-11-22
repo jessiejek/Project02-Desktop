@@ -146,7 +146,10 @@ public sealed class QueueService : IQueueService
         var queueNumber = _numbers is null
             ? await QueueSequencer.NextForPatientAsync(db, today, patient.PatientId, discount, ct)
             : await _numbers.NextForPatientAsync(db, today, patient.PatientId, discount, ct);
-        if (queueNumber is null) return QueueActionResult.Fail(QueueNumberMessages.NoNumbersLeft);
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.3 (owner Q1): no reserved number left = "Paper queue". The patient is added with NO number (staff keep the paper list, the doctor adds the patient when they
+        // enter the room); the clinic server gives the booking a number when it syncs. The doctor is never blocked.
+        // queueNumber stays null here; the ticket and the slip say "PAPER QUEUE".
+        //JJQR - END
         //JJQR - END
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -189,7 +192,7 @@ public sealed class QueueService : IQueueService
             Aggregate = "booking",
             EntityId = bookingId,
             OperationType = "create",
-            PayloadJson = $$"""{"bookingId":"{{bookingId}}","queueNumber":"{{queueNumber}}"}""",
+            PayloadJson = $$"""{"bookingId":"{{bookingId}}","queueNumber":"{{queueNumber}}"}""", //JJQR - AI (Nov 22, 2026) - step 2.3: "" when paper queue //JJQR - END
             CreatedAt = now,
         }, ct);
         await db.SaveChangesAsync(ct);
@@ -199,7 +202,7 @@ public sealed class QueueService : IQueueService
         //JJQR - END
 
         var ticket = new WalkInTicket(
-            bookingId, paymentId, queueNumber,
+            bookingId, paymentId, queueNumber ?? "",
             QueueLane.IsPriority(queueNumber) ? QueueLane.Priority : QueueLane.Regular,
             QueueLane.IsPriority(queueNumber),
             $"{patient.FirstName} {patient.LastName}".Trim(),

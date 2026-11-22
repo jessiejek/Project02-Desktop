@@ -18,6 +18,10 @@ public static class QueueSlip
     public static string VisitLabel(string visitType) => visitType == "FollowUp" ? "Follow-up" : "New";
 
     public const string PriorityText = "PRIORITY LANE · Senior / PWD";
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.3: a booking made with no reserved number prints this instead of a blank
+    public const string PaperQueueText = "PAPER QUEUE";
+    public static string NumberText(QueueSlipData t) => string.IsNullOrWhiteSpace(t.QueueNumber) ? PaperQueueText : t.QueueNumber;
+    //JJQR - END
 
     /// <summary>Body HTML of the WalkInWizard "Print slip" button (verbatim markup).</summary>
     public static string WebBodyHtml(QueueSlipData t) =>
@@ -25,7 +29,7 @@ public static class QueueSlip
         <div class="slip">
                             <div class="brand">{E(t.ClinicName)}</div>
                             <p class="muted">{E(t.ClinicAddress)}</p>
-                            <div class="queue">{E(t.QueueNumber)}</div>
+                            <div class="queue">{E(NumberText(t))}</div>
                             {(t.IsPriority ? $"<p><strong>{PriorityText}</strong></p>" : "")}
                             <p><strong>{E(t.PatientName)}</strong> ({E(t.PatientCode)})</p>
                             <p class="muted">{E(t.DoctorName)}</p>
@@ -36,7 +40,7 @@ public static class QueueSlip
 
     /// <summary>The slip exactly as the web prints it: <c>printHtml(`Queue ${n}`, body)</c> with the default chrome and brand line.</summary>
     public static PrintDocument Web(QueueSlipData t) =>
-        new($"Queue {t.QueueNumber}", PrintPaper.PrinterDefault, PrintHtmlDocument.Wrap($"Queue {t.QueueNumber}", WebBodyHtml(t), bare: false));
+        new($"Queue {NumberText(t)}", PrintPaper.PrinterDefault, PrintHtmlDocument.Wrap($"Queue {NumberText(t)}", WebBodyHtml(t), bare: false));
 
     /// <summary>Same content laid out for a thermal roll: no dashed card, black only, width = printable head width.</summary>
     public static PrintDocument Thermal(QueueSlipData t, PrintPageSize roll)
@@ -63,7 +67,7 @@ body { width: {{paperMm}}mm; font-family: Arial, Helvetica, sans-serif; color: #
             "<p class=\"clinic\">" + E(t.ClinicName) + "</p>" +
             (string.IsNullOrWhiteSpace(t.ClinicAddress) ? "" : "<p>" + E(t.ClinicAddress) + "</p>") +
             "<hr />" +
-            "<div class=\"queue\">" + E(t.QueueNumber) + "</div>" +
+            "<div class=\"queue\">" + E(NumberText(t)) + "</div>" +
             (t.IsPriority ? "<p><span class=\"prio\">" + PriorityText + "</span></p>" : "") +
             "<p class=\"who\">" + E(t.PatientName) + "</p>" +
             "<p>" + E(t.PatientCode) + "</p>" +
@@ -72,7 +76,7 @@ body { width: {{paperMm}}mm; font-family: Arial, Helvetica, sans-serif; color: #
             "<hr />" +
             "<p>" + E(IssuedAtText(t.IssuedAt)) + "</p>" +
             "</div>";
-        var title = $"Queue {t.QueueNumber}";
+        var title = $"Queue {NumberText(t)}";
         var html = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <title>" + E(title) + "</title>\n  <style>\n" + css + "\n  </style>\n</head>\n<body>\n  " + body + "\n</body>\n</html>";
         return new PrintDocument(title, roll, html);
     }
@@ -86,7 +90,7 @@ body { width: {{paperMm}}mm; font-family: Arial, Helvetica, sans-serif; color: #
         };
         if (!string.IsNullOrWhiteSpace(t.ClinicAddress)) lines.Add((t.ClinicAddress, EscPosStyle.Normal));
         lines.Add(("", EscPosStyle.Rule));
-        lines.Add((t.QueueNumber, EscPosStyle.Huge));
+        lines.Add((NumberText(t), EscPosStyle.Huge));
         if (t.IsPriority) lines.Add(("PRIORITY LANE - Senior / PWD", EscPosStyle.Bold));
         lines.Add((t.PatientName, EscPosStyle.Bold));
         lines.Add((t.PatientCode, EscPosStyle.Normal));

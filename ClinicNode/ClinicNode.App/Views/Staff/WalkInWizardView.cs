@@ -397,8 +397,8 @@ public sealed class WalkInWizardView : ContentView
             Spacing = 4,
             Children =
             {
-                Center("Queue number", "MutedSm"),
-                new Label { Text = t.QueueNumber, Style = ClinicTheme.Style("DisplaySm"), TextColor = ClinicTheme.Color("Primary"), HorizontalTextAlignment = TextAlignment.Center },
+                Center(string.IsNullOrWhiteSpace(t.QueueNumber) ? "No queue number yet (the clinic server gives one when this computer syncs)" : "Queue number", "MutedSm"),
+                new Label { Text = string.IsNullOrWhiteSpace(t.QueueNumber) ? "Paper queue" : t.QueueNumber, Style = ClinicTheme.Style("DisplaySm"), TextColor = ClinicTheme.Color("Primary"), HorizontalTextAlignment = TextAlignment.Center },
             },
         };
         if (t.IsPriority)
