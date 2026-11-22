@@ -110,6 +110,37 @@ public partial class App : Application
             });
         };
         //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 1.4: a SUGGESTION to switch mode. Nothing changes unless the doctor or admin presses the button.
+        var showingSuggestion = false;
+        _services.GetRequiredService<ClinicNode.Api.Http.IConnectionAdvisor>().Suggested += suggestion =>
+        {
+            var mode = _services.GetRequiredService<ClinicNode.Core.Sync.IWorkModeService>();
+            if (!mode.CanSwitch || showingSuggestion) return; // staff cannot switch, so they are not asked
+            showingSuggestion = true;
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                try
+                {
+                    if (suggestion.Kind == ClinicNode.Api.Http.SuggestionKind.SwitchToOffline)
+                    {
+                        if (await shell.DisplayAlertAsync("Connection", suggestion.Message, "Switch to Offline mode", "Not now"))
+                        {
+                            var r = await mode.SetAsync(ClinicNode.Core.Sync.WorkMode.Offline);
+                            if (!r.Succeeded) await shell.DisplayAlertAsync("Can't switch", r.Error ?? "", "OK");
+                        }
+                    }
+                    else if (await shell.DisplayAlertAsync("Connection", suggestion.Message, "Sync and go Online", "Not now"))
+                    {
+                        var run = await _services.GetRequiredService<ISyncService>().RunOnceAsync();
+                        if (run.Succeeded) await mode.SetAsync(ClinicNode.Core.Sync.WorkMode.Online);
+                        else await shell.DisplayAlertAsync("Sync did not finish", (run.Error ?? "The clinic server did not accept everything.") + " You are still in Offline mode.", "OK");
+                    }
+                }
+                catch { /* the window may be closing */ }
+                finally { showingSuggestion = false; }
+            });
+        };
+        //JJQR - END
         window.Destroying += (_, _) =>
         {
             try

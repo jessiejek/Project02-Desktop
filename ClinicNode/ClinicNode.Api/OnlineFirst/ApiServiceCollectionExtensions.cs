@@ -33,6 +33,9 @@ public static class ApiServiceCollectionExtensions
         services.TryAddSingleton<ConnectionMonitor>(sp => new ConnectionMonitor(
             sp.GetRequiredService<IApiConnectivity>(), sp.GetRequiredService<IApiConnectivity>() as IApiProbeSource ?? new NoProbeSource()));
         services.TryAddSingleton<IConnectionMonitor>(sp => sp.GetRequiredService<ConnectionMonitor>());
+        //JJQR - AI (Nov 22, 2026) - step 1.4: suggestions (needs the work mode from AddClinicNodeSync; without it there is nothing to suggest about)
+        services.TryAddSingleton<ConnectionAdvisor>(sp => new ConnectionAdvisor(sp.GetRequiredService<IConnectionMonitor>(), sp.GetRequiredService<ClinicNode.Core.Sync.IWorkModeService>()));
+        services.TryAddSingleton<IConnectionAdvisor>(sp => sp.GetRequiredService<ConnectionAdvisor>());
         //JJQR - END
         services.TryAddSingleton<IApiAuthClient>(sp => new ApiAuthClient(sp.GetRequiredService<ApiOptions>(), sp.GetRequiredService<IApiTokenStore>(), sp.GetRequiredService<IApiConnectivity>()));
         services.TryAddSingleton<IApiClient>(sp => new ApiClient(sp.GetRequiredService<ApiOptions>(), sp.GetRequiredService<IApiTokenStore>(), sp.GetRequiredService<IApiAuthClient>(), sp.GetRequiredService<IApiConnectivity>()));
