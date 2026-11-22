@@ -12,6 +12,20 @@ using Microsoft.Extensions.Logging;
 
 namespace ClinicNode.Sync;
 
+//JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.3 (D5): has this computer finished a sync for today's clinic date?
+public enum DailySyncDecision { NotNeeded, Needed, NotRegistered, NotConfigured }
+
+public static class DailySyncRules
+{
+    public const string StateKey = "daily_sync_done";
+
+    /// <summary>A sync is needed unless the stored date IS today. A stored date later than today (the clock or the server date went back) counts as not done.</summary>
+    public static bool Needs(string? stored, DateOnly today) => !(DateOnly.TryParseExact(stored, "yyyy-MM-dd", out var d) && d == today);
+
+    public static string Format(DateOnly day) => day.ToString("yyyy-MM-dd");
+}
+//JJQR - END
+
 public interface ISyncService : ISyncStatusSource
 {
     Task<SyncStatus> RefreshStatusAsync(CancellationToken ct = default);
@@ -22,6 +36,8 @@ public interface ISyncService : ISyncStatusSource
     Task<SyncCycleResult> RunManualAsync(string trigger, CancellationToken ct = default) => RunManualAsync(ct);
     /// <summary>The last 30 runs, newest first (step 3.2).</summary>
     Task<IReadOnlyList<SyncRunRecord>> GetRunHistoryAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<SyncRunRecord>>([]);
+    /// <summary>Step 3.3: should the first sign-in of the day run a sync? Never throws.</summary>
+    Task<DailySyncDecision> GetDailySyncDecisionAsync(CancellationToken ct = default) => Task.FromResult(DailySyncDecision.NotNeeded);
     //JJQR - END
 }
 
@@ -48,6 +64,8 @@ public sealed record SyncCycleResult(bool Succeeded, SyncFailureKind Failure, st
     /// <summary>Changes received from the server.</summary>
     public int Received => Pulled;
     public int QueueBlocksReserved { get; init; }
+    /// <summary>The clinic server's clock at the end of the run (null when it did not answer).</summary>
+    public DateTimeOffset? ServerTime { get; init; }
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset FinishedAt { get; init; }
     //JJQR - END
@@ -250,6 +268,38 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
     }
 
     //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.1
+    //JJQR - AI (Nov 22, 2026) - step 3.3
+    /// <summary>Raised after every manual / daily / switch run (any thread). The app uses it to forget remembered visit versions (owner, 22 Nov).</summary>
+    public event Action<SyncCycleResult>? ManualRunCompleted;
+
+    public async Task<DailySyncDecision> GetDailySyncDecisionAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            if (!_cloud.IsConfigured) return DailySyncDecision.NotConfigured;
+            if (_cloud is ClinicNode.Sync.Wire.ISyncNodeRegistration reg && !await reg.IsRegisteredAsync(ct)) return DailySyncDecision.NotRegistered;
+            // "today" = the clinic server's date when it answers, else this computer's clock
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(3));
+                if (_cloud is ClinicNode.Sync.Wire.ISyncNodeRegistration r2 && await r2.HandshakeAsync(cts.Token) is { ServerTime: { } st }) now = st;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { /* the server did not answer: use the clock */ }
+            await using var db = await _factory.CreateDbContextAsync(ct);
+            await SyncLocalStore.EnsureSchemaAsync(db, ct);
+            var stored = await SyncLocalStore.GetStateAsync(db, DailySyncRules.StateKey, ct);
+            return DailySyncRules.Needs(stored, ClinicApp.Domain.ClinicClock.DateOf(now)) ? DailySyncDecision.Needed : DailySyncDecision.NotNeeded;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning("Could not decide about the daily sync ({Type}).", ex.GetType().Name);
+            return DailySyncDecision.NotNeeded;   // never block a sign-in over this
+        }
+    }
+    //JJQR - END
+
     public Task<SyncCycleResult> RunManualAsync(CancellationToken ct = default) => RunManualAsync("manual", ct);
 
     public async Task<SyncCycleResult> RunManualAsync(string trigger, CancellationToken ct = default)
@@ -264,6 +314,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         }
         result = result with { StartedAt = result.StartedAt == default ? started : result.StartedAt, FinishedAt = result.FinishedAt == default ? DateTimeOffset.UtcNow : result.FinishedAt };
         await RecordRunAsync(trigger, result);
+        try { ManualRunCompleted?.Invoke(result); } catch { /* a listener must never break a sync */ }
         return result;
     }
 
@@ -493,6 +544,10 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         //JJQR - END
         var at = serverTime ?? DateTimeOffset.UtcNow;
         await SyncOutbox.SetLastSuccessfulSyncAsync(db, at, ct);
+        //JJQR - AI (Nov 22, 2026) - step 3.3: "synced today" is recorded only when this run left nothing waiting
+        if (await _outbox.CountPendingAsync(db, ct) == 0)
+            await SyncLocalStore.SetStateAsync(db, DailySyncRules.StateKey, DailySyncRules.Format(ClinicApp.Domain.ClinicClock.DateOf(at)), ct);
+        //JJQR - END
         await NotifyReprintAsync(db, ct); //JJQR - AI (Nov 21, 2026) // JJQR - END
         //JJQR - AI (Nov 21, 2026)
         await SyncLocalStore.SetStateAsync(db, RevokedKey, null, ct);
@@ -514,7 +569,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
             Pushed = pushed, Acked = acked, RetryLater = retry, Pulled = pulled, Applied = applied,
             Accepted = accepted, Merged = mergedCount, Conflicts = conflicts, Rejected = rejected,
             NewReviewItems = Math.Max(0, openAfter - openBefore), StillWaiting = await _outbox.CountPendingAsync(db, ct),
-            QueueBlocksReserved = blocksReserved, StartedAt = startedAt, FinishedAt = DateTimeOffset.UtcNow,
+            QueueBlocksReserved = blocksReserved, ServerTime = serverTime, StartedAt = startedAt, FinishedAt = DateTimeOffset.UtcNow,
         };
         //JJQR - END
     }

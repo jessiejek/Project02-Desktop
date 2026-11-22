@@ -11,6 +11,9 @@ namespace ClinicNode.Tests.Sync;
 public sealed class FakeSyncServer : HttpMessageHandler
 {
     public bool Offline { get; set; }
+    //JJQR - AI (Nov 22, 2026) - step 3.3: the server's clock as it answers (fixed in the past unless a test sets it)
+    public DateTimeOffset ServerNow { get; set; } = DateTimeOffset.Parse("2026-11-21T06:15:00+00:00");
+    //JJQR - END
     public bool Revoked { get; set; }
     /// <summary>Number of upcoming sync calls (not token) answered 401.</summary>
     public int UnauthorizedResponses { get; set; }
@@ -33,7 +36,7 @@ public sealed class FakeSyncServer : HttpMessageHandler
     public void EnqueuePull(string nextCursor, bool hasMore, params JsonObject[] changes) =>
         PullPages.Enqueue(new JsonObject
         {
-            ["server_time"] = "2026-11-21T06:15:00+00:00",
+            ["server_time"] = ServerNow.ToString("O"),
             ["next_cursor"] = nextCursor,
             ["has_more"] = hasMore,
             ["changes"] = new JsonArray(changes.Select(c => (JsonNode)c).ToArray()),
@@ -94,7 +97,7 @@ public sealed class FakeSyncServer : HttpMessageHandler
                 var result = OnPush?.Invoke(op) ?? Applied(op);
                 results.Add(result);
             }
-            return Json(HttpStatusCode.OK, new JsonObject { ["server_time"] = "2026-11-21T06:15:00+00:00", ["results"] = results });
+            return Json(HttpStatusCode.OK, new JsonObject { ["server_time"] = ServerNow.ToString("O"), ["results"] = results });
         }
 
         if (path == "/api/sync/pull")
@@ -108,7 +111,7 @@ public sealed class FakeSyncServer : HttpMessageHandler
             }
             return Json(HttpStatusCode.OK, new JsonObject
             {
-                ["server_time"] = "2026-11-21T06:15:00+00:00", ["next_cursor"] = _cursor, ["has_more"] = false, ["changes"] = new JsonArray(),
+                ["server_time"] = ServerNow.ToString("O"), ["next_cursor"] = _cursor, ["has_more"] = false, ["changes"] = new JsonArray(),
             });
         }
 

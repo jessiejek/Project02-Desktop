@@ -141,6 +141,10 @@ public partial class App : Application
             });
         };
         //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - owner approved 22 Nov: remembered visit versions are forgotten after a manual / first-login sync (not after the background one)
+        if (_services.GetService<ClinicNode.Sync.SyncService>() is { } syncService)
+            syncService.ManualRunCompleted += r => { if (r.Succeeded) ClinicNode.Api.Http.VisitVersions.ClearAll(); };
+        //JJQR - END
         window.Destroying += (_, _) =>
         {
             try

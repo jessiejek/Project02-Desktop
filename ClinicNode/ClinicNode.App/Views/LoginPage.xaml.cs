@@ -76,6 +76,7 @@ public partial class LoginPage : ContentPage
         {
             if (!await online.TryResumeAsync()) return;
             PasswordEntry.Text = "";
+            await ClinicNode.App.Views.Shared.DailySyncUi.RunIfNeededAsync(IPlatformApplication.Current!.Services); //JJQR - AI (Nov 22, 2026) - step 3.3: first sign-in of the day syncs before the dashboard //JJQR - END
             if (Shell.Current is AppShell shell)
                 await shell.EnterRoleAsync();
         }
