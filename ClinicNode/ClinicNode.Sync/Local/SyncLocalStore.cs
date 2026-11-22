@@ -93,6 +93,9 @@ public static class SyncLocalStore
                 resolved_at TEXT NULL
             );
             """, ct);
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 4.1 (desktop side): ids of the review items already handed to the server
+        await db.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS node_sync_review_uploaded (id TEXT NOT NULL PRIMARY KEY, uploaded_at TEXT NOT NULL);", ct);
+        //JJQR - END
         //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.2: the last 30 sync runs, kept on this computer
         await db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS node_sync_runs (
@@ -332,6 +335,64 @@ public static class SyncLocalStore
         }
         return list;
     }
+
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 4.1 (desktop side): what still has to go to the server's review list
+    /// <summary>Local kinds that mean "the server refused this change".</summary>
+    public static readonly string[] RejectedKinds = ["rejected", "conflict", "illegal_transition", "finished_immutable", "apply_failed"];
+
+    public static async Task<IReadOnlyList<ReviewItemUpload>> ListReviewUploadsAsync(ClinicAppDbContext db, int stuckAttempts, int take = 100, CancellationToken ct = default)
+    {
+        var list = new List<ReviewItemUpload>();
+        var kinds = string.Join(",", RejectedKinds.Select(k => "'" + k + "'"));
+        await using (var cmd = await CommandAsync(db, $"""
+            SELECT id, aggregate, entity_id, kind, reason_code, message, created_at FROM node_sync_conflicts
+            WHERE resolved_at IS NULL AND kind IN ({kinds}) AND id NOT IN (SELECT id FROM node_sync_review_uploaded)
+            ORDER BY created_at LIMIT $t;
+            """, ct))
+        {
+            Add(cmd, "$t", take);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var aggregate = r.GetString(1); var kind = r.GetString(3);
+                var message = r.IsDBNull(5) ? null : r.GetString(5);
+                var title = Short($"{aggregate}: {message ?? kind}", 300);
+                list.Add(new ReviewItemUpload(Guid.Parse(r.GetString(0)), "change_rejected", title,
+                    new { reason_code = r.IsDBNull(4) ? null : r.GetString(4), local_kind = kind, message = Short(message, 500) },
+                    aggregate, r.GetString(2), DateTimeOffset.Parse(r.GetString(6))));
+            }
+        }
+        await using (var cmd = await CommandAsync(db, """
+            SELECT operation_id, aggregate, entity_id, operation_type, attempts, last_error, created_at FROM node_sync_outbox
+            WHERE acked_at IS NULL AND attempts >= $n AND lower(operation_id) NOT IN (SELECT lower(id) FROM node_sync_review_uploaded)
+            ORDER BY created_at LIMIT $t;
+            """, ct))
+        {
+            Add(cmd, "$n", stuckAttempts); Add(cmd, "$t", take);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var aggregate = r.GetString(1); var attempts = r.GetInt32(4);
+                list.Add(new ReviewItemUpload(Guid.Parse(r.GetString(0)), "change_stuck", $"A change to {aggregate} failed {attempts} times and is stuck",
+                    new { attempts, operation_type = r.GetString(3), last_error = Short(r.IsDBNull(5) ? null : r.GetString(5), 500) },
+                    aggregate, r.GetString(2), DateTimeOffset.Parse(r.GetString(6))));
+            }
+        }
+        return list;
+    }
+
+    public static async Task MarkReviewUploadedAsync(ClinicAppDbContext db, IEnumerable<Guid> ids, CancellationToken ct = default)
+    {
+        foreach (var id in ids)
+        {
+            await using var cmd = await CommandAsync(db, "INSERT OR IGNORE INTO node_sync_review_uploaded (id, uploaded_at) VALUES ($i, $at);", ct);
+            Add(cmd, "$i", id.ToString()); Add(cmd, "$at", DateTimeOffset.UtcNow.ToString("O"));
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+    }
+
+    private static string? Short(string? s, int max) => s is null ? null : s.Length <= max ? s : s[..max];
+    //JJQR - END
 
     //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.2: sync run history (the last 30 are kept)
     public const int RunsKept = 30;

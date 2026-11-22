@@ -318,6 +318,20 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         return result;
     }
 
+    //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side): after a good sync, the problems only this computer knows about go to the server's review list. Best effort: if it does not work they simply go next time.
+    private async Task UploadReviewItemsAsync(ClinicAppDbContext db, CancellationToken ct)
+    {
+        try
+        {
+            var items = await SyncLocalStore.ListReviewUploadsAsync(db, SyncOutbox.StuckAttempts, 100, ct);
+            if (items.Count == 0) return;
+            var result = await _cloud.UploadReviewItemsAsync(items, ct);
+            if (result.Succeeded && result.Done.Count > 0) await SyncLocalStore.MarkReviewUploadedAsync(db, result.Done, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Could not upload review items ({Type}); will retry next sync.", ex.GetType().Name); }
+    }
+    //JJQR - END
+
     private async Task RecordRunAsync(string trigger, SyncCycleResult r)
     {
         try
@@ -544,6 +558,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         //JJQR - END
         var at = serverTime ?? DateTimeOffset.UtcNow;
         await SyncOutbox.SetLastSuccessfulSyncAsync(db, at, ct);
+        await UploadReviewItemsAsync(db, ct); //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side) //JJQR - END
         //JJQR - AI (Nov 22, 2026) - step 3.3: "synced today" is recorded only when this run left nothing waiting
         if (await _outbox.CountPendingAsync(db, ct) == 0)
             await SyncLocalStore.SetStateAsync(db, DailySyncRules.StateKey, DailySyncRules.Format(ClinicApp.Domain.ClinicClock.DateOf(at)), ct);

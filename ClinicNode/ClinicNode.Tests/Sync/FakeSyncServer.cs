@@ -11,6 +11,10 @@ namespace ClinicNode.Tests.Sync;
 public sealed class FakeSyncServer : HttpMessageHandler
 {
     public bool Offline { get; set; }
+    //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side): what the desktop uploaded to the review list; set ReviewUploadFails to simulate an old server / a failure
+    public List<JsonObject> ReviewUploads { get; } = new();
+    public bool ReviewUploadFails { get; set; }
+    //JJQR - END
     //JJQR - AI (Nov 22, 2026) - step 3.3: the server's clock as it answers (fixed in the past unless a test sets it)
     public DateTimeOffset ServerNow { get; set; } = DateTimeOffset.Parse("2026-11-21T06:15:00+00:00");
     //JJQR - END
@@ -98,6 +102,15 @@ public sealed class FakeSyncServer : HttpMessageHandler
                 results.Add(result);
             }
             return Json(HttpStatusCode.OK, new JsonObject { ["server_time"] = ServerNow.ToString("O"), ["results"] = results });
+        }
+
+        if (path == "/api/sync/review-items" && request.Method == HttpMethod.Post)
+        {
+            if (ReviewUploadFails) return new HttpResponseMessage(HttpStatusCode.NotFound);
+            var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
+            var accepted = new JsonArray();
+            foreach (var it in body["items"]!.AsArray().OfType<JsonObject>()) { ReviewUploads.Add((JsonObject)it.DeepClone()); accepted.Add(it["id"]!.DeepClone()); }
+            return Json(HttpStatusCode.OK, new JsonObject { ["accepted"] = accepted, ["skipped"] = new JsonArray(), ["invalid"] = new JsonArray() });
         }
 
         if (path == "/api/sync/pull")

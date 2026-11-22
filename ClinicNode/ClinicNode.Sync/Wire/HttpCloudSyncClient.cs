@@ -188,6 +188,42 @@ public sealed class HttpCloudSyncClient : ICloudSyncClient, ISyncNodeRegistratio
     }
     //JJQR - END
 
+    //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side)
+    public async Task<ReviewUploadResult> UploadReviewItemsAsync(IReadOnlyList<ReviewItemUpload> items, CancellationToken ct = default)
+    {
+        if (!IsConfigured || items.Count == 0) return new ReviewUploadResult(false, []);
+        var body = new
+        {
+            items = items.Select(i => new
+            {
+                id = i.Id, kind = i.Kind, title = i.Title, details = i.Details, aggregate = i.Aggregate, entity_id = i.EntityId, created_at = i.CreatedAt,
+            }).ToList(),
+        };
+        var (resp, failure, error) = await SendAuthorizedAsync(
+            () => new HttpRequestMessage(HttpMethod.Post, Url("/api/sync/review-items")) { Content = JsonContent.Create(body, options: SyncWire.Json) }, ct);
+        if (resp is null)
+        {
+            _logger.LogInformation("Review items not uploaded ({Kind}); they stay on this computer and go next time.", failure);
+            return new ReviewUploadResult(false, []);
+        }
+        using (resp)
+        {
+            try
+            {
+                var node = await resp.Content.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>(SyncWire.Json, ct);
+                var done = new List<Guid>();
+                foreach (var name in new[] { "accepted", "skipped" })
+                    if (node?[name] is System.Text.Json.Nodes.JsonArray arr)
+                        done.AddRange(arr.Select(n => Guid.TryParse(n?.GetValue<string>(), out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty));
+                if (node?["invalid"] is System.Text.Json.Nodes.JsonArray bad)   // the server will never take these: do not send them again
+                    done.AddRange(bad.Select(n => Guid.TryParse(n?["id"]?.GetValue<string>(), out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty));
+                return new ReviewUploadResult(true, done);
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException) { return new ReviewUploadResult(false, []); }
+        }
+    }
+    //JJQR - END
+
     // ── /health ───────────────────────────────────────────────────────────
     public async Task<bool> PingAsync(CancellationToken ct = default)
     {

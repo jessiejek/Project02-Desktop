@@ -88,6 +88,10 @@ public interface ICloudSyncClient
     Task<QueueBlockReservation?> ReserveQueueBlockAsync(DateOnly date, string lane, int size, CancellationToken ct = default) =>
         Task.FromResult<QueueBlockReservation?>(null);
     //JJQR - END
+    //JJQR - AI (Nov 22, 2026) - offline-mode plan step 4.1 (desktop side): POST /api/sync/review-items. Problems only this computer knows about (a change the server refused, one stuck after repeated tries) go to the server's review list for the admin.
+    Task<ReviewUploadResult> UploadReviewItemsAsync(IReadOnlyList<ReviewItemUpload> items, CancellationToken ct = default) =>
+        Task.FromResult(new ReviewUploadResult(false, []));
+    //JJQR - END
 }
 
 /// <summary>
@@ -114,3 +118,12 @@ public sealed class UnconfiguredCloudSyncClient : ICloudSyncClient
 //JJQR - AI (21 Nov 2026) - contract: {date:"yyyy-MM-dd", lane:"R"|"S", size?:20} -> {date, lane, from, to, size, first:"R-041", last:"R-060"}
 public sealed record QueueBlockReservation(DateOnly Date, string Lane, int From, int To, int Size, string? First, string? Last);
 //JJQR - END
+
+//JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side)
+/// <summary>One problem to show the admin. The id is this computer's own, so sending it twice is harmless. Only a short description and ids go up: never the patient data of the change.</summary>
+public sealed record ReviewItemUpload(Guid Id, string Kind, string Title, object? Details, string Aggregate, string? EntityId, DateTimeOffset CreatedAt);
+
+/// <summary>Succeeded = the server answered; Done = the ids it now has (new or already known) or will never take, so they are not sent again.</summary>
+public sealed record ReviewUploadResult(bool Succeeded, IReadOnlyList<Guid> Done);
+//JJQR - END
+

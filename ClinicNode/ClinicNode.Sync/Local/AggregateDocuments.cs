@@ -345,9 +345,43 @@ public static class AggregateDocuments
         return true;
     }
 
+    //JJQR - AI (Nov 22, 2026) - step 4.4 (desktop side)
+    private static async Task<bool> ApplyMergedAwayPatientAsync(ClinicAppDbContext db, PulledChange ch, CancellationToken ct)
+    {
+        var et = EntityType(db, typeof(Patient));
+        if (KeyFromId(et, ch.EntityId) is not { } key) return false;
+        var gone = (Patient?)await FindAsync(db, typeof(Patient), key, ct);
+        if (gone is null) return true;
+        var id = (Guid)key[0];
+        string? why = null;
+        if (await SyncLocalStore.HasPendingAsync(db, Aggregates.Patient, id.ToString(), ct)) why = "a change to this patient has not been sent yet";
+        else if (await db.Bookings.AnyAsync(b => b.PatientId == id, ct)) why = "this computer still has visits recorded under this patient";
+        if (why is null)
+        {
+            try
+            {
+                db.Patients.Remove(gone);
+                await db.SaveChangesAsync(ct);
+                return true;
+            }
+            catch (DbUpdateException) { db.ChangeTracker.Clear(); why = "other records on this computer still point to this patient"; }
+        }
+        await SyncLocalStore.AddConflictAsync(db, new SyncConflict
+        {
+            Aggregate = Aggregates.Patient, EntityId = id.ToString(), Kind = "patient_merged_kept",
+            Message = $"An admin merged this patient into another record on the clinic server, but it was kept on this computer because {why}. Ask the admin to check this patient.",
+        }, ct);
+        return true;
+    }
+    //JJQR - END
+
     private static async Task<bool> ApplyPatientAsync(ClinicAppDbContext db, PulledChange ch, JsonObject? data, ApplyMode mode, CancellationToken ct)
     {
-        if (ch.IsDelete || data is null) return false; // delete_not_allowed
+        //JJQR - AI (Nov 22, 2026) - offline-mode plan step 4.4 (desktop side): the clinic server only ever deletes a patient when an admin MERGED them into another. Its records arrive first (a pull applies changes before deletes),
+        // so the merged-away patient can leave this computer's lists. If anything here still points at it (an unsent change, a record not moved yet) it is kept and listed instead.
+        if (ch.IsDelete) return await ApplyMergedAwayPatientAsync(db, ch, ct);
+        //JJQR - END
+        if (data is null) return false; // delete_not_allowed
         var et = EntityType(db, typeof(Patient));
         var key = KeyFromJson(et, data) ?? KeyFromId(et, ch.EntityId) ?? throw new InvalidDataException("patient without patient_id");
         var local = (Patient?)await FindAsync(db, typeof(Patient), key, ct);
