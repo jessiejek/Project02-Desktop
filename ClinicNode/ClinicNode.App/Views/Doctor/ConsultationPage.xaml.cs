@@ -91,6 +91,9 @@ public partial class ConsultationPage : ContentPage
         _printer = printer;
         _catalog = catalog;
         _serviceProvider = services; //JJQR - AI (Nov 21, 2026) - for the live Patient history //JJQR - END
+        //JJQR - AI (Nov 22, 2026) - QA high #5: the top-left Back arrow threw away unsaved amend edits without asking (the web asks "Discard changes?"). Amend mode is manual-save only, so Back asks first when something changed.
+        Shell.SetBackButtonBehavior(this, new BackButtonBehavior { Command = new Command(async () => await OnBackRequestedAsync()) });
+        //JJQR - END
         // registered by DoctorModule.AddDoctorModule(); until that line is added the local implementation is used directly
         _lib = services.GetService<IConsultationLibraryService>() ?? ActivatorUtilities.CreateInstance<ConsultationLibraryService>(services);
         //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
@@ -275,6 +278,7 @@ public partial class ConsultationPage : ContentPage
         catch { return Guid.NewGuid().ToString(); }
     }
 
+    bool _savedLocalOnly; //JJQR - AI (Nov 22, 2026) - QA high #3: the last save did not reach the clinic server //JJQR - END
     bool Dirty => _workspace is not null && Snapshot() != _savedSnapshot;
 
     void StartAutosave()
@@ -1168,6 +1172,9 @@ public partial class ConsultationPage : ContentPage
         SectionHost.Children.Add(Btn(editing ? "Update item" : "Add Item", () =>
         {
             if (!ConsultRules.RxCanAdd(rxNew.GenericName, rxNew.Quantity)) { err.Text = "Enter the medication and the quantity."; err.IsVisible = true; return; }
+            //JJQR - AI (Nov 22, 2026) - QA high #6
+            if (ConsultRules.RxLineProblem(rxNew.Dosage, rxNew.Quantity, rxNew.DurationKind, rxNew.DurationValue) is { } lineProblem) { err.Text = lineProblem; err.IsVisible = true; return; }
+            //JJQR - END
             //JJQR - AI (21 Nov 2026) - web handleNewRxAdd order: allergy → drug safety → duplicate (ConsultationPage.Safety.cs)
             if (!RxSafeToAdd(rxNew.GenericName.Trim())) return;
             //JJQR - END
@@ -1808,6 +1815,20 @@ public partial class ConsultationPage : ContentPage
         //JJQR - END
     }
 
+    //JJQR - AI (Nov 22, 2026) - QA high #5
+    async Task OnBackRequestedAsync()
+    {
+        if (_mode == "amend" && Dirty && !_busy) { ConfirmDiscard(async () => await Shell.Current.GoToAsync("..")); return; }
+        await Shell.Current.GoToAsync("..");
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        if (_mode == "amend" && Dirty && !_busy) { ConfirmDiscard(async () => await Shell.Current.GoToAsync("..")); return true; }
+        return base.OnBackButtonPressed();
+    }
+    //JJQR - END
+
     async void OnCancelAmend(object? sender, EventArgs e)
     {
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - web "Discard changes?" dialog (Keep Editing / Discard)
@@ -1860,6 +1881,15 @@ public partial class ConsultationPage : ContentPage
                 return false;
             }
             _saveFailed = false;
+            //JJQR - AI (Nov 22, 2026) - QA high #3: say so when the save only reached THIS computer (clinic server unreachable)
+            var wasLocalOnly = _savedLocalOnly;
+            _savedLocalOnly = ClinicNode.Api.OnlineFirst.OnlineRouteStatus.LastWriteWasLocalOnly;
+            if (_savedLocalOnly && !wasLocalOnly)
+            {
+                var notRegistered = _serviceProvider.GetService<ClinicNode.Sync.ISyncStatus>()?.Phase is ClinicNode.Sync.SyncPhase.NotRegistered;
+                ShowToast("Saved on this computer only — the clinic server could not be reached." + (notRegistered ? " This computer is not registered for sync, so these changes will NOT reach the clinic server or other computers." : " They will be sent when the connection is back."), null, ++_noticeSeq);
+            }
+            //JJQR - END
             if (_mode == "amend") _amendSavedAt = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, ManilaZone()).ToString("h:mm tt", CultureInfo.GetCultureInfo("en-PH")) + " PHT";
             //JJQR - END
             if (result.Draft is { } back && !ReferenceEquals(back, sent)) ConsultDraftExtras.CopyExtras(sent, back);

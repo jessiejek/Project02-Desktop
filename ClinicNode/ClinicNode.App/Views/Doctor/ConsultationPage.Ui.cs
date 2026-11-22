@@ -295,6 +295,7 @@ public partial class ConsultationPage
         : _saveFailed ? "Not saved — your entries are still here."
         : _mode == "amend" ? (_amendSavedAt is { } t ? $"Amendment saved {t}" : "Amendment · manual save")
         : Dirty ? "Unsaved changes · auto-save every 30 seconds"
+        : _savedLocalOnly && _draftSavedAt is { } lat ? $"Saved on this computer only ({lat} PHT) — clinic server not reached"
         : _draftSavedAt is { } at ? $"Draft saved {at} PHT"
         : D.ConsultationId is not null ? "Draft loaded · no new changes"
         : "Draft not saved · changes auto-save every 30 seconds";

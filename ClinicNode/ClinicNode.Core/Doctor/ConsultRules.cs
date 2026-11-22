@@ -190,6 +190,20 @@ public static class ConsultRules
     /// <summary>PrescriptionForm canAdd: a medicine name and a quantity (dosage is optional).</summary>
     public static bool RxCanAdd(string? name, string? quantity) => !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(quantity);
 
+    //JJQR - AI (Nov 22, 2026) - QA high #6: a prescription line needs a dosage and a real quantity (the server refuses the same lines). Returns the sentence to show, or null when the line is fine.
+    public static string? RxLineProblem(string? dosage, string? quantity, string? durationKind = null, int? durationValue = null)
+    {
+        if (string.IsNullOrWhiteSpace(dosage)) return "Enter the dosage / strength.";
+        var q = (quantity ?? "").Trim();
+        if (q.Length == 0) return "Enter the quantity.";
+        var m = System.Text.RegularExpressions.Regex.Match(q, @"-?\d+(?:\.\d+)?");
+        if (!m.Success) return "Quantity needs a number, for example 30 or 1 box.";
+        if (m.Value.StartsWith('-') || decimal.Parse(m.Value, System.Globalization.CultureInfo.InvariantCulture) <= 0) return "Quantity must be more than 0.";
+        if (durationKind is "Days" or "Weeks" && durationValue is { } d && (d < 1 || d > 365)) return "Duration must be a whole number from 1 to 365.";
+        return null;
+    }
+    //JJQR - END
+
     /// <summary>directionsLine: "After lunch, maintenance." style summary of the structured fields.</summary>
     public static string DirectionsLine(RxLine rx)
     {

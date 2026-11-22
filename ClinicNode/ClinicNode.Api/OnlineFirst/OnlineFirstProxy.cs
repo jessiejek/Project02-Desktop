@@ -11,6 +11,14 @@ using ClinicNode.Core.Sync;
 
 namespace ClinicNode.Api.OnlineFirst;
 
+//JJQR - AI (Nov 22, 2026) - QA high #3: tells the screen whether the last SAVE reached the clinic server or only this computer (the footer said "Draft saved" either way).
+public static class OnlineRouteStatus
+{
+    /// <summary>True when the last write was kept on this computer only because the clinic server could not be reached.</summary>
+    public static volatile bool LastWriteWasLocalOnly;
+}
+//JJQR - END
+
 public class OnlineFirstProxy<T> : DispatchProxy where T : class
 {
     private T _api = null!;
@@ -80,13 +88,13 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
         if (!_hasApiSession() || !await _connectivity.EnsureCheckedAsync())
         {
             if (route == OnlineRoute.ApiOnly) throw new ApiOfflineException("This needs a connection to the clinic server and an online sign-in.");
-            LastRoute = "local"; return await (Task<TResult>)Call(_local, m, args)!;
+            LastRoute = "local"; if (IsWrite(m)) OnlineRouteStatus.LastWriteWasLocalOnly = true; return await (Task<TResult>)Call(_local, m, args)!;
         }
         try
         {
             var result = await (Task<TResult>)Call(_api, m, args)!;
             LastRoute = "api";
-            if (IsWrite(m)) _sync?.RequestSync();
+            if (IsWrite(m)) { OnlineRouteStatus.LastWriteWasLocalOnly = false; _sync?.RequestSync(); }
             //JJQR - AI (21 Nov 2026) - read served by the API → write it into the local DB (lane hook, else a catch-up pull). Never blocks or throws.
             else _mirror?.OnApiRead(typeof(T), m, args, result);
             //JJQR - END
@@ -96,6 +104,7 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
         catch (ApiNotSupportedException) when (route != OnlineRoute.ApiOnly) { }
         catch (ApiUnauthorizedException) when (route != OnlineRoute.ApiOnly) { _dropApiSession?.Invoke(); } // the API session is gone (refresh failed): carry on locally until the next online sign-in
         LastRoute = "local";
+        if (IsWrite(m)) OnlineRouteStatus.LastWriteWasLocalOnly = true; //JJQR - AI (Nov 22, 2026) - QA high #3 //JJQR - END
         //JJQR - AI (21 Nov 2026) - offline write: the Local service saved it and queued it in the outbox; wake the sync loop so it is sent when back online
         var localResult = await (Task<TResult>)Call(_local, m, args)!;
         if (IsWrite(m)) _sync?.RequestSync();
