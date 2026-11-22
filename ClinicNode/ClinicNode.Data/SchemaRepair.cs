@@ -109,7 +109,9 @@ public static class SchemaRepair
     static async Task CreateMissingTablesAsync(ClinicAppDbContext db, HashSet<string> missing, ILogger logger, CancellationToken ct)
     {
         var differ = db.GetService<IMigrationsModelDiffer>();
-        var operations = differ.GetDifferences(null, db.Model.GetRelationalModel());
+        //JJQR - AI (Nov 22, 2026) - the runtime model drops some index details (a filter on a unique index, for instance); the differ and the SQL generator need the full design-time model
+        var designModel = db.GetService<Microsoft.EntityFrameworkCore.Metadata.IDesignTimeModel>().Model;
+        var operations = differ.GetDifferences(null, designModel.GetRelationalModel());
         var wanted = operations.Where(op => ForMissingTable(op, missing)).ToList();
         if (wanted.Count == 0)
         {
@@ -117,7 +119,7 @@ public static class SchemaRepair
             return;
         }
 
-        var commands = db.GetService<IMigrationsSqlGenerator>().Generate(wanted, db.Model);
+        var commands = db.GetService<IMigrationsSqlGenerator>().Generate(wanted, designModel);
         foreach (var cmd in commands)
             await db.Database.ExecuteSqlRawAsync(cmd.CommandText, ct);
 
