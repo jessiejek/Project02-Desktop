@@ -105,7 +105,7 @@ public sealed class ClinicSidebar : Grid
                 },
                 logout,
                 //JJQR - AI (Nov 22, 2026) - the version, always visible
-                new Label { Text = "Clinic Node v" + (Version.TryParse(AppInfo.Current.VersionString, out var _v) ? _v.ToString(3) : AppInfo.Current.VersionString), FontSize = 11, TextColor = ClinicTheme.Color("SidebarMuted"), HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 14, 0, 12) },
+                new Label { Text = "Clinic Node v" + ClinicNode.App.Services.AppUpdateService.DetectCurrent().ToString(3), FontSize = 11, TextColor = ClinicTheme.Color("SidebarMuted"), HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 14, 0, 12) },
                 //JJQR - END
             },
         };
@@ -117,6 +117,14 @@ public sealed class ClinicSidebar : Grid
         Grid.SetRow(scroll, 1);
         Children.Add(footer);
         Grid.SetRow(footer, 2);
+        //JJQR - AI (Nov 23, 2026) - owner: on Windows the admin could not log out: the menu list was taller than the window, the list never scrolled and the pinned Logout row fell off the bottom.
+        // The Windows flyout does not limit the sidebar to the window height, so hand it the app's own height; the middle row then scrolls and Logout stays visible.
+#if WINDOWS
+        void FitToWindow() { if (_shell.Height > 0) HeightRequest = _shell.Height; }
+        _shell.SizeChanged += (_, _) => FitToWindow();
+        FitToWindow();
+#endif
+        //JJQR - END
     }
 
     public void SetActiveRoute(string route)

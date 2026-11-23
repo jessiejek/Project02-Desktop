@@ -25,13 +25,7 @@ public sealed class AppUpdateService : IDisposable
 
     public AppUpdateService()
     {
-        Current = Version.TryParse(AppInfo.Current.VersionString, out var v) ? v : new Version(0, 0, 0);
-#if WINDOWS
-        //JJQR - AI (Nov 23, 2026) - owner: the Windows app said "0.1.0" after updating, so it offered the same update forever. The unpackaged Windows app takes its version label from a manifest that the installer never touches.
-        // The installer now writes the version it installed (HKCU\Software\Clinic Node\Version); that is the truth, then the exe's file version, then the old label.
-        if (WindowsInstalledVersion() is { } wv) Current = wv;
-        //JJQR - END
-#endif
+        Current = DetectCurrent();
 #if MACCATALYST
         var key = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "mac_arm64" : "mac_x64";
 #elif WINDOWS
@@ -42,6 +36,18 @@ public sealed class AppUpdateService : IDisposable
         _checker = new UpdateChecker(() => _http, Environment.GetEnvironmentVariable("CLINIC_NODE_UPDATE_FEED") is { Length: > 0 } f ? f : FeedUrl, PublicKey, key, ComputerId); // the variable is for testing a feed on this computer
         Last = new UpdateInfo(UpdateStatus.NotChecked, Current);
     }
+
+    //JJQR - AI (Nov 23, 2026) - owner: the Windows app said "0.1.0" after updating, so it offered the same update forever. The unpackaged Windows app takes its version label from a manifest that the installer never touches.
+    // The installer now writes the version it installed (HKCU\Software\Clinic Node\Version); that is the truth, then the exe's file version, then the old label. Public so the sidebar shows the same number.
+    public static Version DetectCurrent()
+    {
+        var v = Version.TryParse(AppInfo.Current.VersionString, out var parsed) ? parsed : new Version(0, 0, 0);
+#if WINDOWS
+        if (WindowsInstalledVersion() is { } wv) v = wv;
+#endif
+        return v;
+    }
+    //JJQR - END
 
     static string ComputerId() { try { return Preferences.Default.Get("update-computer-id", "") is { Length: > 0 } id ? id : NewId(); } catch { return Environment.MachineName; } }
     static string NewId() { var id = Guid.NewGuid().ToString("N"); try { Preferences.Default.Set("update-computer-id", id); } catch { } return id; }
