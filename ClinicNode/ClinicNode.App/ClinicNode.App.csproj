@@ -3,6 +3,9 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0;net10.0-maccatalyst;net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!--JJQR - AI (Nov 23, 2026) - the cloud/Windows installer build passes -p:ClinicWindowsOnly=true so only the Windows target is restored (the Mac Catalyst target made restore ask for a Mono runtime pack that does not exist for win-x64). Only THIS project reads the switch, so the library projects are untouched. -->
+    <TargetFrameworks Condition="'$(ClinicWindowsOnly)' == 'true'">net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!--JJQR - END-->
     <OutputType>Exe</OutputType>
     <!-- net10.0 is a class-library TFM so tests can build the real service graph and resolve Pages/ViewModels -->
     <OutputType Condition="'$(TargetFramework)' == 'net10.0'">Library</OutputType>
