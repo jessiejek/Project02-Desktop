@@ -97,6 +97,9 @@ public static class MauiProgram
         Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("ClinicEntryFocus", (handler, view) => handler.PlatformView.FocusEffect = null);
 #endif
         //JJQR - END
+#if WINDOWS
+        ClinicNode.App.WinUI.NativeUiEnhancements.Register(builder); //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: UI scale, double-click guard + hand cursor, Esc / Enter (all in Platforms/Windows) //JJQR - END
+#endif
         return builder.Build();
     }
 

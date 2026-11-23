@@ -36,6 +36,18 @@ public static class ClinicPopup
             }
         }
         catch { /* fall back to the layout walk below */ }
+#elif WINDOWS
+        //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: same idea as the Mac branch above. Ask WinUI where the field really is, relative to the popup root (adding up layout offsets gives ~0 inside dialogs).
+        try
+        {
+            if (v.Handler?.PlatformView is Microsoft.UI.Xaml.UIElement ui && root.Handler?.PlatformView is Microsoft.UI.Xaml.UIElement rootUi && ui.XamlRoot is not null && ReferenceEquals(ui.XamlRoot, rootUi.XamlRoot) && ui.ActualSize.X > 0)
+            {
+                var p = ui.TransformToVisual(rootUi).TransformPoint(new global::Windows.Foundation.Point(0, 0));
+                return new Point(p.X, p.Y);
+            }
+        }
+        catch { /* fall back to the layout walk below */ }
+        //JJQR - END
 #endif
         //JJQR - END
         double x = 0, y = 0;
@@ -105,6 +117,12 @@ public static class ClinicPopup
             layer.Children.Clear();
         }
     }
+#if WINDOWS
+    //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: Esc closes an open pop-up first (Platforms/Windows/WindowsKeys.cs)
+    internal static bool IsOpen(ContentPage page) =>
+        page.Content is Grid g && g.ClassId == RootId && g.Children.OfType<AbsoluteLayout>().FirstOrDefault(l => l.ClassId == LayerId) is { IsVisible: true };
+    //JJQR - END
+#endif
 }
 
 public static class ClinicPickers

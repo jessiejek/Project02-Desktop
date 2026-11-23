@@ -78,6 +78,21 @@ public static class ClinicModal
         //JJQR - AI (Nov 21, 2026) - dialogs take a proper width (up to maxWidth) instead of shrinking to their content; on narrow windows they leave a margin on each side
         scrim.SizeChanged += (_, _) => { if (scrim.Width > 0) card.WidthRequest = Math.Max(320, Math.Min(maxWidth, scrim.Width - 56)); };
         //JJQR - END
+#if WINDOWS
+        //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: a tall dialog (e.g. Register a new patient, Connection) ran off the bottom of a laptop screen and hid its buttons.
+        // Cap the scrolling body to the room the window really has, so the body scrolls and the title and footer buttons stay visible. Also lets Esc / Enter find this dialog.
+        var bodyScroll = rows.Children.OfType<ScrollView>().First();
+        scrim.SizeChanged += (_, _) =>
+        {
+            if (scrim.Height <= 0) return;
+            double others = 0;
+            foreach (var c in rows.Children) if (!ReferenceEquals(c, bodyScroll) && c is View v && v.Height > 0) others += v.Height;
+            if (others <= 0) others = 59 + (footer is not null ? 61 : 0); // title bar 58 + line, footer 60 + line, before the first layout
+            bodyScroll.MaximumHeightRequest = Math.Max(120, Math.Min(maxBodyHeight, scrim.Height - 56 - others));
+        };
+        ClinicNode.App.WinUI.WindowsKeys.RegisterDialog(scrim, onClose, footer);
+        //JJQR - END
+#endif
         return scrim;
     }
 
