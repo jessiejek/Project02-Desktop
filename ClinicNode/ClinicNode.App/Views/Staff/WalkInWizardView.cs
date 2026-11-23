@@ -58,7 +58,13 @@ public sealed class WalkInWizardView : ContentView
     {
         _sp = sp;
         Vm = StaffUi.Get<WalkInWizardViewModel>(sp);
-        Vm.Changed += () => MainThread.BeginInvokeOnMainThread(Render);
+        //JJQR - AI (Nov 23, 2026) - BeginInvokeOnMainThread runs the code at once when already on the UI thread, so Render could tear the page down inside the tap or radio event that caused it (crash on Windows). Post it to the next turn instead, and never let a drawing error close the app.
+        Vm.Changed += () => (Application.Current?.Dispatcher ?? Dispatcher).Dispatch(() =>
+        {
+            try { Render(); }
+            catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("WalkInWizardView.Render", ex); }
+        });
+        //JJQR - END
         _search.TextChanged += async (_, e) =>
         {
             _debounce?.Cancel();

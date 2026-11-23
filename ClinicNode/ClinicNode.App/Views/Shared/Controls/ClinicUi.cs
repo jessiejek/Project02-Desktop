@@ -143,7 +143,9 @@ public static class ClinicUi
                     if (onTap is not null && item is not null)
                     {
                         var captured = item;
-                        t.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => onTap(captured)) });
+                        //JJQR - AI (Nov 23, 2026) - owner (Windows, Offline): choosing a patient in New booking crashed the app. The tap handler rebuilt the whole table while Windows was still delivering the pointer event to the rows being removed. Run the tap on the NEXT turn of the UI loop, after the event has finished.
+                        t.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { var d = Application.Current?.Dispatcher; if (d is null) onTap(captured); else d.Dispatch(() => onTap(captured)); }) });
+                        //JJQR - END
                     }
                 }
             }
