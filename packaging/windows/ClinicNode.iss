@@ -41,6 +41,11 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdi
 Name: "{autoprograms}\Clinic Node"; Filename: "{app}\{#ExeName}"
 Name: "{autodesktop}\Clinic Node"; Filename: "{app}\{#ExeName}"; Tasks: desktopicon
 
+; JJQR - AI (Nov 23, 2026) - the app reads its own version from here (the Windows exe label was stuck at 0.1.0, so it offered the same update forever)
+[Registry]
+Root: HKCU; Subkey: "Software\Clinic Node"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"; Flags: uninsdeletekey
+; JJQR - END
+
 [Run]
 Filename: "{app}\{#ExeName}"; Description: "Start Clinic Node"; Flags: nowait postinstall skipifsilent
 ; JJQR - AI (Nov 23, 2026) - one-click update runs this Setup silently: the normal entry above is skipped in silent mode, so this one reopens the app after an automatic update.

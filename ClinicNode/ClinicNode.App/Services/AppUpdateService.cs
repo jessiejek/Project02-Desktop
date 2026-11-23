@@ -26,6 +26,12 @@ public sealed class AppUpdateService : IDisposable
     public AppUpdateService()
     {
         Current = Version.TryParse(AppInfo.Current.VersionString, out var v) ? v : new Version(0, 0, 0);
+#if WINDOWS
+        //JJQR - AI (Nov 23, 2026) - owner: the Windows app said "0.1.0" after updating, so it offered the same update forever. The unpackaged Windows app takes its version label from a manifest that the installer never touches.
+        // The installer now writes the version it installed (HKCU\Software\Clinic Node\Version); that is the truth, then the exe's file version, then the old label.
+        if (WindowsInstalledVersion() is { } wv) Current = wv;
+        //JJQR - END
+#endif
 #if MACCATALYST
         var key = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "mac_arm64" : "mac_x64";
 #elif WINDOWS
@@ -179,6 +185,25 @@ public sealed class AppUpdateService : IDisposable
             return null;
         }
         catch (Exception ex) { return "Could not start the installer: " + ex.Message; }
+    }
+#endif
+
+#if WINDOWS
+    static Version? WindowsInstalledVersion()
+    {
+        static Version? Parse(string? text) => Version.TryParse(text, out var v) && v > new Version(0, 1, 0, 0) ? new Version(v.Major, v.Minor, Math.Max(v.Build, 0)) : null;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Clinic Node");
+            if (Parse(key?.GetValue("Version") as string) is { } fromRegistry) return fromRegistry;
+        }
+        catch { /* fall through */ }
+        try
+        {
+            if (Environment.ProcessPath is { Length: > 0 } exe && Parse(System.Diagnostics.FileVersionInfo.GetVersionInfo(exe).FileVersion) is { } fromFile) return fromFile;
+        }
+        catch { /* fall through */ }
+        return null;
     }
 #endif
 
