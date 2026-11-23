@@ -22,7 +22,7 @@ public static class AdminSetPasswordDialog
             WidthRequest = 420,
             Children =
             {
-                ClinicTheme.Text($"Set a temporary password for {name}. Tell them in person. They will be asked to choose their own the next time they sign in, and any computer they are signed in on is signed out.", "MutedBody"),
+                ClinicTheme.Text($"Set a temporary password for {name}. Tell them in person and ask them to change it in their Profile after signing in. Any computer they are signed in on is signed out.", "MutedBody"),
                 ClinicUi.Field("New password", pw),
                 ClinicUi.Field("Confirm password", again),
             },
@@ -36,7 +36,7 @@ public static class AdminSetPasswordDialog
             return r.Succeeded ? null : (r.Error ?? "The password could not be set. Try again.");
         }, busyText: "Saving…");
 
-        if (done) await page.DisplayAlertAsync("Password set", $"{name} can sign in with the new password and will then choose their own.", "OK");
+        if (done) await page.DisplayAlertAsync("Password set", $"{name} can sign in with the new password. Ask them to change it in their Profile.", "OK");
     }
 }
 //JJQR - END
