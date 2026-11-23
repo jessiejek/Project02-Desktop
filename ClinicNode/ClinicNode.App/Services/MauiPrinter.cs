@@ -42,9 +42,13 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
                 await Printing.MacPrintRenderer.PrintPdfAsync(pdf, document.Title, grayscale: PrintPaper.KindOf(document.Page) == PaperKind.Roll,
                     showDialog, printerName, resolved.PaperPoints);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                OpenHtmlAndAutoPrint(document);
+                //JJQR - AI (Nov 23, 2026) - owner: "clicking Print opens the browser". The native print failed silently and the fallback was a web page in Safari, which ignores the A5 paper size. Now the real error is written to print-errors.log and the fallback opens the exact-size PDF (Preview prints it at its own page size).
+                LogPrintError(ex);
+                try { OpenPdfInViewer(document, pdf.ToArray()); }
+                catch (Exception ex2) { LogPrintError(ex2); OpenHtmlAndAutoPrint(document); }
+                //JJQR - END
             }
             //JJQR - END
         });
@@ -160,6 +164,19 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         UIKit.UIApplication.SharedApplication.OpenUrl(Foundation.NSUrl.FromFilename(path), new UIKit.UIApplicationOpenUrlOptions(), null);
     }
 #endif
+    //JJQR - END
+
+    //JJQR - AI (Nov 23, 2026) - keep the reason a print failed (next to the database) so it can be fixed
+    static void LogPrintError(Exception ex)
+    {
+        try
+        {
+            var dir = Path.Combine(FileSystem.AppDataDirectory, "ClinicNode");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "print-errors.log"), $"{DateTimeOffset.Now:O}\n{ex}\n\n");
+        }
+        catch { /* nothing more we can do */ }
+    }
     //JJQR - END
 
     void KeepCopy(PrintDocument document, byte[] pdf)
