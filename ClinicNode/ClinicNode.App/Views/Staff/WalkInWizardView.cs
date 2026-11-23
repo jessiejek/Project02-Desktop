@@ -242,11 +242,9 @@ public sealed class WalkInWizardView : ContentView
                 new("Date of birth", new GridLength(1.2, GridUnitType.Star), o => ClinicUi.Cell(StaffUi.Date(((StaffPatientRow)o).DateOfBirth))),
                 new("Account", new GridLength(1.3, GridUnitType.Star), o => AccountPill(((StaffPatientRow)o).AccountStatus)),
             };
-            var table = ClinicUi.Table(columns, res.Items.Cast<object>(), onTap: o => Vm.Pick((StaffPatientRow)o));
-            // web: the selected row is tinted (bg-primary/10)
-            if (table is Border { Content: VerticalStackLayout body })
-                foreach (var g in body.Children.OfType<Grid>().Skip(1).Select((g, i) => (g, i)))
-                    if (res.Items[g.i].PatientId == selectedId) g.g.BackgroundColor = ClinicTheme.Color("Primary").WithAlpha(0.1f);
+            //JJQR - AI (Nov 23, 2026) - owner: highlight the chosen patient and dim the others (still clickable). The old tint here looked for one grid per row, but the table is a single grid, so nothing was ever tinted.
+            var table = ClinicUi.Table(columns, res.Items.Cast<object>(), onTap: o => Vm.Pick((StaffPatientRow)o), isSelected: o => ((StaffPatientRow)o).PatientId == selectedId);
+            //JJQR - END
             list = new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = new ContentView { MinimumWidthRequest = 672, Content = table } };
         }
 

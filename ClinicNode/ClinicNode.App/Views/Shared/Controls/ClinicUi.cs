@@ -89,8 +89,12 @@ public static class ClinicUi
     }
 
     // ── table (DataTable.tsx: rounded-xl frame, header row bg-surface-container-low, row dividers, empty text) ──
-    public static View Table(IReadOnlyList<TableColumn> columns, IEnumerable<object> rows, string empty = "Nothing to show yet.", Action<object>? onTap = null)
+    public static View Table(IReadOnlyList<TableColumn> columns, IEnumerable<object> rows, string empty = "Nothing to show yet.", Action<object>? onTap = null, Func<object, bool>? isSelected = null)
     {
+        //JJQR - AI (Nov 23, 2026) - owner: "highlight the entry I chose and dim the others, but keep them clickable". isSelected marks the chosen row: a tinted row with a teal accent bar; while one is chosen the others are dimmed (never disabled) and light up fully on hover.
+        var rowList = rows.ToList();
+        var anySelected = isSelected is not null && rowList.Any(isSelected);
+        //JJQR - END
         //JJQR - AI (Nov 21, 2026) - ONE grid for header + every row so each column has the same width on every row (Auto columns used to
         // resize per row and push the headers out of line); the row background spans all columns and lights up on hover.
         var grid = new Grid { ColumnSpacing = 0, RowSpacing = 0 };
@@ -102,25 +106,39 @@ public static class ClinicUi
         void AddRow(Func<TableColumn, View> make, Color background, double minHeight, double vPad, object? item, bool interactive)
         {
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            var bg = new BoxView { Color = background, MinimumHeightRequest = minHeight };
+            //JJQR - AI (Nov 23, 2026) - the chosen row keeps a tint and an accent bar; every other row is dimmed while something is chosen
+            var selected = interactive && item is not null && isSelected is not null && isSelected(item);
+            var dimmed = interactive && anySelected && !selected;
+            var restBackground = selected ? ClinicTheme.Color("Primary").WithAlpha(0.12f) : background;
+            const double DimOpacity = 0.55;
+            var bg = new BoxView { Color = restBackground, MinimumHeightRequest = minHeight };
             grid.Add(bg, 0, gridRow); Grid.SetColumnSpan(bg, columns.Count);
             var touched = new List<View> { bg };
+            if (selected)
+            {
+                var bar = new BoxView { Color = ClinicTheme.Color("Primary"), WidthRequest = 4, HorizontalOptions = LayoutOptions.Start };
+                grid.Add(bar, 0, gridRow);
+            }
+            var cells = new List<View>();
+            //JJQR - END
             for (var c = 0; c < columns.Count; c++)
             {
                 var cell = make(columns[c]);
                 cell.VerticalOptions = LayoutOptions.Center;
                 if (string.IsNullOrEmpty(columns[c].Header) && c == lastCol) cell.HorizontalOptions = LayoutOptions.End;
                 var holder = new ContentView { Padding = new Thickness(c == 0 ? 16 : 8, vPad, c == lastCol ? 16 : 8, vPad), VerticalOptions = LayoutOptions.Fill, Content = cell, MinimumHeightRequest = minHeight };
+                if (dimmed) holder.Opacity = DimOpacity; //JJQR - AI (Nov 23, 2026) //JJQR - END
                 grid.Add(holder, c, gridRow);
                 touched.Add(holder);
+                cells.Add(holder);
             }
             if (interactive)
             {
                 foreach (var t in touched)
                 {
                     var hv = new PointerGestureRecognizer();
-                    hv.PointerEntered += (_, _) => bg.Color = ClinicTheme.Color("PrimarySubtle");
-                    hv.PointerExited += (_, _) => bg.Color = surface;
+                    hv.PointerEntered += (_, _) => { bg.Color = ClinicTheme.Color("PrimarySubtle"); if (dimmed) foreach (var h in cells) h.Opacity = 1; }; //JJQR - AI (Nov 23, 2026) - dimmed rows light up on hover //JJQR - END
+                    hv.PointerExited += (_, _) => { bg.Color = selected ? restBackground : surface; if (dimmed) foreach (var h in cells) h.Opacity = DimOpacity; };
                     t.GestureRecognizers.Add(hv);
                     if (onTap is not null && item is not null)
                     {
@@ -134,7 +152,7 @@ public static class ClinicUi
 
         AddRow(c => ClinicTheme.Text(c.Header, "TableHeader"), ClinicTheme.Color("SurfaceContainerLow"), 36, 9, null, false);
         var any = false;
-        foreach (var item in rows)
+        foreach (var item in rowList)
         {
             any = true;
             grid.RowDefinitions.Add(new RowDefinition(1));
