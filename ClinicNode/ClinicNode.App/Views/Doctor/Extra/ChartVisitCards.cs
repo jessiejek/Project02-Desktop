@@ -37,7 +37,7 @@ public static class ChartVisitCards
         var views = new List<View>();
         var defaults = c.VitalTemplates.Where(t => t.IsDefault).ToList();
         var ordered = c.Bookings.Where(b => b.BookingId != excludeBookingId)
-            .OrderByDescending(b => b.AppointmentDate).ThenByDescending(b => DoctorPatientChartPage.Seq(b.QueueNumber)).ToList();
+            .OrderByDescending(b => b.AppointmentDate).ToList();
         var n = 0;
         foreach (var b in ordered)
         {

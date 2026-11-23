@@ -143,7 +143,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         // latest record: a highlighted box so the most recent visit stands out from the history below it
         //JJQR - AI (Nov 21, 2026) - "latest" = newest booking that has vitals; several visits on one day are ordered by queue number
         static int Seq(string? q) => int.TryParse(new string((q ?? "").Where(char.IsDigit).ToArray()), out var n) ? n : 0;
-        var last = c.Bookings.OrderByDescending(b => b.AppointmentDate).ThenByDescending(b => Seq(b.QueueNumber))
+        var last = c.Bookings.OrderByDescending(b => b.AppointmentDate)
             .Select(b => c.VitalVisits.FirstOrDefault(v => v.BookingId == b.BookingId)).FirstOrDefault(v => v is not null)
             ?? c.VitalVisits.OrderByDescending(v => v.Date).FirstOrDefault();
         //JJQR - END
@@ -239,7 +239,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
             _tab.Children.Add(bar);
         }
         var defaults = c.VitalTemplates.Where(t => t.IsDefault).ToList();
-        foreach (var b in c.Bookings.OrderByDescending(x => x.AppointmentDate).ThenByDescending(x => Seq(x.QueueNumber)))
+        foreach (var b in c.Bookings.OrderByDescending(x => x.AppointmentDate))
         {
             var consult = c.Consultations.FirstOrDefault(x => x.BookingId == b.BookingId);
             var ex = c.VisitExtras?.FirstOrDefault(e => e.BookingId == b.BookingId);
@@ -421,7 +421,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         //JJQR - AI (21 Nov 2026) - header card = web layout (initials avatar, name + code, sex · age · Born ISO, phone chip) via Extra2/DoctorPatientHeaderCard; the "Print patient card" button
         // (GET /api/patients/{id}/card; identity, blood type, allergies, emergency contact only) stays under it.
         _header.Children.Add(Rail(_chart));
-        _expandedConsult ??= _chart.Bookings.OrderByDescending(x => x.AppointmentDate).ThenByDescending(x => Seq(x.QueueNumber)).Select(x => (Guid?)x.BookingId).FirstOrDefault();
+        _expandedConsult ??= _chart.Bookings.OrderByDescending(x => x.AppointmentDate).Select(x => (Guid?)x.BookingId).FirstOrDefault();
         RefreshTabs();
         //JJQR - END
         RenderTab();
