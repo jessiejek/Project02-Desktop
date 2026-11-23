@@ -36,6 +36,13 @@ def pkg(p):
     return {"url":f"{base}/downloads/{os.path.basename(p)}","sha256":h,"size":os.path.getsize(p)}
 m={"version":ver,"min_version":minv or None,"released_at":datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
    "notes":json.loads(notes),f"mac_{short}":pkg(zp),f"mac_{short}_dmg":pkg(dp),"rollout_percent":int(roll)}
+#JJQR - AI (Nov 23, 2026) - the cloud release also builds the Windows installer; when WIN_SETUP points at it, it goes into the same signed feed as "win_x64"
+win=os.environ.get("WIN_SETUP","")
+if win and os.path.isfile(win):
+    import shutil
+    dst=os.path.join(rel,"downloads",os.path.basename(win)); os.makedirs(os.path.dirname(dst),exist_ok=True)
+    shutil.copyfile(win,dst); m["win_x64"]=pkg(dst)
+#JJQR - END
 open(os.path.join(rel,"latest.json"),"w",encoding="utf-8").write(json.dumps(m,indent=2,ensure_ascii=False))
 PY
 # signature over the EXACT bytes of latest.json (ECDSA P-256 / SHA-256, DER, base64)

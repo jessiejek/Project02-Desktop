@@ -1,9 +1,10 @@
-name: Release desktop (Mac)
+name: Release desktop (Mac + Windows)
 
 # JJQR - AI (Nov 22, 2026) - owner: "who updates the releases repo?" GitHub does, when you push a version tag.
 #   git tag -a v0.2.4 -m "Faster consultation. Fixed the date picker."     <- the tag message becomes the "what is new" notes
 #   git push origin v0.2.4
-# It builds the Mac app on GitHub's Mac, signs latest.json with YOUR key, and publishes the installers + feed to the public Project02-releases repo.
+# Nov 23: it builds the WINDOWS Setup.exe on GitHub's Windows machine and the Mac app on GitHub's Mac, signs latest.json with YOUR key, and publishes both to the public Project02-releases repo.
+# If the Windows build fails, NOTHING is published (the Mac job waits for it), so the two never get out of step.
 # Installed apps pick it up about 5 minutes later (GitHub's cache).
 #
 # ONE-TIME SETUP: add these three repository secrets (Settings > Secrets and variables > Actions) in Project02-Desktop:
@@ -25,9 +26,80 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the desktop repo
+        uses: actions/checkout@v4
+        with:
+          path: Project02-desktop
+
+      - name: Check out the backend repo (project references)
+        uses: actions/checkout@v4
+        with:
+          repository: jessiejek/Project02-be
+          token: ${{ secrets.BE_READ_TOKEN }}
+          path: Project02-be
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install the MAUI workload
+        run: dotnet workload install maui
+
+      - name: Install Inno Setup (makes the installer)
+        run: choco install innosetup -y --no-progress
+
+      - name: Work out the version
+        id: v
+        working-directory: Project02-desktop
+        shell: pwsh
+        run: |
+          $proj = "ClinicNode/ClinicNode.App/ClinicNode.App.csproj"
+          if ($env:GITHUB_REF_TYPE -eq "tag") { $ver = $env:GITHUB_REF_NAME.TrimStart("v") }
+          else { $ver = ([regex]::Match((Get-Content $proj -Raw), "<ApplicationDisplayVersion>(.*?)</ApplicationDisplayVersion>")).Groups[1].Value }
+          (Get-Content $proj -Raw) -replace "<ApplicationDisplayVersion>.*?</ApplicationDisplayVersion>", "<ApplicationDisplayVersion>$ver</ApplicationDisplayVersion>" | Set-Content $proj -NoNewline
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish the app (Windows x64, self-contained)
+        working-directory: Project02-desktop
+        shell: pwsh
+        run: >
+          dotnet publish ClinicNode/ClinicNode.App/ClinicNode.App.csproj
+          -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained true
+          -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true
+          -o "$env:GITHUB_WORKSPACE/out/ClinicNode"
+
+      - name: Make the installer
+        working-directory: Project02-desktop
+        shell: pwsh
+        run: |
+          $app = "$env:GITHUB_WORKSPACE/out/ClinicNode"
+          $exe = Get-ChildItem $app -Filter "ClinicNode*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "no ClinicNode*.exe in $app" }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DSourceDir=$app" "/DExeName=$($exe.Name)" "/O$env:GITHUB_WORKSPACE\out" packaging\windows\ClinicNode.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem "$env:GITHUB_WORKSPACE\out" -Filter "ClinicNode-Setup-*.exe"
+
+      - name: Keep the installer for the publish step
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: out/ClinicNode-Setup-*.exe
+          if-no-files-found: error
+
   mac:
+    needs: windows
     runs-on: macos-latest
     steps:
+      - name: Get the Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-setup
+          path: win-setup
+
       - name: Check out the desktop repo
         uses: actions/checkout@v4
         with:
@@ -80,6 +152,8 @@ jobs:
           printf '%s\n' "$UPDATE_SIGNING_KEY" > "$RUNNER_TEMP/update-key.pem"
           chmod 600 "$RUNNER_TEMP/update-key.pem"
           mapfile -t NOTE_LINES <<< "${{ steps.v.outputs.notes }}" 2>/dev/null || NOTE_LINES=("${{ steps.v.outputs.notes }}")
+          WIN_SETUP="$(ls "$GITHUB_WORKSPACE"/win-setup/ClinicNode-Setup-*.exe | head -1)"
+          export WIN_SETUP
           UPDATE_KEY="$RUNNER_TEMP/update-key.pem" REL_DIR="$GITHUB_WORKSPACE/Project02-releases" \
             bash packaging/release/make-release.sh "${NOTE_LINES[@]}"
           rm -f "$RUNNER_TEMP/update-key.pem"
