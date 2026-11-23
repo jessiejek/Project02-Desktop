@@ -51,7 +51,7 @@ try {
     $app = Join-Path $out "ClinicNode"
     if (Test-Path $app) { Remove-Item $app -Recurse -Force }
     dotnet publish $proj -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained true `
-        -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -o $app
+        -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -p:TargetFrameworks=net10.0-windows10.0.19041.0 -o $app
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE). The first Windows build of this project is expected to need a few fixes: send packaging\out\build-installer.log." }
     $exe = Get-ChildItem $app -Filter "*.exe" | Where-Object { $_.Name -like "ClinicNode*" } | Select-Object -First 1
     if (-not $exe) { throw "The published folder has no ClinicNode*.exe: $app" }
