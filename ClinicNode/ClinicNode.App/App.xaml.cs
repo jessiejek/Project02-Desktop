@@ -181,14 +181,21 @@ public partial class App : Application
         //JJQR - END
         window.Destroying += (_, _) =>
         {
+            //JJQR - AI (Nov 23, 2026) - owner: "closing the app on Windows takes a long time". The window waited on the main thread for the sync loop to finish (.GetResult()), so a sync in flight, or one that needed the main thread, held the window open until a timeout.
+            // Ask the loop to stop OFF the main thread, wait at most about a second, and never block the window. On Windows, make sure the process really ends a few seconds later even if some background connection lingers (everything saved is in SQLite, which is crash-safe).
             try
             {
-                _services.GetRequiredService<ISyncLoop>().StopAsync().GetAwaiter().GetResult();
+                var stop = Task.Run(() => _services.GetRequiredService<ISyncLoop>().StopAsync());
+                stop.Wait(TimeSpan.FromMilliseconds(1000));
             }
             catch
             {
                 // shutting down
             }
+#if WINDOWS
+            _ = Task.Run(async () => { await Task.Delay(TimeSpan.FromSeconds(3)); Environment.Exit(0); });
+#endif
+            //JJQR - END
         };
         return window;
     }
