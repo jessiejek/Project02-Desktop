@@ -71,7 +71,13 @@ public static class StaffUi
         if (onTap is not null)
         {
             var tap = new TapGestureRecognizer();
-            tap.Tapped += async (_, _) => { await Task.Yield(); try { await onTap(); } catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffUi.Link", ex); } }; //JJQR - AI (Nov 23, 2026) - an error here used to close the app //JJQR - END
+#if WINDOWS
+            //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: run on the next UI turn and never let an error here close the app
+            tap.Tapped += async (_, _) => { await Task.Yield(); try { await onTap(); } catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffUi.StatTap", ex); } };
+            //JJQR - END
+#else
+            tap.Tapped += async (_, _) => await onTap();
+#endif
             card.GestureRecognizers.Add(tap);
         }
         return card;
@@ -147,7 +153,13 @@ public static class StaffUi
     {
         var l = ClinicTheme.Text(text, "BrandLink");
         var tap = new TapGestureRecognizer();
+#if WINDOWS
+        //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: run on the next UI turn and never let an error here close the app
+        tap.Tapped += async (_, _) => { await Task.Yield(); try { await onTap(); } catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffUi.Link", ex); } };
+        //JJQR - END
+#else
         tap.Tapped += async (_, _) => await onTap();
+#endif
         l.GestureRecognizers.Add(tap);
         return l;
     }
