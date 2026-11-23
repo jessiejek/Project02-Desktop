@@ -24,6 +24,7 @@ public static class NativeUiEnhancements
 
     public static void Register(MauiAppBuilder builder)
     {
+        WindowsCrashLog.Register(); // write the real reason of any crash to errors.log
         ButtonHandler.Mapper.AppendToMapping("ClinicClickGuardAndPointer", (handler, view) =>
         {
             if (handler.PlatformView is not Microsoft.UI.Xaml.Controls.Button b) return;

@@ -475,6 +475,24 @@ public sealed class TodayPage : ContentPage
                 var print = PrintButtons(id, u.HasPrescription, u.HasLabOrders);
                 if (print is not null) act.Children.Add(print);
                 act.Children.Add(StaffUi.Btn(resume ? "Resume" : "Start", () => StartConsultAsync(id, resume), resume ? "PrimaryButton" : "SecondaryButton"));
+#if WINDOWS
+                //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: owner "CUT": Print Rx + Print Labs + Resume (about 300 wide) did not fit the fixed 170 action column (line 437), so Print Labs was cut and Resume was hidden.
+                // With two or more buttons, stack them one under another, each the full column width, so every button is always visible at any window size. One button stays as it was.
+                var actButtons = new List<View>();
+                foreach (var child in act.Children.OfType<View>().ToList())
+                {
+                    if (child is HorizontalStackLayout printRow) { actButtons.AddRange(printRow.Children.OfType<View>()); printRow.Children.Clear(); }
+                    else if (child.IsVisible) actButtons.Add(child);
+                }
+                if (actButtons.Count >= 2)
+                {
+                    act.Children.Clear(); // detach first (WinUI throws if a view that still has a parent is added elsewhere)
+                    var actStack = new VerticalStackLayout { Spacing = 6, WidthRequest = 170, VerticalOptions = LayoutOptions.Center };
+                    foreach (var b in actButtons) { b.HorizontalOptions = LayoutOptions.Fill; actStack.Children.Add(b); }
+                    act.Children.Add(actStack);
+                }
+                //JJQR - END
+#endif
                 row.Add(num, 0, 0); row.Add(who, 1, 0); row.Add(visit, 2, 0); row.Add(status, 3, 0); row.Add(act, 4, 0);
                 table.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.6f) });
                 table.Children.Add(row);

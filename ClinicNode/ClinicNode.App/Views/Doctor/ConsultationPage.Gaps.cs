@@ -461,7 +461,12 @@ public partial class ConsultationPage
         {
             if (e.Value) foreach (var r in D.Prescriptions) _rxSelected.Add(r);
             else _rxSelected.Clear();
+#if WINDOWS
+            //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: owner's app crashed during a consultation. Redrawing the screen inside the tick/tap that caused it can crash WinUI (WINDOWS-HANDOFF.md item 2); redraw on the next UI turn instead. //JJQR - END
+            Dispatcher.Dispatch(RenderSection);
+#else
             RenderSection();
+#endif
         };
         var right = _rxSelected.Count > 0
             ? Btn($"Delete selected ({_rxSelected.Count})", () =>
@@ -477,7 +482,12 @@ public partial class ConsultationPage
     View RxSelectable(RxLine line, View content)
     {
         var box = new CheckBox { IsChecked = _rxSelected.Contains(line), VerticalOptions = LayoutOptions.Start };
+#if WINDOWS
+        //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: owner's app crashed during a consultation. Redrawing the screen inside the tick/tap that caused it can crash WinUI (WINDOWS-HANDOFF.md item 2); redraw on the next UI turn instead. //JJQR - END
+        box.CheckedChanged += (_, e) => { if (e.Value) _rxSelected.Add(line); else _rxSelected.Remove(line); Dispatcher.Dispatch(RenderSection); };
+#else
         box.CheckedChanged += (_, e) => { if (e.Value) _rxSelected.Add(line); else _rxSelected.Remove(line); RenderSection(); };
+#endif
         //JJQR - AI (Nov 21, 2026) - clicking the medicine text selects it too, not just the circle
         box.InputTransparent = true;
         var row = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } }; // Grid (not a stack) so long text wraps inside the column

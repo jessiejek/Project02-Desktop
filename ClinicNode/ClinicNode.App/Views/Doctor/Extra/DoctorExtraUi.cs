@@ -75,7 +75,12 @@ public static class DoctorExtraUi
                 BackgroundColor = on ? ClinicTheme.Color("SurfaceContainerLowest") : Colors.Transparent,
                 Content = new Label { Text = labels[i], FontSize = 13, FontFamily = on ? ClinicTheme.FontSemiBold : ClinicTheme.FontMedium, TextColor = on ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OnSurfaceVariant") },
             };
+#if WINDOWS
+            //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: owner's app crashed during a consultation. Redrawing the screen inside the tick/tap that caused it can crash WinUI (WINDOWS-HANDOFF.md item 2); redraw on the next UI turn instead. //JJQR - END
+            seg.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { var d = Application.Current?.Dispatcher; if (d is null) onSelect(idx); else d.Dispatch(() => onSelect(idx)); }) });
+#else
             seg.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => onSelect(idx)) });
+#endif
             row.Children.Add(seg);
         }
         return new Border
