@@ -91,6 +91,10 @@ public sealed class WalkInWizardView : ContentView
 
     void Render()
     {
+        //JJQR - AI (Nov 23, 2026) - owner (Windows): "COMException: No installed components were detected" when choosing a patient. The search box is reused on every draw but was still a child of the
+        // previous draw's "Search patients" field; Windows refuses a view with two parents (the Mac allows it). Take it out of the old field first.
+        if (_search.Parent is Layout oldField) oldField.Children.Remove(_search);
+        //JJQR - END
         //JJQR - AI (21 Nov 2026) - web: loading / loadError replace the wizard (header stays on the host page)
         if (Vm.Step == WalkInStep.Patient && Vm.Results is null)
             Content = Vm.LoadFailed ? LoadError() : ClinicTheme.Text("Loading patients…", "MutedBody");
@@ -121,7 +125,7 @@ public sealed class WalkInWizardView : ContentView
             if (_bar.Parent is Layout old) old.Children.Remove(_bar); // one parent at a time (the previous render's column)
             col.Children.Add(_bar);
         }
-        if (Vm.Step == WalkInStep.Confirm) col.MaximumWidthRequest = 896; // web max-w-doctor-record
+        if (Vm.Step == WalkInStep.Confirm) col.MaximumWidthRequest = 920; // web max-w-doctor-record //JJQR - AI (Nov 23, 2026) - was 896, narrower than the 920-wide Confirm card, so its right edge (and the Check in button) was cut off //JJQR - END
         return col;
     }
 

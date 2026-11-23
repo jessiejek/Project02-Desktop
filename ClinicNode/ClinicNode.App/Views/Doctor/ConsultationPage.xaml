@@ -9,7 +9,7 @@
              Title="Consultation"
              BackgroundColor="{StaticResource Background}">
     <!-- JJQR - AI (Nov 21, 2026) - desktop workspace: header row, then [steps | form | patient & visit summary], footer under the form -->
-    <Grid x:Name="Root" ColumnDefinitions="262,*" RowDefinitions="Auto,Auto,*,Auto" ColumnSpacing="16" RowSpacing="14" Padding="24,18,24,18">
+    <Grid x:Name="Root" ColumnDefinitions="262,*" RowDefinitions="Auto,Auto,*,Auto" ColumnSpacing="16" RowSpacing="10" Padding="24,12,24,12">
 
         <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" ColumnSpacing="16">
             <VerticalStackLayout Spacing="2">
@@ -47,8 +47,8 @@
         </Border>
 
         <!-- patient / visit / fee: one tidy strip ABOVE the work area (aligned blocks, labels on top, content on one line) -->
-        <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Card}" Padding="20,14">
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="48" RowDefinitions="Auto,Auto" RowSpacing="8">
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Card}" Padding="20,10">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="48" RowDefinitions="Auto,Auto" RowSpacing="4">
                 <Label Grid.Row="0" Grid.Column="0" Text="PATIENT" Style="{StaticResource LabelSm}" />
                 <Label Grid.Row="0" Grid.Column="1" Text="VISIT TYPE" Style="{StaticResource LabelSm}" />
                 <Label Grid.Row="0" Grid.Column="2" Text="FEE" Style="{StaticResource LabelSm}" />
@@ -62,22 +62,26 @@
         </Border>
 
         <!-- footer under the form -->
-        <VerticalStackLayout Grid.Row="3" Grid.Column="1" Spacing="6">
-            <Label x:Name="StatusLabel" Style="{StaticResource MutedSm}" />
-            <Label x:Name="ErrorLabel" Style="{StaticResource ErrorText}" IsVisible="False" />
+        <!-- JJQR - AI (Nov 23, 2026) - owner: "the working area is too small". The save messages used to stack ABOVE the buttons (2-3 extra lines); now they sit on the LEFT of the buttons in one row. -->
+        <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <VerticalStackLayout Grid.Column="0" Spacing="2" VerticalOptions="Center">
+            <Label x:Name="StatusLabel" Style="{StaticResource MutedSm}" MaxLines="2" LineBreakMode="TailTruncation" />
+            <Label x:Name="ErrorLabel" Style="{StaticResource ErrorText}" IsVisible="False" MaxLines="2" LineBreakMode="TailTruncation" />
             <HorizontalStackLayout x:Name="ToastBar" Spacing="8" IsVisible="False">
                 <Label x:Name="ToastLabel" Style="{StaticResource BodyMd}" VerticalOptions="Center" />
                 <Button x:Name="ToastAction" Text="Undo" Style="{StaticResource GhostButton}" Clicked="OnToastAction" />
             </HorizontalStackLayout>
-            <FlexLayout Wrap="Wrap" JustifyContent="End">
+        </VerticalStackLayout>
+            <HorizontalStackLayout Grid.Column="1" VerticalOptions="Center">
                 <ActivityIndicator x:Name="FooterSpinner" IsRunning="False" IsVisible="False" WidthRequest="22" HeightRequest="22" VerticalOptions="Center" Margin="8,0,0,0" Color="{StaticResource Primary}" SemanticProperties.Description="Saving" />
                 <Button x:Name="PrevButton" Text="Prev" Style="{StaticResource SecondaryButton}" Clicked="OnPrev" Margin="8,0,0,0" />
                 <Button x:Name="NextButton" Text="Next" Style="{StaticResource SecondaryButton}" Clicked="OnNext" Margin="8,0,0,0" />
                 <Button x:Name="AmendButton" Text="Edit Consultation" Style="{StaticResource SecondaryButton}" Clicked="OnAmend" IsVisible="False" Margin="8,0,0,0" />
                 <Button x:Name="SaveNextButton" Text="Save &amp; next" Style="{StaticResource SecondaryButton}" Clicked="OnSaveNext" Margin="8,0,0,0" />
                 <Button x:Name="CompleteButton" Text="Review &amp; complete" Style="{StaticResource PrimaryButton}" Clicked="OnComplete" Margin="8,0,0,0" />
-            </FlexLayout>
-        </VerticalStackLayout>
+            </HorizontalStackLayout>
+        </Grid>
+        <!-- JJQR - END -->
 
         <!-- JJQR - AI (Nov 21, 2026) - floating dropdown layer: panels open OVER the page so nothing below moves -->
         <AbsoluteLayout x:Name="PopupLayer" Grid.RowSpan="4" Grid.ColumnSpan="2" IsVisible="False" ZIndex="15" BackgroundColor="Transparent" />
@@ -97,7 +101,8 @@
                                 Clicked="OnOverlayClose" SemanticProperties.Description="Close" ToolTipProperties.Text="Close" />
                     </Grid>
                     <BoxView Grid.Row="1" HeightRequest="1" Color="{StaticResource OutlineVariant}" />
-                    <ScrollView Grid.Row="2" MaximumHeightRequest="560"><VerticalStackLayout x:Name="OverlayBody" Spacing="10" Padding="22,18" /></ScrollView>
+                    <!-- JJQR - AI (Nov 23, 2026) - owner (Windows laptop): "I can't complete it". A fixed 560 here plus the title was taller than the page, so the Confirm & Complete row was cut off. The height now follows the window (code-behind FitOverlay). -->
+                    <ScrollView x:Name="OverlayScroll" Grid.Row="2" MaximumHeightRequest="560"><VerticalStackLayout x:Name="OverlayBody" Spacing="10" Padding="22,18" /></ScrollView>
                     <BoxView Grid.Row="3" HeightRequest="1" Color="{StaticResource OutlineVariant}" />
                     <FlexLayout x:Name="OverlayActions" Grid.Row="4" Wrap="Wrap" JustifyContent="End" BackgroundColor="{StaticResource SurfaceContainerLow}" Padding="22,12,22,4" />
                 </Grid>
