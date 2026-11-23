@@ -69,6 +69,11 @@ public static class AdminModule
         services.TryAddTransient<AdminOrClashesViewModel>();
         services.TryAddTransient<AdminOrClashesPage>();
         //JJQR - END
+        //JJQR - AI (Nov 23, 2026) - web parity: admin Sync review (possible duplicate patients and computer problems; merge, dismiss, resolve). Online only.
+        services.AddOnlineFirst<IAdminSyncReviewService, ApiAdminSyncReviewService, LocalAdminSyncReviewService>();
+        services.TryAddTransient<AdminSyncReviewViewModel>();
+        services.TryAddTransient<AdminSyncReviewPage>();
+        //JJQR - END
         return services;
     }
 

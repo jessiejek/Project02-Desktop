@@ -105,6 +105,7 @@ public sealed class AdminPatientsViewModel : AdminViewModelBase
     public DateTime? NewDobPicked { get; set; }
     public string? NewSexPicked { get; set; }
     public string CreateError { get; private set; } = "";
+    public bool NewPrivacyNoticeShown { get; set; } //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH): the front desk showed the notice //JJQR - END
 
     public async Task GoToPageAsync(int page)
     {
@@ -126,12 +127,12 @@ public sealed class AdminPatientsViewModel : AdminViewModelBase
         ?? AdminWebRules.PhoneProblem(NewContact);
 
     public bool CanCreate => NewPatientProblem is null && !string.IsNullOrWhiteSpace(NewFirstName) && !string.IsNullOrWhiteSpace(NewLastName)
-        && NewDobPicked is not null && !string.IsNullOrEmpty(NewSexPicked);
+        && NewDobPicked is not null && !string.IsNullOrEmpty(NewSexPicked) && NewPrivacyNoticeShown; //JJQR - AI (Nov 23, 2026) - the privacy notice must be shown first //JJQR - END
 
     public void ResetNewPatient()
     {
         NewFirstName = NewLastName = NewContact = "";
-        NewDobPicked = null; NewSexPicked = null; CreateError = "";
+        NewDobPicked = null; NewSexPicked = null; CreateError = ""; NewPrivacyNoticeShown = false;
     }
 
     /// <summary>True when the patient was added (the modal closes); false keeps the modal and typed details.</summary>
@@ -143,7 +144,7 @@ public sealed class AdminPatientsViewModel : AdminViewModelBase
         {
             var sex = NewSexPicked == "Male" ? SexType.Male : SexType.Female;
             var result = await _patients.CreateAsync(new PatientEdit(NewFirstName, NewLastName, DateOnly.FromDateTime(NewDobPicked!.Value), sex,
-                ContactNumber: string.IsNullOrWhiteSpace(NewContact) ? null : NewContact));
+                ContactNumber: string.IsNullOrWhiteSpace(NewContact) ? null : NewContact, PrivacyNoticeShown: NewPrivacyNoticeShown));
             if (!result.Succeeded) { CreateError = string.IsNullOrWhiteSpace(result.Error) ? "The patient could not be added. Check the details and try again." : result.Error; return false; }
             // web: the new row goes on top of the current page and the total goes up by one (no reload, page and search kept)
             if (result.Value is { } added) { Items.Insert(0, ToRow(added)); Total++; PageCount = Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize)); }

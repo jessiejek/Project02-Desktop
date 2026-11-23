@@ -88,11 +88,15 @@ public sealed class DoctorConsultationLocalService : IConsultationService
         if (draft.PfDecision == "Waive" && (draft.PfWaiveReason ?? "").Trim().Length < ConsultRules.WaiveReasonMinLength)
             return ConsultSaveResult.Fail("Waive needs a reason of at least 5 characters.", [ConsultSteps.Sections[ConsultSteps.FeeSectionIndex]]);
         var wanted = (Decision: draft.PfDecision, Amount: draft.PfAmount, Reason: draft.PfWaiveReason, Edited: draft.FeeState().PfAmountEdited);
-        if (wanted.Decision == "Charge" && wanted.Amount is null) wanted.Amount = await ComputedTotalAsync(draft, ct);
+        //JJQR - AI (Nov 23, 2026) - offline audit: amending a completed visit whose fee follows the total failed with "Finish Professional Fee Decision to save the amendment". The editor keeps such a fee as empty ("follows the total") and the inner amend refuses an empty Charge amount.
+        // Complete already fills the amount in first; do the same here, then give the editor back its "follows the total" state.
+        if (wanted.Decision == "Charge" && wanted.Amount is null) { wanted.Amount = await ComputedTotalAsync(draft, ct); draft.PfAmount = wanted.Amount; }
+        //JJQR - END
         //JJQR - AI (21 Nov 2026)
         var vaxKeep = await SnapshotVaccinationsAsync(draft, ct);
         //JJQR - END
         var r = await _inner.AmendAsync(draft, ct); // keeps the stored fee; we apply the doctor's decision below
+        if (wanted.Decision == "Charge" && !wanted.Edited) draft.PfAmount = null; //JJQR - AI (Nov 23, 2026) - keep following the total in the editor //JJQR - END
         if (!r.Succeeded) return r;
         var fail = await ApplyAmendedFeeAsync(draft, wanted.Decision, wanted.Amount, wanted.Reason, ct);
         if (fail is not null) return ConsultSaveResult.Fail(fail);

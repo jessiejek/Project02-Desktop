@@ -443,6 +443,16 @@ public static class SyncLocalStore
         return System.Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
     }
 
+    //JJQR - AI (Nov 23, 2026) - clear the review items that are not real: both copies hold the same values. Runs after every successful sync, so old false alarms disappear by themselves. Returns how many were cleared.
+    public static async Task<int> AutoResolveHarmlessConflictsAsync(ClinicAppDbContext db, CancellationToken ct = default)
+    {
+        var cleared = 0;
+        foreach (var c in await ListOpenConflictsAsync(db, 500, ct))
+            if (AggregateDocuments.IsHarmlessDifference(c)) { await ResolveConflictAsync(db, c.Id, ct); cleared++; }
+        return cleared;
+    }
+    //JJQR - END
+
     public static async Task ResolveConflictAsync(ClinicAppDbContext db, Guid id, CancellationToken ct = default)
     {
         await using var cmd = await CommandAsync(db, "UPDATE node_sync_conflicts SET resolved_at = $at WHERE id = $id;", ct);

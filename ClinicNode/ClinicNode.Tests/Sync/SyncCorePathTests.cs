@@ -289,6 +289,73 @@ public class SyncCorePathTests
         Assert.Contains(await SyncLocalStore.ListOpenConflictsAsync(db2), c => c.Kind == "cloud_edit_flagged" && c.Aggregate == "payment");
     }
 
+    //JJQR - AI (Nov 23, 2026) - offline audit (the owner's real database): an identical payment coming back from the server was flagged "cloud copy differs" because of timestamp precision (4 vs 7 decimals) and 500 vs 500.0
+    [Fact]
+    public async Task An_identical_cloud_payment_with_only_formatting_differences_is_not_flagged()
+    {
+        await using var host = await SyncTestHost.StartAsync();
+        var (_, bookingId, _) = await MakeVisitAsync(host);
+        await host.Get<ISyncService>().RunOnceAsync();
+        var confirmed = new DateTimeOffset(2026, 11, 23, 5, 9, 10, TimeSpan.Zero).AddTicks(5_329_904);
+        ClinicApp.Domain.Entities.Payment local;
+        await using (var db = await host.DbAsync())
+        {
+            local = await db.Payments.SingleAsync(p => p.BookingId == bookingId);
+            local.Status = ClinicApp.Domain.Enums.PaymentStatus.Paid;
+            local.AmountReceived = local.Amount;
+            local.ConfirmedAt = confirmed;
+            await db.SaveChangesAsync();
+        }
+
+        host.Cloud.EnqueuePull("tz1", false, FakeSyncServer.Change("payment", local.PaymentId, new JsonObject
+        {
+            ["payment_id"] = local.PaymentId.ToString(), ["booking_id"] = bookingId.ToString(),
+            ["amount"] = (double)local.Amount, ["status"] = "Paid", ["confirmed_at"] = "2026-11-23T05:09:10.5329904+00:00",
+        }));
+        Assert.True((await host.Get<ISyncService>().RunOnceAsync()).Succeeded);
+
+        await using var db2 = await host.DbAsync();
+        Assert.DoesNotContain(await SyncLocalStore.ListOpenConflictsAsync(db2), c => c.Kind == "cloud_edit_flagged" && c.Aggregate == "payment");
+    }
+    //JJQR - END
+
+    //JJQR - AI (Nov 23, 2026) - the owner's Sync review showed 4 items whose "this computer" and "clinic server" columns were the same values; pressing Sync did not clear them
+    [Fact]
+    public async Task Identical_review_items_clear_themselves_at_the_next_sync_and_real_differences_stay()
+    {
+        await using var host = await SyncTestHost.StartAsync();
+        await using (var db = await host.DbAsync())
+        {
+            await SyncLocalStore.EnsureSchemaAsync(db);
+            await SyncLocalStore.AddConflictAsync(db, new ClinicNode.Sync.Local.SyncConflict
+            {
+                Aggregate = "payment", EntityId = Guid.NewGuid().ToString(), Kind = "cloud_edit_flagged", ReasonCode = "not_owner", Message = "same",
+                LocalJson = """{"payment_id":"5472f697-3589-4438-bcef-936da1f5645f","amount":500,"amount_received":500,"status":"Paid","confirmed_at":"2026-11-23T05:09:10.5329+00:00","origin_node_id":null,"row_version":0}""",
+                CloudJson = """{"payment_id":"5472f697-3589-4438-bcef-936da1f5645f","amount":500.00,"amount_received":500.00,"status":"Paid","confirmed_at":"2026-11-23T05:09:10.5329904+00:00","origin_node_id":"64496148-6ba6-4eab-86c9-adc8e336351f","row_version":3}""",
+            });
+            await SyncLocalStore.AddConflictAsync(db, new ClinicNode.Sync.Local.SyncConflict
+            {
+                Aggregate = "consultation", EntityId = Guid.NewGuid().ToString(), Kind = "conflict", ReasonCode = "finished_immutable", Message = "same doc",
+                LocalJson = """{"consultation":{"status":"Completed","plan":"rest","pf_amount":500,"completed_at":"2026-11-23T05:03:31.2301+00:00","row_version":0},"diagnoses":[]}""",
+                CloudJson = """{"consultation":{"status":"Completed","plan":"rest","pf_amount":500.00,"completed_at":"2026-11-23T05:03:31.2301000+00:00","row_version":2},"diagnoses":[]}""",
+            });
+            await SyncLocalStore.AddConflictAsync(db, new ClinicNode.Sync.Local.SyncConflict
+            {
+                Aggregate = "payment", EntityId = Guid.NewGuid().ToString(), Kind = "cloud_edit_flagged", ReasonCode = "not_owner", Message = "really different",
+                LocalJson = """{"payment_id":"11111111-1111-1111-1111-111111111111","amount":500,"status":"Paid"}""",
+                CloudJson = """{"payment_id":"11111111-1111-1111-1111-111111111111","amount":450,"status":"Paid"}""",
+            });
+        }
+
+        Assert.True((await host.Get<ISyncService>().RunOnceAsync()).Succeeded);
+
+        await using var db2 = await host.DbAsync();
+        var open = await SyncLocalStore.ListOpenConflictsAsync(db2);
+        var left = Assert.Single(open);
+        Assert.Equal("really different", left.Message);
+    }
+    //JJQR - END
+
     //JJQR - AI (Nov 21, 2026) - real-DB finding: demo bookings share ids with the cloud but payments do not (payments.booking_id is UNIQUE)
     [Theory]
     [InlineData(false)]

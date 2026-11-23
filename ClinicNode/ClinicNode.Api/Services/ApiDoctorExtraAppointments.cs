@@ -80,6 +80,26 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
     sealed record CertRowDto(Guid ConsultationId, string? DiagnosisText, DateOnly? IssueDate);
     sealed record VaccinationDto(Guid Id, string? VaccineName, short? DoseNumber, DateOnly? AdministeredDate, DateOnly? NextDoseDate, VaccinationStatus Status);
 
+    //JJQR - AI (Nov 23, 2026) - web parity: open an uploaded lab result / document. Fetches the bytes with the sign-in (GET /api/patient-lab-results|patient-documents/{id}/file) into a temporary file the caller opens.
+    public async Task<string?> DownloadFileAsync(ChartFile file, CancellationToken ct = default)
+    {
+        var route = file.Kind == "lab" ? "patient-lab-results" : "patient-documents";
+        var dl = await api.DownloadAsync($"/api/{route}/{Id(file.Id)}/file", ct);
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ClinicNode", "files");
+        Directory.CreateDirectory(dir);
+        // patient files do not stay on disk: remove copies older than an hour each time one is opened
+        foreach (var old in Directory.GetFiles(dir)) { try { if (File.GetLastWriteTimeUtc(old) < DateTime.UtcNow.AddHours(-1)) File.Delete(old); } catch { } }
+        var name = !string.IsNullOrWhiteSpace(dl.FileName) ? dl.FileName! : file.FileName ?? file.Title;
+        var safe = string.Concat(name.Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '-' : c)).Trim();
+        if (safe.Length == 0) safe = "file";
+        if (!System.IO.Path.HasExtension(safe))
+            safe += dl.ContentType switch { "application/pdf" => ".pdf", "image/png" => ".png", "image/jpeg" => ".jpg", "image/webp" => ".webp", "image/gif" => ".gif", _ => "" };
+        var path = System.IO.Path.Combine(dir, $"{Guid.NewGuid():N}-{safe}");
+        await File.WriteAllBytesAsync(path, dl.Bytes, ct);
+        return path;
+    }
+    //JJQR - END
+
     public async Task<IReadOnlyList<DoctorPatientRow>> ListAsync(Guid doctorId, CancellationToken ct = default)
     {
         var bookings = await api.GetAsync<List<BookingDto>>("/api/bookings", Q(("doctorId", Id(doctorId))), ct) ?? [];
@@ -175,8 +195,8 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
             chartBookings, chartConsults,
             templates.Select(t => new ChartVitalTemplate(t.TemplateId, t.Description ?? "", t.Unit ?? "", t.IsDefault)).ToList(),
             visits, rx,
-            labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt)).ToList(),
-            docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName ?? "" : d.Title!, d.UploadedAt)).ToList(),
+            labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt, "lab")).ToList(),
+            docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName ?? "" : d.Title!, d.UploadedAt, "doc", d.FileName)).ToList(),
             vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName ?? "", v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList(),
             extras);
     }

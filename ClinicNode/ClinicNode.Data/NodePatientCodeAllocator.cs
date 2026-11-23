@@ -38,20 +38,30 @@ public sealed class NodePatientCodeAllocator : IPatientCodeAllocator
                 {
                     var blockId = reader.GetString(0);
                     var next = reader.GetInt64(1);
+                    var end = reader.GetInt64(2);
                     await reader.DisposeAsync();
+
+                    //JJQR - AI (Nov 23, 2026) - owner (offline test): "Could not register this patient". The block was reserved on 22 Nov while the database was empty (100000-100099), then the server's patients (MF-100000 to MF-100096) were pulled in.
+                    // Every offline registration took MF-100000, hit the unique index, rolled back and left the counter where it was: stuck for the next 97 patients. Never hand out a code that already exists:
+                    // start above the highest MF- code on file, and move the block forward when the server's codes have caught up with it.
+                    var highest = await HighestOfficialAsync(conn, db, ct);
+                    var candidate = Math.Max(next, highest + 1);
+                    var newEnd = candidate <= end ? end : candidate + DefaultBlockSize - 1;
 
                     await using var upd = conn.CreateCommand();
                     upd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
                     upd.CommandText = """
                         UPDATE node_patient_code_blocks
-                        SET next_value = next_value + 1
+                        SET next_value = $after, end_inclusive = $end,
+                            start_inclusive = CASE WHEN $candidate > end_inclusive THEN $candidate ELSE start_inclusive END
                         WHERE block_id = $id AND next_value = $expected;
                         """;
-                    var pId = upd.CreateParameter(); pId.ParameterName = "$id"; pId.Value = blockId; upd.Parameters.Add(pId);
-                    var pEx = upd.CreateParameter(); pEx.ParameterName = "$expected"; pEx.Value = next; upd.Parameters.Add(pEx);
+                    void Add(string name, object value) { var p = upd.CreateParameter(); p.ParameterName = name; p.Value = value; upd.Parameters.Add(p); }
+                    Add("$id", blockId); Add("$expected", next); Add("$after", candidate + 1); Add("$end", newEnd); Add("$candidate", candidate);
                     var affected = await upd.ExecuteNonQueryAsync(ct);
                     if (affected == 1)
-                        return $"{OfficialPrefix}{next.ToString("D6", CultureInfo.InvariantCulture)}";
+                        return $"{OfficialPrefix}{candidate.ToString("D6", CultureInfo.InvariantCulture)}";
+                    //JJQR - END
                 }
             }
 
@@ -62,6 +72,20 @@ public sealed class NodePatientCodeAllocator : IPatientCodeAllocator
             if (opened) await conn.CloseAsync();
         }
     }
+
+    //JJQR - AI (Nov 23, 2026) - the highest all-digit MF- code already on this computer (0 when there is none)
+    static async Task<long> HighestOfficialAsync(IDbConnection conn, ClinicAppDbContext db, CancellationToken ct)
+    {
+        await using var cmd = ((Microsoft.Data.Sqlite.SqliteConnection)conn).CreateCommand();
+        cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction() as Microsoft.Data.Sqlite.SqliteTransaction;
+        cmd.CommandText = """
+            SELECT COALESCE(MAX(CAST(SUBSTR(patient_code, 4) AS INTEGER)), 0)
+            FROM patients
+            WHERE patient_code GLOB 'MF-[0-9]*' AND SUBSTR(patient_code, 4) NOT GLOB '*[^0-9]*';
+            """;
+        return Convert.ToInt64(await cmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+    }
+    //JJQR - END
 
     static async Task<string> NextTemporaryAsync(IDbConnection conn, ClinicAppDbContext db, CancellationToken ct)
     {

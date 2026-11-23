@@ -22,16 +22,29 @@ public class ClinicDayTests
     {
         await using var host = await AppTestHost.StartAsync();
         var auth = host.Get<IAuthService>();
+        //JJQR - AI (Nov 23, 2026) - owner: "I want perfect offline mode". This test described the OLD design (staff working offline) and never actually went offline, so it stopped at its first save. It is now the real offline day: the DOCTOR switches the computer to Offline mode
+        // (a registered computer) and does everything alone - register, check in, call in, full consultation, booklet payment, receipt, amend - with no clinic server at all.
+        var mode = host.Get<ClinicNode.Core.Sync.IWorkModeService>();
+        await mode.InitializeAsync();
+        var doctor = await auth.LoginAsync("doctor@clinic.test", DevDataSeeder.DevPassword, rememberEmail: false);
+        Assert.True(doctor.Succeeded, doctor.Error);
+        await host.Get<ClinicNode.Sync.Auth.INodeCredentialStore>().SaveAsync(new ClinicNode.Sync.Auth.NodeCredential(Guid.NewGuid(), "test-secret"));
+        Assert.True((await mode.SetAsync(ClinicNode.Core.Sync.WorkMode.Offline)).Succeeded);
 
-        // 1. Staff logs in offline and registers a patient (temporary MF-T- code, as when the reserved block is exhausted).
-        var staff = await auth.LoginAsync("staff@clinic.test", DevDataSeeder.DevPassword, rememberEmail: false);
-        Assert.True(staff.Succeeded, staff.Error);
-        await ExhaustReservedBlockAsync(host);
+        // a computer that was online once holds reserved queue numbers for the coming days, in both lanes (otherwise a check-in is a paper-queue patient, which DoctorOfflineDayTests covers)
+        var blockFactory = host.Get<IDbContextFactory<ClinicAppDbContext>>();
+        await using (var seedDb = await blockFactory.CreateDbContextAsync())
+            foreach (var day in ClinicNode.Sync.Local.QueueBlocks.Days(ClinicApp.Domain.ClinicClock.Today))
+                foreach (var lane in ClinicNode.Sync.Local.QueueBlocks.Lanes)
+                    await ClinicNode.Sync.Local.QueueBlocks.SaveAsync(seedDb, new ClinicNode.Sync.QueueBlockReservation(day, lane, 1, 200, 200, null, null));
+
+        // 1. the doctor registers a patient (official MF- code from the reserved block)
         var form = new QuickRegisterForm("Mia", null, "Fernandez", new DateOnly(1992, 4, 4), SexType.Female, "09171234567", "Cebu");
         var (registered, patient) = await host.Get<IStaffPatientsService>().QuickRegisterAsync(form);
         Assert.True(registered.Succeeded, registered.Error);
         Assert.NotNull(patient);
-        Assert.StartsWith("MF-T-", patient!.PatientCode);
+        Assert.StartsWith("MF-", patient!.PatientCode);
+        //JJQR - END
 
         // 2. Walk-in issues a queue number.
         var doctors = await host.Get<IQueueService>().ListDoctorsAsync();
@@ -42,9 +55,7 @@ public class ClinicDayTests
         Assert.False(string.IsNullOrWhiteSpace(walkIn.Ticket?.QueueNumber));
         var bookingId = walkIn.Ticket!.BookingId;
 
-        // 3. Doctor logs in, calls the patient in, completes a consult with vitals, Rx and ICD-10.
-        var doctor = await auth.LoginAsync("doctor@clinic.test", DevDataSeeder.DevPassword, rememberEmail: false);
-        Assert.True(doctor.Succeeded, doctor.Error);
+        // 3. Doctor calls the patient in, completes a consult with vitals, Rx and ICD-10.
         Assert.Equal(doctorId, doctor.Session!.DoctorId);
         var called = await host.Get<IQueueService>().CallAsync(bookingId);
         Assert.True(called.Succeeded, called.Error);
@@ -81,12 +92,10 @@ public class ClinicDayTests
         Assert.True(completed.Succeeded, completed.Error);
         Assert.Equal(ConsultationStatus.Completed, completed.Draft!.Status);
 
-        // 4. Staff records the exact payment and the receipt document is produced (and handed to the printer).
-        var staffAgain = await auth.LoginAsync("staff@clinic.test", DevDataSeeder.DevPassword, rememberEmail: false);
-        Assert.True(staffAgain.Succeeded, staffAgain.Error);
+        // 4. The doctor marks the exact payment received (typing the receipt number from the booklet) and the receipt document is produced (and handed to the printer).
         var payments = host.Get<IStaffPaymentsService>();
         var due = draft.PfAmount!.Value;
-        var paid = await payments.RecordAsync(new RecordPaymentInput(bookingId, PaymentMethod.Cash, due.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture), null, null));
+        var paid = await payments.RecordAsync(new RecordPaymentInput(bookingId, PaymentMethod.Cash, due.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture), null, null, "BK-000777"));
         Assert.True(paid.Succeeded, paid.Error);
         var receipt = await host.Get<IPrintDocumentFactory>().PaymentReceiptAsync(bookingId);
         Assert.False(string.IsNullOrWhiteSpace(receipt.Html));
@@ -96,8 +105,6 @@ public class ClinicDayTests
         Assert.Contains(printer.Documents, d => d.Title == receipt.Title);
 
         // 5. Doctor amends the completed chart (clinical content only).
-        var doctorAgain = await auth.LoginAsync("doctor@clinic.test", DevDataSeeder.DevPassword, rememberEmail: false);
-        Assert.True(doctorAgain.Succeeded, doctorAgain.Error);
         var toAmend = (await consults.LoadByBookingAsync(bookingId)).Draft;
         toAmend.Plan = "Amended plan: add a spacer; review in a week.";
         var amended = await consults.AmendAsync(toAmend);

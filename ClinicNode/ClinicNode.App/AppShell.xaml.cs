@@ -228,6 +228,7 @@ public partial class AppShell : Shell
                 //JJQR - AI (21 Nov 2026) - wave-end wiring: System group pages (allen4)
                 AddFlyout("Sync computers", "admin-sync-computers", typeof(AdminSyncComputersPage));
                 AddFlyout("Receipt clashes", "admin-or-clashes", typeof(AdminOrClashesPage));
+                AddFlyout("Sync review", "admin-sync-review", typeof(AdminSyncReviewPage)); //JJQR - AI (Nov 23, 2026) - web parity: the admin Sync review / merge screen //JJQR - END
                 //JJQR - END
                 AddFlyout("Register this node", "admin-register-node", typeof(AdminRegisterNodePage));
                 AddFlyout("My account", "admin-profile", typeof(Views.Staff.StaffProfilePage)); //JJQR - AI (Nov 22, 2026) - owner: the admin could not change their password; the profile page (name, email, change password) is now in the admin menu //JJQR - END

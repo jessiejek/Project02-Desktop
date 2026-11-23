@@ -686,6 +686,25 @@ public static class AggregateDocuments
         return false;
     }
 
+    //JJQR - AI (Nov 23, 2026) - owner: "what is the point of showing it if after pressing Sync it is still there". A review item whose two columns hold the SAME values (500 and 500.00, the same time with more decimals, a consultation that is identical on both sides) tells nobody anything.
+    // True when the computer's copy and the server's copy of the record carry the same content, ignoring who wrote it and the version counter.
+    internal static bool IsHarmlessDifference(SyncConflict c)
+    {
+        try
+        {
+            // only the two alarms seen in practice: a payment the server also holds ("not_owner") and a consultation the server already finished ("finished_immutable").
+            // Anything else (e.g. a DIFFERENT record for the same visit) always stays for a person to look at.
+            if (c.ReasonCode is not ("not_owner" or "finished_immutable")) return false;
+            if (string.IsNullOrWhiteSpace(c.LocalJson) || string.IsNullOrWhiteSpace(c.CloudJson)) return false;
+            if (JsonNode.Parse(c.LocalJson) is not JsonObject local || JsonNode.Parse(c.CloudJson) is not JsonObject cloud) return false;
+            // a consultation conflict carries the whole document: compare the consultation record itself
+            if (local["consultation"] is JsonObject l && cloud["consultation"] is JsonObject r) { local = l; cloud = r; }
+            return SameValues(local, cloud);
+        }
+        catch { return false; }
+    }
+    //JJQR - END
+
     private static bool SameValues(JsonObject local, JsonObject cloud)
     {
         foreach (var kv in cloud)
@@ -700,6 +719,12 @@ public static class AggregateDocuments
     {
         if (n is JsonValue v && v.TryGetValue<decimal>(out var d)) return JsonValue.Create(d / 1.0000000000000000000000000000m);
         if (n is JsonValue s && s.TryGetValue<string>(out var str) && Guid.TryParse(str, out var g)) return JsonValue.Create(g.ToString());
+        //JJQR - AI (Nov 23, 2026) - offline audit: after every online payment the admin saw a "the cloud copy of this payment differs" review item although both copies were identical (Paid, same amount, same receipt number).
+        // The only difference was the timestamp text: this computer stores 4 decimals ("...10.5329+00:00"), the server sends 7 ("...10.5329904+00:00"). Compare timestamps as moments, to the millisecond.
+        if (n is JsonValue t && t.TryGetValue<string>(out var ts) && ts.Length >= 20 && ts[4] == '-' && ts[10] == 'T'
+            && DateTimeOffset.TryParse(ts, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var moment))
+            return JsonValue.Create(moment.UtcDateTime.Ticks / TimeSpan.TicksPerMillisecond);
+        //JJQR - END
         return n?.DeepClone();
     }
 

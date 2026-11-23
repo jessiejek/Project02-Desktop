@@ -53,7 +53,9 @@ public sealed record PatientEdit(
     string? MiddleName = null,
     string? ContactNumber = null,
     string? Email = null,
-    string? Address = null);
+    string? Address = null,
+    //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH): "I showed the patient the privacy notice" ticked when ADDING a patient; recorded in the audit log (never as the patient's consent)
+    bool PrivacyNoticeShown = false);
 
 public sealed record DataRequestItem(
     Guid Id,
@@ -198,6 +200,7 @@ public sealed class AdminPatientService : IAdminPatientService
         proto.PatientCode = await _codes.NextAsync(db, ct);
         db.Patients.Add(proto);
         AdminAudit.Add(db, AuditEntityType.Patient, proto.PatientId, "Created", _auth.Current.UserId, $"Code: {proto.PatientCode}");
+        if (edit.PrivacyNoticeShown) AdminAudit.Add(db, AuditEntityType.Patient, proto.PatientId, "PrivacyNoticeShown", _auth.Current.UserId, "Privacy notice shown at the front desk"); //JJQR - AI (Nov 23, 2026) //JJQR - END
         await _outbox.EnqueueAsync(db, new SyncOutboxEntry
         {
             OperationId = Guid.NewGuid(),

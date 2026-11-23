@@ -71,6 +71,13 @@ public sealed partial class ApiStaffPatientsService(IApiClient api) : IStaffPati
         catch (ApiValidationException ex) { return (StaffResult.Fail(ex.Message), null); }
         catch (Exception ex) when (IsServerAnswer(ex)) { return (StaffResult.Fail("Could not register this patient. Try again."), null); }
         if (created is null) return (StaffResult.Fail("Could not register this patient. Try again."), null);
+        //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH): record that the privacy notice was shown at the front desk (audit entry; best effort, the patient is already registered)
+        if (f.PrivacyNoticeShown)
+        {
+            try { await api.SendAsync(HttpMethod.Post, $"/api/patients/{created.PatientId:D}/privacy-notice-shown", null, null, ct); }
+            catch (Exception) { /* the audit entry is best effort */ }
+        }
+        //JJQR - END
         return (StaffResult.Ok(created.PatientId), ToRow(created));
     }
 

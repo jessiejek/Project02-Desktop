@@ -19,7 +19,7 @@ public sealed record ChartVitalTemplate(Guid TemplateId, string Description, str
 public sealed record ChartVitalVisit(Guid BookingId, DateOnly Date, IReadOnlyDictionary<Guid, string> Values);
 public sealed record ChartRxLine(string GenericName, string Dosage, string Quantity, string? Instruction);
 public sealed record ChartRxGroup(Guid GroupId, Guid BookingId, DateTimeOffset CreatedAt, IReadOnlyList<ChartRxLine> Lines);
-public sealed record ChartFile(Guid Id, string Title, DateTimeOffset UploadedAt);
+public sealed record ChartFile(Guid Id, string Title, DateTimeOffset UploadedAt, string Kind = "", string? FileName = null); //JJQR - AI (Nov 23, 2026) - Kind "lab" or "doc" and FileName let the chart open the file (web parity) //JJQR - END
 public sealed record ChartVaccination(Guid Id, string VaccineName, short? DoseNumber, DateOnly? Date, VaccinationStatus Status);
 
 /// <summary>Everything else about one visit that the chart shows when the visit is opened: fee line, lab orders, follow-up and medical certificate.</summary>
@@ -54,6 +54,9 @@ public interface IDoctorPatientsService
     /// <summary>Web: name + patient code contains the search (case-insensitive).</summary>
     IReadOnlyList<DoctorPatientRow> Filter(IEnumerable<DoctorPatientRow> rows, string? search);
     Task<PatientChart?> GetChartAsync(Guid doctorId, Guid patientId, CancellationToken ct = default);
+    //JJQR - AI (Nov 23, 2026) - web parity: open an uploaded lab result / document. Returns the path of a temporary copy, or null when this mode cannot fetch files (offline: the file lives on the clinic server).
+    Task<string?> DownloadFileAsync(ChartFile file, CancellationToken ct = default) => Task.FromResult<string?>(null);
+    //JJQR - END
 }
 
 public sealed class DoctorPatientsService : IDoctorPatientsService
@@ -146,8 +149,8 @@ public sealed class DoctorPatientsService : IDoctorPatientsService
             chartBookings, chartConsults,
             templates.Select(t => new ChartVitalTemplate(t.TemplateId, t.Description, t.Unit, t.IsDefault)).ToList(),
             visits, rx,
-            labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt)).ToList(),
-            docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName : d.Title!, d.UploadedAt)).ToList(),
+            labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt, "lab")).ToList(),
+            docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName : d.Title!, d.UploadedAt, "doc", d.FileName)).ToList(),
             vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName, v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList(),
             extras);
     }

@@ -13,7 +13,13 @@ public interface IApiClient
     Task<T?> GetAsync<T>(string path, IReadOnlyDictionary<string, string?>? query = null, CancellationToken ct = default);
     Task<T?> SendAsync<T>(HttpMethod method, string path, object? body = null, IReadOnlyDictionary<string, string?>? query = null, CancellationToken ct = default);
     Task SendAsync(HttpMethod method, string path, object? body = null, IReadOnlyDictionary<string, string?>? query = null, CancellationToken ct = default);
+    //JJQR - AI (Nov 23, 2026) - parity with the web: download a file (patient lab result / document) with the sign-in. Default throws so test doubles need no change.
+    Task<ApiDownload> DownloadAsync(string path, CancellationToken ct = default) => throw new NotSupportedException("This client cannot download files.");
+    //JJQR - END
 }
+
+/// <summary>A file answered by the server: its bytes, media type and (when sent) its name.</summary>
+public sealed record ApiDownload(byte[] Bytes, string? ContentType, string? FileName);
 
 public sealed class ApiClient : IApiClient, IDisposable
 {
@@ -38,6 +44,42 @@ public sealed class ApiClient : IApiClient, IDisposable
 
     public Task<T?> GetAsync<T>(string path, IReadOnlyDictionary<string, string?>? query = null, CancellationToken ct = default) =>
         SendAsync<T>(HttpMethod.Get, path, null, query, ct);
+
+    //JJQR - AI (Nov 23, 2026) - download a file: same sign-in, one transparent refresh on 401, offline errors mapped like every other call
+    public async Task<ApiDownload> DownloadAsync(string path, CancellationToken ct = default)
+    {
+        var baseUrl = _options.ResolveBaseUrl() ?? throw new ApiOfflineException("No clinic server address is configured.");
+        var uri = Build(baseUrl, path, null);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, uri);
+            if (_tokens.AccessToken is { Length: > 0 } t) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(2)); // files can be large
+            try
+            {
+                using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                if (res.StatusCode == HttpStatusCode.Unauthorized && attempt == 0 && _tokens.RefreshToken is not null && await _auth.TryRefreshAsync(ct)) continue;
+                if (!res.IsSuccessStatusCode) throw Map(res.StatusCode, await res.Content.ReadAsStringAsync(timeout.Token));
+                var bytes = await res.Content.ReadAsByteArrayAsync(timeout.Token);
+                var cd = res.Content.Headers.ContentDisposition;
+                _connectivity?.ReportSuccess();
+                return new ApiDownload(bytes, res.Content.Headers.ContentType?.MediaType, (cd?.FileNameStar ?? cd?.FileName)?.Trim('"'));
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                _connectivity?.ReportNetworkFailure();
+                throw new ApiOfflineException("The clinic server took too long to answer.");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or System.Net.Sockets.SocketException)
+            {
+                _connectivity?.ReportNetworkFailure();
+                throw new ApiOfflineException("The clinic server could not be reached.", ex);
+            }
+        }
+        throw Map(HttpStatusCode.Unauthorized, "");
+    }
+    //JJQR - END
 
     public async Task<T?> SendAsync<T>(HttpMethod method, string path, object? body = null, IReadOnlyDictionary<string, string?>? query = null, CancellationToken ct = default)
     {

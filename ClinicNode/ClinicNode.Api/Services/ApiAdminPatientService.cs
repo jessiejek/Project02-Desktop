@@ -104,6 +104,13 @@ public sealed class ApiAdminPatientService(IApiClient api) : IAdminPatientServic
                 user_id = (Guid?)null,
             };
             var row = await api.SendAsync<Patient>(HttpMethod.Post, "/api/patients", body, null, ct);
+            //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH): record that the privacy notice was shown at the front desk (audit entry; best effort)
+            if (row is not null && edit.PrivacyNoticeShown)
+            {
+                try { await api.SendAsync(HttpMethod.Post, $"/api/patients/{row.PatientId:D}/privacy-notice-shown", null, null, ct); }
+                catch (Exception) { /* the patient is added; the audit entry is best effort */ }
+            }
+            //JJQR - END
             return row is null ? AdminResult<AdminPatientListItem>.Fail("The new patient could not be read back.") : AdminResult<AdminPatientListItem>.Ok(Map(row));
         }
         catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult<AdminPatientListItem>.Fail(ex.Message); }

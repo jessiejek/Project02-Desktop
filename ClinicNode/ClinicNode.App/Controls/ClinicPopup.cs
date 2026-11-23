@@ -61,8 +61,10 @@ public static class ClinicPopup
         layer.Children.Add(scrim);
         //JJQR - AI (Nov 21, 2026) - limits measured against the popup layer, not the page root (the layer can be inset), so the panel never runs off the edge
         var pos = PositionIn(root, anchor);
-        var layerW = layer.Width > 0 ? layer.Width : root.Width;
-        var layerH = layer.Height > 0 ? layer.Height : root.Height;
+        //JJQR - AI (Nov 23, 2026) - owner: the calendar jumped to the top-left corner of the window. The FIRST time a pop-up opens on a page its freshly added layer has not been measured yet (width/height -1), so the code pinned it to the left edge and flipped it above the field. Fall back to the page's own size.
+        var layerW = layer.Width > 0 ? layer.Width : root.Width > 0 ? root.Width : page.Width;
+        var layerH = layer.Height > 0 ? layer.Height : root.Height > 0 ? root.Height : page.Height;
+        //JJQR - END
         var px = pos.X - layer.X; var py = pos.Y - layer.Y;
         var x = Math.Max(8, Math.Min(px, Math.Max(8, layerW - width - 16)));
         var below = py + anchor.Height + 4;

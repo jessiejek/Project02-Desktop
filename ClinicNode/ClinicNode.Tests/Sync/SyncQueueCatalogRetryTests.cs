@@ -32,13 +32,13 @@ public class SyncQueueCatalogRetryTests
 
     // ---- queue numbers ---------------------------------------------------------------------------------------------
 
+    //JJQR - AI (Nov 23, 2026) - offline audit: these two tests still expected the OLD rule ("a renumbered queue slip raises a reprint flag"). The product rule changed on 21 Nov (see AggregateDocuments, REPRINT COPY): the number already printed stays valid,
+    // the server keeps it and only audits the clash, so there is NO reprint flag; the clash shows as a review item. They now check the current rule.
     [Fact]
-    public async Task Queue_number_reassigned_updates_the_booking_and_raises_a_reprint_slip_signal()
+    public async Task A_queue_number_clash_on_push_updates_the_booking_but_demands_no_slip_reprint()
     {
         await using var host = await SyncTestHost.StartAsync();
         var (_, bookingId) = await WalkInAsync(host);
-        string oldNumber;
-        await using (var db = await host.DbAsync()) oldNumber = (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber!;
 
         host.Cloud.OnPush = op =>
         {
@@ -50,38 +50,19 @@ public class SyncQueueCatalogRetryTests
             return r;
         };
         var status = host.Get<ISyncStatus>();
-        var raised = new List<ReprintFlag>();
-        status.ReprintRequired += (_, f) => raised.Add(f);
-        var propertyChanges = new List<string?>();
-        status.PropertyChanged += (_, e) => propertyChanges.Add(e.PropertyName);
-
         Assert.True((await host.Get<ISyncService>().RunOnceAsync()).Succeeded);
 
         await using (var db = await host.DbAsync())
             Assert.Equal("Q-777", (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber);
-        var flag = Assert.Single(await status.GetReprintFlagsAsync());
-        Assert.Equal("queue_slip", flag.Kind);
-        Assert.Equal(bookingId.ToString(), flag.EntityId);
-        Assert.Equal(oldNumber, flag.OldValue);
-        Assert.Equal("Q-777", flag.NewValue);
-        Assert.Equal(1, status.ReprintCount);
-        Assert.Contains("ReprintCount", propertyChanges);
-        Assert.Equal("queue_slip", Assert.Single(raised).Kind);
-
-        // review item explains it too
+        Assert.Empty(await status.GetReprintFlagsAsync());
+        Assert.Equal(0, status.ReprintCount);
+        // the clash is still explained to the admin as a review item
         await using (var db = await host.DbAsync())
             Assert.Contains(await SyncLocalStore.ListOpenConflictsAsync(db), c => c.ReasonCode == "queue_number_reassigned");
-
-        // a later cycle does not raise it again; dismissing clears the count
-        await host.Get<ISyncService>().RunOnceAsync();
-        Assert.Single(raised);
-        await status.DismissReprintFlagAsync(flag.Id);
-        Assert.Equal(0, status.ReprintCount);
-        Assert.Empty(await status.GetReprintFlagsAsync());
     }
 
     [Fact]
-    public async Task A_cloud_renumbering_arriving_on_pull_also_signals_a_reprint()
+    public async Task A_cloud_queue_number_arriving_on_pull_is_applied_without_a_reprint_demand()
     {
         await using var host = await SyncTestHost.StartAsync();
         var (_, bookingId) = await WalkInAsync(host);
@@ -91,12 +72,11 @@ public class SyncQueueCatalogRetryTests
         host.Cloud.EnqueuePull("q1", false, Change("booking", bookingId.ToString(), doc, 30));
         Assert.True((await host.Get<ISyncService>().RunOnceAsync()).Succeeded);
 
-        var flag = Assert.Single(await host.Get<ISyncStatus>().GetReprintFlagsAsync());
-        Assert.Equal("queue_slip", flag.Kind);
-        Assert.Equal("Q-555", flag.NewValue);
+        Assert.Empty(await host.Get<ISyncStatus>().GetReprintFlagsAsync());
         await using var db = await host.DbAsync();
         Assert.Equal("Q-555", (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber);
     }
+    //JJQR - END
 
     [Fact]
     public async Task A_replaced_patient_code_signals_a_patient_card_reprint()

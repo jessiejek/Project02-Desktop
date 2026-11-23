@@ -7,6 +7,7 @@ using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.App.Controls;
 using ClinicNode.App.Services;
 using ClinicNode.App.Views.Staff;
+using ClinicNode.Api.Http; //JJQR - AI (Nov 23, 2026) - file open errors //JJQR - END
 using ClinicNode.Core.DoctorExtra;
 using ClinicNode.Core.Print;
 using ClinicNode.Core.Printing;
@@ -501,9 +502,27 @@ public sealed class DoctorPatientChartPage : StaffLivePage
             [
                 new TableColumn("Name", GridLength.Star, o => ClinicTheme.Text(((ChartFile)o).Title, "LabelLg")),
                 new TableColumn("Uploaded", new GridLength(160), o => ClinicTheme.Text(((ChartFile)o).UploadedAt.ToLocalTime().ToString("yyyy-MM-dd"), "BodyMd")),
+                //JJQR - AI (Nov 23, 2026) - web parity: the web opens the file; the desktop only listed names
+                new TableColumn("", new GridLength(110), o => StaffUi.Btn("Open", () => OpenFileAsync((ChartFile)o), "GhostButton")),
+                //JJQR - END
             ],
             files.Cast<object>()));
     }
+
+    //JJQR - AI (Nov 23, 2026) - download the file with the sign-in and open it in the computer's own viewer. Needs the clinic server (offline: say so).
+    private async Task OpenFileAsync(ChartFile file)
+    {
+        try
+        {
+            var path = await Svc<IDoctorPatientsService>().DownloadFileAsync(file);
+            if (path is null) { await DisplayAlertAsync("Open file", "Files are stored on the clinic server. Connect to the internet (Online mode) to open this file.", "OK"); return; }
+            await Launcher.Default.OpenAsync(new OpenFileRequest(file.Title, new ReadOnlyFile(path)));
+        }
+        catch (ApiNotFoundException) { await DisplayAlertAsync("Open file", "This file is no longer on the server.", "OK"); }
+        catch (ApiOfflineException) { await DisplayAlertAsync("Open file", "The clinic server could not be reached. Check the internet and try again.", "OK"); }
+        catch (Exception) { await DisplayAlertAsync("Open file", "The file could not be opened. Please try again.", "OK"); }
+    }
+    //JJQR - END
     //JJQR - END
 
     //JJQR - AI (21 Nov 2026) - prescription actions

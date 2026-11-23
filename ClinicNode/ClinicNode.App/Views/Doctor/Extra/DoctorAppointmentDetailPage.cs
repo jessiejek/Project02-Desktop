@@ -102,16 +102,28 @@ public sealed class DoctorAppointmentDetailPage : StaffLivePage
         fee.Add(Txt("Fee breakdown", "BodyMd", "OnSurfaceVariant"), 0);
         fee.Add(Txt($"{WebPeso(d.TotalFee)} total · {WebPeso(d.AmountDue)} due", "LabelLg"), 1);
 
-        _body.Children.Add(StaffUi.Card(
-            top,
-            Chips(meta.ToArray()),
-            Divider(),
-            Chips(Txt("☎  " + d.PatientContact, "LabelMd", "OnSurfaceVariant"), Txt("✉  " + d.PatientEmail, "LabelMd", "OnSurfaceVariant")),
-            new Border
+        //JJQR - AI (Nov 23, 2026) - owner: "make this UI professional". The contact row printed two tiny glyphs even when the patient has no phone or email. Show a proper icon + value only for what exists, and skip the row and its divider when there is nothing.
+        View Contact(string icon, string text) => new HorizontalStackLayout
+        {
+            Spacing = 8,
+            Children =
             {
-                Padding = new Thickness(16, 8), StrokeThickness = 0, BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
-                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 }, Content = fee,
-            }));
+                new ClinicNode.App.Controls.ClinicIcon { Name = icon, IconSize = ClinicNode.App.Controls.ClinicIcons.SizeSm, IconColor = ClinicTheme.Color("OnSurfaceVariant"), VerticalOptions = LayoutOptions.Center },
+                Txt(text, "LabelMd", "OnSurfaceVariant"),
+            },
+        };
+        var contacts = new List<View>();
+        if (!string.IsNullOrWhiteSpace(d.PatientContact)) contacts.Add(Contact("call", d.PatientContact.Trim()));
+        if (!string.IsNullOrWhiteSpace(d.PatientEmail)) contacts.Add(Contact("mail", d.PatientEmail.Trim()));
+        var heroRows = new List<View> { top, Chips(meta.ToArray()) };
+        if (contacts.Count > 0) { heroRows.Add(Divider()); heroRows.Add(Chips(contacts.ToArray())); }
+        heroRows.Add(new Border
+        {
+            Padding = new Thickness(16, 10), StrokeThickness = 0, BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 }, Content = fee,
+        });
+        _body.Children.Add(StaffUi.Card(heroRows.ToArray()));
+        //JJQR - END
         //JJQR - END
 
         //JJQR - AI (21 Nov 2026) - actions card
@@ -124,10 +136,12 @@ public sealed class DoctorAppointmentDetailPage : StaffLivePage
                 actions.Children.Add(open);
                 break;
             case AppointmentState.Completed:
-                var pair = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) }, ColumnSpacing = 16 };
-                pair.Add(StaffUi.Btn("View Consultation", () => DoctorExtraUi.OpenConsultAsync(d.BookingId, "view"), "SecondaryButton"), 0);
-                pair.Add(StaffUi.Btn("Edit / Amend", () => DoctorExtraUi.OpenConsultAsync(d.BookingId, "amend")), 1);
+                //JJQR - AI (Nov 23, 2026) - owner: "make this UI professional". The two buttons were stretched into equal halves with the primary one floating in the middle. One tidy left-aligned group: the main action first, then the secondary one.
+                var pair = StaffUi.Wrap(
+                    DoctorExtraUi.Spaced(StaffUi.Btn("Edit / Amend", () => DoctorExtraUi.OpenConsultAsync(d.BookingId, "amend"))),
+                    DoctorExtraUi.Spaced(StaffUi.Btn("View Consultation", () => DoctorExtraUi.OpenConsultAsync(d.BookingId, "view"), "SecondaryButton")));
                 actions.Children.Add(pair);
+                //JJQR - END
                 //JJQR - AI (Nov 22, 2026) - offline-mode plan step 2.4 (D6, Q3): the doctor marks the payment received, typing the receipt number from the booklet (Offline, and Online too)
                 if (d.PaymentLabel == "Unpaid" && d.AmountDue > 0)
                 {
@@ -143,13 +157,20 @@ public sealed class DoctorAppointmentDetailPage : StaffLivePage
                         var paid = await RecordPaymentPage.ShowAsync(this, Svc<ClinicNode.Core.Staff.IStaffPaymentsService>(), d.BookingId, d.PatientName, "", d.AmountDue, receiptHint: false, bookletNumber: true);
                         if (paid is not null) await LoadAsync();
                     });
-                    markPaid.HorizontalOptions = LayoutOptions.Fill;
-                    actions.Children.Add(markPaid);
+                    //JJQR - AI (Nov 23, 2026) - owner: the payment button was a full-width banner. A normal button with a short hint reads as an action, not as a headline.
+                    markPaid.HorizontalOptions = LayoutOptions.Start;
+                    actions.Children.Add(new VerticalStackLayout
+                    {
+                        Spacing = 6,
+                        Children = { markPaid, Txt($"{WebPeso(d.AmountDue)} is still unpaid. Enter the receipt number from the booklet.", "LabelMd", "OnSurfaceVariant") },
+                    });
+                    //JJQR - END
                 }
                 //JJQR - END
                 if (PrintButtons(d.BookingId, printable[d.BookingId], compact: false) is { Count: > 0 } pr)
                 {
                     actions.Children.Add(Divider());
+                    actions.Children.Add(Txt("Print", "LabelMd", "OnSurfaceVariant")); //JJQR - AI (Nov 23, 2026) - the print buttons get a label //JJQR - END
                     actions.Children.Add(StaffUi.Wrap(pr.Select(b => DoctorExtraUi.Spaced(b)).ToArray()));
                 }
                 break;

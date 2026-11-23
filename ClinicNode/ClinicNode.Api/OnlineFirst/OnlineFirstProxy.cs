@@ -128,7 +128,15 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
         }
     }
 
+    //JJQR - AI (Nov 23, 2026) - offline audit: 131 screens catch every error and show a generic sentence, so a failed save left no clue ("Could not register this patient"). Every service call passes through here, so every failure is recorded once in errors.log with the service and method.
     private async Task<TResult> RunAsync<TResult>(MethodInfo m, object?[]? args)
+    {
+        try { return await RunAsyncCore<TResult>(m, args); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write($"{typeof(T).Name}.{m.Name}", ex); throw; }
+    }
+    //JJQR - END
+
+    private async Task<TResult> RunAsyncCore<TResult>(MethodInfo m, object?[]? args)
     {
         var route = RouteOf(m);
         if (route == OnlineRoute.LocalOnly) { LastRoute = "local"; return await (Task<TResult>)Call(_local, m, args)!; }
@@ -164,6 +172,12 @@ public class OnlineFirstProxy<T> : DispatchProxy where T : class
     }
 
     private async Task RunVoidAsync(MethodInfo m, object?[]? args)
+    {
+        try { await RunVoidAsyncCore(m, args); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write($"{typeof(T).Name}.{m.Name}", ex); throw; } //JJQR - AI (Nov 23, 2026) - see RunAsync //JJQR - END
+    }
+
+    private async Task RunVoidAsyncCore(MethodInfo m, object?[]? args)
     {
         var route = RouteOf(m);
         if (route == OnlineRoute.LocalOnly) { LastRoute = "local"; await (Task)Call(_local, m, args)!; return; }

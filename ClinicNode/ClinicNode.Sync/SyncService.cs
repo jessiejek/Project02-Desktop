@@ -558,6 +558,10 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         //JJQR - END
         var at = serverTime ?? DateTimeOffset.UtcNow;
         await SyncOutbox.SetLastSuccessfulSyncAsync(db, at, ct);
+        //JJQR - AI (Nov 23, 2026) - first clear the review items whose two copies are the same (so they are never shown, nor sent to the admin as review items)
+        try { var cleared = await SyncLocalStore.AutoResolveHarmlessConflictsAsync(db, ct); if (cleared > 0) _logger.LogInformation("Cleared {Cleared} review item(s) whose copies were identical.", cleared); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Could not clear identical review items ({Type}).", ex.GetType().Name); }
+        //JJQR - END
         await UploadReviewItemsAsync(db, ct); //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side) //JJQR - END
         //JJQR - AI (Nov 22, 2026) - step 3.3: "synced today" is recorded only when this run left nothing waiting
         if (await _outbox.CountPendingAsync(db, ct) == 0)

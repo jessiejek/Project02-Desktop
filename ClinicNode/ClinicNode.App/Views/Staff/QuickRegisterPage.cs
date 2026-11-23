@@ -42,10 +42,13 @@ public sealed class QuickRegisterPage : ContentPage
         //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.3: ONE patient id for this registration dialog, so pressing Register again after a failure or a lost reply cannot create a second patient
         var registrationId = Guid.NewGuid();
         //JJQR - END
+        //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH): the privacy notice must be shown to the patient before registering them. The tick is recorded in the audit log; the patient still consents in the portal.
+        var notice = new CheckBox { VerticalOptions = LayoutOptions.Start };
+        //JJQR - END
         QuickRegisterForm Form() => new(first.Text ?? "", middle.Text, last.Text ?? "",
             dob.Date is { } d ? DateOnly.FromDateTime(d) : null,
             sexIndex switch { 0 => SexType.Male, 1 => SexType.Female, _ => null },
-            contact.Text, address.Text, registrationId);
+            contact.Text, address.Text, registrationId, notice.IsChecked);
 
         Button? register = null;
         var cancel = StaffUi.Btn("Cancel", async () => { if (_registering) return; _done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
@@ -60,11 +63,11 @@ public sealed class QuickRegisterPage : ContentPage
                 ?? StaffRules.Length(f.Address, 300, "Address")
                 ?? StaffRules.Phone(f.ContactNumber);
             Show(problem, p);
-            if (register is not null) register.IsEnabled = !_registering && svc.CanQuickRegister(f);
+            if (register is not null) register.IsEnabled = !_registering && svc.CanQuickRegister(f) && notice.IsChecked; //JJQR - AI (Nov 23, 2026) - privacy notice must be shown first //JJQR - END
         }
         register = StaffUi.Btn("Register and select", async () =>
         {
-            if (_registering || !svc.CanQuickRegister(Form())) return;
+            if (_registering || !svc.CanQuickRegister(Form()) || !notice.IsChecked) return;
             Show(error, null);
             _registering = true;
             register!.Text = "Registering…";
@@ -76,7 +79,13 @@ public sealed class QuickRegisterPage : ContentPage
                 _done.TrySetResult(row);
                 await Navigation.PopModalAsync();
             }
-            catch (Exception) { Show(error, "Could not register this patient. Try again."); }
+            catch (Exception ex)
+            {
+                //JJQR - AI (Nov 23, 2026) - owner (offline test): show the real reason when the app has one (server unreachable, register this computer first) and keep a record of every failure
+                ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("register-patient (screen)", ex);
+                Show(error, ClinicNode.Core.Diagnostics.ClinicErrorLog.Friendly(ex, "Could not register this patient. Try again."));
+                //JJQR - END
+            }
             finally
             {
                 _registering = false;
@@ -87,6 +96,7 @@ public sealed class QuickRegisterPage : ContentPage
         });
         foreach (var e in new[] { first, middle, last, contact, address }) e.TextChanged += (_, _) => Sync();
         dob.DateSelected += (_, _) => Sync();
+        notice.CheckedChanged += (_, _) => Sync(); //JJQR - AI (Nov 23, 2026) //JJQR - END
         //JJQR - END
 
         //JJQR - AI (Nov 21, 2026) - dialog body: alerts on top, then a two-column form, then the portal option
@@ -109,7 +119,27 @@ public sealed class QuickRegisterPage : ContentPage
         var body = new VerticalStackLayout
         {
             Spacing = 14,
-            Children = { error, problem, form, ClinicPickers.CheckRow(portal, "Prepare portal account", "Creates login access; the patient sets a password on first login."), portalNote },
+            Children =
+            {
+                error, problem, form,
+                ClinicPickers.CheckRow(portal, "Prepare portal account", "Creates login access; the patient sets a password on first login."), portalNote,
+                //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH) notice, same wording as the web registration
+                new Border
+                {
+                    Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(14, 12),
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 8,
+                        Children =
+                        {
+                            ClinicTheme.Text("Privacy notice (Data Privacy Act)", "LabelLg"),
+                            ClinicTheme.Text("Before registering, show the patient the clinic's privacy notice: what personal and health information is collected, why, who can see it, and their rights to access, correct and object. The patient gives their own consent in the patient portal.", "MutedBody"),
+                            ClinicPickers.CheckRow(notice, "I have shown the patient the privacy notice *", "Required. This is recorded in the audit log."),
+                        },
+                    },
+                },
+                //JJQR - END
+            },
         };
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { cancel, register } };
         Content = ClinicModal.Build("Register a new patient", body, footer, async () => { if (_registering) return; _done.TrySetResult(null); await Navigation.PopModalAsync(); }, maxWidth: 780, maxBodyHeight: 640);

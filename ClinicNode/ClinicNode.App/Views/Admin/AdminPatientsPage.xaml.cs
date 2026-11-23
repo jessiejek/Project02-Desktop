@@ -99,19 +99,20 @@ public partial class AdminPatientsPage : ContentPage
         var sex = new Picker { Title = "Select…", ItemsSource = new List<string> { "Male", "Female" } };
         var contact = new Entry { Keyboard = Keyboard.Telephone };
         var dobPicked = false;
+        var notice = new CheckBox { VerticalOptions = LayoutOptions.Start }; //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH) //JJQR - END
         var warning = new VerticalStackLayout();
         AdminDialog? dialog = null;
         void Sync()
         {
             _vm.NewFirstName = first.Text ?? ""; _vm.NewLastName = last.Text ?? ""; _vm.NewContact = contact.Text ?? "";
-            _vm.NewDobPicked = dobPicked ? dob.Date : null; _vm.NewSexPicked = sex.SelectedItem as string;
+            _vm.NewDobPicked = dobPicked ? dob.Date : null; _vm.NewSexPicked = sex.SelectedItem as string; _vm.NewPrivacyNoticeShown = notice.IsChecked;
             warning.Children.Clear();
             if (_vm.NewPatientProblem is { } p)
                 warning.Children.Add(new Border { Style = ClinicTheme.Style("PillWarning"), Padding = new Thickness(12, 8), Content = ClinicTheme.Text(p, "PillLabelWarning") });
             if (dialog is not null) dialog.ConfirmButton.IsEnabled = _vm.CanCreate;
         }
         first.TextChanged += (_, _) => Sync(); last.TextChanged += (_, _) => Sync(); contact.TextChanged += (_, _) => Sync();
-        dob.DateSelected += (_, _) => { dobPicked = true; Sync(); }; sex.SelectedIndexChanged += (_, _) => Sync();
+        dob.DateSelected += (_, _) => { dobPicked = true; Sync(); }; sex.SelectedIndexChanged += (_, _) => Sync(); notice.CheckedChanged += (_, _) => Sync();
 
         var grid = new Grid { ColumnSpacing = 16, RowSpacing = 16, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
         for (var i = 0; i < 3; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -128,7 +129,23 @@ public partial class AdminPatientsPage : ContentPage
         grid.Add(contactField, 0, 2);
         Grid.SetColumnSpan(contactField, 2);
 
-        var body = new VerticalStackLayout { Spacing = 16, Children = { warning, grid } };
+        //JJQR - AI (Nov 23, 2026) - Data Privacy Act (PH) notice, same wording as the web
+        var privacy = new Border
+        {
+            Style = ClinicTheme.Style("PillInfo"), Padding = new Thickness(14, 12),
+            Content = new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children =
+                {
+                    ClinicTheme.Text("Privacy notice (Data Privacy Act)", "LabelLg"),
+                    ClinicTheme.Text("Before adding the patient, show them the clinic's privacy notice: what personal and health information is collected, why, who can see it, and their rights to access, correct and object. The patient gives their own consent in the patient portal.", "MutedBody"),
+                    ClinicPickers.CheckRow(notice, "I have shown the patient the privacy notice *", "Required. This is recorded in the audit log."),
+                },
+            },
+        };
+        //JJQR - END
+        var body = new VerticalStackLayout { Spacing = 16, Children = { warning, grid, privacy } };
         var added = await AdminDialog.ShowSubmitAsync(this, "Add a patient", body, "Add patient",
             async () => { Sync(); return await _vm.CreateWebAsync() ? null : (string.IsNullOrWhiteSpace(_vm.CreateError) ? "The patient could not be added. Check the details and try again." : _vm.CreateError); },
             busyText: "Adding…",
