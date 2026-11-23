@@ -39,11 +39,44 @@ public static class UpdateUi
 #if MACCATALYST
         if (choice == "Install now (the app restarts)") //JJQR - AI (Nov 23, 2026) - one-click update //JJQR - END
         {
-            var err = await svc.PrepareInstallAsync(info);
-            if (err is not null) { await shell.DisplayAlertAsync("Update", err, "OK"); return; }
-            await shell.DisplayAlertAsync("Updating", "Clinic Node will close, update itself and reopen in a few seconds.", "OK");
+            //JJQR - AI (Nov 23, 2026) - owner: "for a second I thought nothing happens". Show a full-screen progress page the moment Install now is pressed: spinner, download percent, then "restarting".
+            var status = new Label { Text = $"Downloading version {info.Latest!.ToString(3)}...", FontSize = 15, HorizontalTextAlignment = TextAlignment.Center, TextColor = Color.FromArgb("#5A6B66") };
+            var bar = new ProgressBar { Progress = 0, ProgressColor = Color.FromArgb("#0F6B5C"), WidthRequest = 320 };
+            var busyPage = new ContentPage
+            {
+                BackgroundColor = Color.FromArgb("#F4F7F6"),
+                Content = new VerticalStackLayout
+                {
+                    Spacing = 16, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center,
+                    Children =
+                    {
+                        new ActivityIndicator { IsRunning = true, Color = Color.FromArgb("#0F6B5C"), HeightRequest = 40, WidthRequest = 40 },
+                        new Label { Text = "Updating Clinic Node", FontSize = 22, FontAttributes = FontAttributes.Bold, HorizontalTextAlignment = TextAlignment.Center, TextColor = Color.FromArgb("#1B2A26") },
+                        bar, status,
+                        new Label { Text = "Please do not close the app. It will restart by itself.", FontSize = 13, HorizontalTextAlignment = TextAlignment.Center, TextColor = Color.FromArgb("#5A6B66") },
+                    },
+                },
+            };
+            await shell.Navigation.PushModalAsync(busyPage, false);
+            string? err;
+            try
+            {
+                var progress = new Progress<double>(pr => { bar.Progress = pr; status.Text = $"Downloading version {info.Latest!.ToString(3)}... {(int)(pr * 100)}%"; });
+                err = await svc.PrepareInstallAsync(info, progress);
+            }
+            catch (Exception ex) { err = "The update failed: " + ex.Message; }
+            if (err is not null)
+            {
+                try { await shell.Navigation.PopModalAsync(false); } catch { }
+                await shell.DisplayAlertAsync("Update", err, "OK");
+                return;
+            }
+            bar.Progress = 1;
+            status.Text = "Installing... Clinic Node is restarting";
+            await Task.Delay(1500);
             Environment.Exit(0);
             return;
+            //JJQR - END
         }
 #endif
         if (choice == "Copy the install command")
