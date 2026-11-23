@@ -125,6 +125,15 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Use the Xcode that this .NET Mac Catalyst version requires (26.0)
+        run: |
+          ls /Applications | grep -i '^Xcode' || true
+          for X in /Applications/Xcode_26.0*.app; do
+            if [ -d "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; break; fi
+          done
+          xcodebuild -version
+          xcodebuild -version | grep -q "Xcode 26.0" || { echo "::error::Xcode 26.0 is not available on this runner"; exit 1; }
+
       - name: Install the MAUI workload
         run: dotnet workload install maui
 
