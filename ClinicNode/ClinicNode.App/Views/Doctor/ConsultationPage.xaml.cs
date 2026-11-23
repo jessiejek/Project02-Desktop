@@ -1677,7 +1677,12 @@ public partial class ConsultationPage : ContentPage
             i => { D.DiscountCategory = i switch { 1 => "Senior", 2 => "PWD", _ => null }; FollowTotal(); RenderSection(); Changed(); });
         discount.HorizontalOptions = LayoutOptions.Start;
         var medCert = new CheckBox { IsChecked = MedCertRequested() };
+#if WINDOWS
+        //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: owner's app crashed during a consultation. Redrawing the screen inside the tick/tap that caused it can crash WinUI (WINDOWS-HANDOFF.md item 2); redraw on the next UI turn instead. //JJQR - END
+        medCert.CheckedChanged += (_, e) => { _medCertManual = e.Value; FollowTotal(); Dispatcher.Dispatch(RenderSection); Changed(); };
+#else
         medCert.CheckedChanged += (_, e) => { _medCertManual = e.Value; FollowTotal(); RenderSection(); Changed(); };
+#endif
         var certRow = ClinicPickers.CheckRow(medCert, $"Medical certificate  +{FeeCalculator.FormatPeso(_settings.FeeMedCert)}", "Ticks by itself when you save the Medical Certificate step. You can still change it here.");
         var toCert = Btn("Open the Medical Certificate step", () => GoTo(7), "GhostButton");
         toCert.Margin = new Thickness(0);

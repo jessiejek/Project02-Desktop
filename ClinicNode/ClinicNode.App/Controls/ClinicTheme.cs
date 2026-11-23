@@ -14,6 +14,13 @@ public static class ClinicTheme
     public const double RadiusLg = 16;
     public const double RadiusXl = 24;
     public const double RadiusNav = 8;
+#if WINDOWS
+    //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY (the Mac never compiles this): one size for the whole Windows app, used by Platforms/Windows/WindowsUiScale.cs.
+    // The Mac draws everything at 0.77 (iPad look). Windows display scaling already enlarges the app, so the bigger the Windows scale, the more we shrink.
+    // 100% -> 0.9, 125% -> 0.85, 150% and above -> 0.8. Tune these three numbers only.
+    public static double WindowsUiScale(double displayScale) => displayScale >= 1.5 ? 0.8 : displayScale >= 1.25 ? 0.85 : 0.9;
+    //JJQR - END
+#endif
 
     public static Color Color(string key) =>
         Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Color color
