@@ -143,7 +143,9 @@ jobs:
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             VER="${GITHUB_REF_NAME#v}"
-            NOTES="$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | sed '/^$/d' | head -5)"
+            # the checkout turns the tag into a plain commit reference: fetch the real tag so its own message (not the commit message) is used
+            git fetch --force origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+            NOTES="$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | grep -vi '^co-authored-by' | sed '/^$/d' | head -5)"
           else
             VER="$(sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p' ClinicNode/ClinicNode.App/ClinicNode.App.csproj | head -1)"
             NOTES="${{ github.event.inputs.notes }}"
