@@ -72,8 +72,16 @@ public sealed class UpdateChecker
         // Each check now asks for fresh copies (a unique ?t= value skips the cache) and, if the signature still does not match, asks once more after 3 seconds before refusing.
         var first = await FetchAndVerifyAsync(current, ct);
         if (first.Status != UpdateStatus.BadSignature) return first;
-        try { await Task.Delay(TimeSpan.FromSeconds(3), ct); } catch (OperationCanceledException) { return first; }
-        return await FetchAndVerifyAsync(current, ct);
+        //JJQR - AI (Nov 23, 2026) - owner saw "not signed correctly" right after a release: the cache can stay mixed for a few minutes, longer than one 3 s retry. Ask up to three more times (3 s, 10 s, 25 s) before giving up.
+        var last = first;
+        foreach (var wait in new[] { 3, 10, 25 })
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(wait), ct); } catch (OperationCanceledException) { return last; }
+            last = await FetchAndVerifyAsync(current, ct);
+            if (last.Status != UpdateStatus.BadSignature) return last;
+        }
+        return last;
+        //JJQR - END
     }
 
     private async Task<UpdateInfo> FetchAndVerifyAsync(Version current, CancellationToken ct)

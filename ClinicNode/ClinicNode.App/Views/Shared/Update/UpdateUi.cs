@@ -13,7 +13,7 @@ public static class UpdateUi
         UpdateStatus.Required => $"Version {i.Latest!.ToString(3)} is required",
         UpdateStatus.UpToDate => "You have the latest version",
         UpdateStatus.Unreachable => "Could not check (no connection)",
-        UpdateStatus.BadSignature => "The update information was refused (not signed correctly)",
+        UpdateStatus.BadSignature => "The update information could not be checked yet. A new version may be publishing right now: try again in a few minutes",
         UpdateStatus.Error => i.Message ?? "Could not check for updates",
         _ => "Not checked yet",
     };
