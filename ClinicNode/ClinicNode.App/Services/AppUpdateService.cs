@@ -155,6 +155,33 @@ public sealed class AppUpdateService : IDisposable
     }
 #endif
 
+#if WINDOWS
+    /// <summary>True when this copy runs from the folder the installer uses (per user, no administrator), so the installer can replace it in place.</summary>
+    public static bool CanInstallInPlace()
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Clinic Node");
+            return AppContext.BaseDirectory.StartsWith(dir, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>One-click update on Windows: downloads the signed Setup.exe, checks its SHA-256, then starts it silently (no questions, no administrator prompt). The caller quits the app; the installer replaces the files and reopens Clinic Node.</summary>
+    public async Task<string?> PrepareInstallAsync(UpdateInfo info, IProgress<double>? progress = null, CancellationToken ct = default)
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ClinicNodeUpdate-" + Guid.NewGuid().ToString("N"));
+        var (setup, error) = await DownloadAsync(info, progress, ct, preferZip: false, dirOverride: dir);
+        if (setup is null) return error ?? "The download failed.";
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS") { UseShellExecute = false });
+            return null;
+        }
+        catch (Exception ex) { return "Could not start the installer: " + ex.Message; }
+    }
+#endif
+
     static string Foundation_DownloadsDir()
     {
 #if MACCATALYST

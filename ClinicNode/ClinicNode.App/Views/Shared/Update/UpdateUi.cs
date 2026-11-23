@@ -29,14 +29,18 @@ public static class UpdateUi
 
         var notes = info.Notes is { Count: > 0 } n ? "\n\nWhat is new:\n• " + string.Join("\n• ", n) : "";
         var required = info.Status == UpdateStatus.Required ? "\n\nThis update is required." : "";
-#if MACCATALYST
+#if MACCATALYST || WINDOWS
         var canInstall = AppUpdateService.CanInstallInPlace();
 #else
         var canInstall = false;
 #endif
+#if WINDOWS
+        var buttons = canInstall ? new[] { "Install now (the app restarts)", "Download and open" } : new[] { "Download and open" };
+#else
         var buttons = canInstall ? new[] { "Install now (the app restarts)", "Download and open", "Copy the install command" } : new[] { "Download and open", "Copy the install command" };
+#endif
         var choice = await shell.DisplayActionSheetAsync($"Update to {info.Latest!.ToString(3)} (you have {svc.CurrentText}){notes}{required}", "Later", null, buttons);
-#if MACCATALYST
+#if MACCATALYST || WINDOWS
         if (choice == "Install now (the app restarts)") //JJQR - AI (Nov 23, 2026) - one-click update //JJQR - END
         {
             //JJQR - AI (Nov 23, 2026) - owner: "for a second I thought nothing happens". Show a full-screen progress page the moment Install now is pressed: spinner, download percent, then "restarting".
@@ -90,6 +94,8 @@ public static class UpdateUi
         if (path is null) { await shell.DisplayAlertAsync("Update", error ?? "The download failed.", "OK"); return; }
 #if MACCATALYST
         UIKit.UIApplication.SharedApplication.OpenUrl(Foundation.NSUrl.FromFilename(path), new UIKit.UIApplicationOpenUrlOptions(), null);
+#elif WINDOWS
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch { /* the file is in Downloads\Clinic Node: the alert below says so */ }
 #endif
         await shell.DisplayAlertAsync("Update downloaded and checked", "The installer is open. Drag Clinic Node onto Applications and choose Replace, then open it again. (macOS may ask you to right-click > Open the first time.)", "OK");
     }
