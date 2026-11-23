@@ -28,7 +28,9 @@ public class AppDelegate : MauiUIApplicationDelegate
         if (builder.System != UIMenuSystem.MainSystem) return;
         var quit = UIKeyCommand.Create(new NSString("Quit Clinic Node"), null, new Selector("quitClinicNode:"), new NSString("q"), UIKeyModifierFlags.Command, null);
         // the system "Quit" menu is replaced by one that holds only our command
-        builder.ReplaceMenu(UIMenuIdentifier.Quit.GetConstant()!, UIMenu.Create("", null, UIMenuIdentifier.None.GetConstant(), UIMenuOptions.DisplayInline, [quit]));
+        //JJQR - AI (Nov 23, 2026) - the cloud build uses an older Mac toolchain whose UIMenu.Create takes the identifier as the UIMenuIdentifier value itself (not its NSString constant). Passing the value is accepted by both toolchains.
+        builder.ReplaceMenu(UIMenuIdentifier.Quit.GetConstant()!, UIMenu.Create("", null, UIMenuIdentifier.None, UIMenuOptions.DisplayInline, [quit]));
+        //JJQR - END
     }
     //JJQR - END
 }
