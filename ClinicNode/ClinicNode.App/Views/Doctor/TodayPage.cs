@@ -11,6 +11,7 @@ using ClinicNode.App.Views.Staff;
 using ClinicNode.Core.Auth;
 using ClinicNode.Data;
 using ClinicNode.Core.Events;
+using ClinicNode.Core.Sync;
 using ClinicNode.Core.Practice;
 using ClinicNode.Sync;
 //JJQR - AI (21 Nov 2026) - live hub (docs/ONLINE-FIRST.md §9)
@@ -82,7 +83,23 @@ public sealed class TodayPage : ContentPage
         Title = "Your clinic today";
         BackgroundColor = ClinicTheme.Color("Background");
         Content = new ScrollView { Content = new ContentView { Padding = 24, Content = _body } };
+        //JJQR - AI (Nov 23, 2026) - owner (Windows): "Today doesn't show anything until I open another page and come back". Right after sign-in the first OnAppearing can be missed or run before the account is ready.
+        // Start from Loaded and NavigatedTo too (all safe to repeat), and re-check a few seconds later that something is on screen.
+        Loaded += (_, _) => EnsureLoaded();
+        NavigatedTo += (_, _) => EnsureLoaded();
+        //JJQR - AI (Nov 23, 2026) - owner (Windows, Offline mode): Today stayed empty after switching mode. The Connection panel closes without Today appearing again on Windows, so reload when the work mode changes.
+        if (services.GetService(typeof(IWorkModeService)) is IWorkModeService mode)
+            mode.Changed += (_, _) => MainThread.BeginInvokeOnMainThread(() => { _ = ReloadAsync(); });
+        //JJQR - END
+        //JJQR - END
     }
+
+    //JJQR - AI (Nov 23, 2026)
+    void EnsureLoaded()
+    {
+        if (_body.Children.Count == 0) OnAppearing();
+    }
+    //JJQR - END
 
     protected override void OnAppearing()
     {
@@ -100,6 +117,9 @@ public sealed class TodayPage : ContentPage
         //JJQR - END
         _hideSkeleton ??= ClinicNode.App.Controls.Skeleton.CoverPage(this); //JJQR - AI (Nov 22, 2026) - skeleton until the first load finishes //JJQR - END
         _ = ReloadAsync();
+        //JJQR - AI (Nov 23, 2026) - watchdog: if nothing is on screen after 3 s (first load lost), load again
+        Dispatcher.StartTimer(TimeSpan.FromSeconds(3), () => { if (_body.Children.Count == 0) _ = ReloadAsync(); return false; });
+        //JJQR - END
     }
 
     protected override void OnDisappearing()
@@ -114,29 +134,52 @@ public sealed class TodayPage : ContentPage
 
     Guid? DoctorId => _auth.Current?.DoctorId;
 
+    private bool _reloading; //JJQR - AI (Nov 23, 2026) - one load at a time //JJQR - END
+
     async Task ReloadAsync()
     {
-        if (DoctorId is not { } id)
+        if (_reloading) return;
+        _reloading = true;
+        try
         {
-            _body.Children.Clear();
-            _body.Children.Add(ClinicTheme.Text("No doctor profile linked", "HeadlineSm"));
-            _body.Children.Add(ClinicTheme.Text("This login can sign in as Doctor but has no staff profile on the server, so the dashboard cannot load. Ask your clinic administrator to link your account to a doctor profile.", "MutedBody"));
-            return;
+            //JJQR - AI (Nov 23, 2026) - right after sign-in the doctor profile can be a moment late: wait up to ~3 s before saying there is no profile
+            for (var i = 0; i < 6 && DoctorId is null; i++) await Task.Delay(500);
+            //JJQR - END
+            if (DoctorId is not { } id)
+            {
+                _body.Children.Clear();
+                _body.Children.Add(ClinicTheme.Text("No doctor profile linked", "HeadlineSm"));
+                _body.Children.Add(ClinicTheme.Text("This login can sign in as Doctor but has no staff profile on the server, so the dashboard cannot load. Ask your clinic administrator to link your account to a doctor profile.", "MutedBody"));
+                return;
+            }
+            //JJQR - AI (Nov 22, 2026) - the two server reads do not depend on each other: ask for both at the same time (was one after the other)
+            var analyticsTask = LoadAnalyticsAsync(id);
+            //JJQR - END
+            try { _data = await _dash.GetAsync(id); _loadError = false; }
+            catch (Exception ex)
+            {
+                // JJQR - AI (Nov 21, 2026) - persist the real cause next to clinic-node.db
+                NodeErrorLog.Write(_options, "TodayPage.GetAsync", ex);
+                _loadError = true;
+                // JJQR - END
+            }
+            await analyticsTask;
+            try { Render(); }
+            catch (Exception ex)
+            {
+                //JJQR - AI (Nov 23, 2026) - never leave the page blank: log it and show a retry
+                NodeErrorLog.Write(_options, "TodayPage.Render", ex);
+                _body.Children.Clear();
+                _body.Children.Add(ClinicTheme.Text("Today could not be shown", "HeadlineSm"));
+                _body.Children.Add(StaffUi.Btn("Try again", () => { _ = ReloadAsync(); return Task.CompletedTask; }, "SecondaryButton"));
+                //JJQR - END
+            }
         }
-        //JJQR - AI (Nov 22, 2026) - the two server reads do not depend on each other: ask for both at the same time (was one after the other)
-        var analyticsTask = LoadAnalyticsAsync(id);
-        //JJQR - END
-        try { _data = await _dash.GetAsync(id); _loadError = false; }
-        catch (Exception ex)
+        finally
         {
-            // JJQR - AI (Nov 21, 2026) - persist the real cause next to clinic-node.db
-            NodeErrorLog.Write(_options, "TodayPage.GetAsync", ex);
-            _loadError = true;
-            // JJQR - END
+            _reloading = false;
+            _hideSkeleton?.Invoke(); //JJQR - AI (Nov 22, 2026) - first load done (also when it failed) //JJQR - END
         }
-        await analyticsTask;
-        Render();
-        _hideSkeleton?.Invoke(); //JJQR - AI (Nov 22, 2026) - first load done //JJQR - END
     }
     private Action? _hideSkeleton; //JJQR - AI (Nov 22, 2026) //JJQR - END
 
@@ -171,8 +214,17 @@ public sealed class TodayPage : ContentPage
     }
 
     // ---- rendering ----
+    //JJQR - AI (Nov 23, 2026) - owner (Windows): "Today shows for a few milliseconds, then nothing". Render reuses a few views (greeting, sync label, error box). They stayed children of the previous render's panels, and Windows refuses to add a view that already has a parent (the Mac allows it), so the second render died half-way and left the page empty.
+    // Take every old panel apart first so the reused views have no parent.
+    static void Detach(IView? v)
+    {
+        if (v is not Microsoft.Maui.Controls.Layout l) return;
+        foreach (var c in l.Children.ToList()) Detach(c);
+        l.Children.Clear();
+    }
     void Render()
     {
+        Detach(_body);
         _body.Children.Clear();
         var nameDate = $"{_auth.Current?.FullName ?? _data?.DoctorName ?? "Doctor"}  ·  {ClinicClock.Today.ToString("MMM d, yyyy", CultureInfo.GetCultureInfo("en-PH"))}";
         _greeting.Text = nameDate;
