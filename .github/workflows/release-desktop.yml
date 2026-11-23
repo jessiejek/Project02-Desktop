@@ -175,7 +175,12 @@ jobs:
         run: |
           git config user.name "release-bot"
           git config user.email "release-bot@users.noreply.github.com"
+          # keep only the newest 3 versions, and squash history so old installers leave the repo for good
+          for v in $(ls downloads | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -uV | head -n -3); do
+            rm -f "downloads/ClinicNode-$v-arm64.zip" "downloads/ClinicNode-$v-arm64.dmg" "downloads/ClinicNode-Setup-$v.exe"
+          done
+          git checkout --orphan squashed
           git add -A
-          git commit -m "Clinic Node ${{ steps.v.outputs.version }}"
-          git push origin HEAD:main
+          git commit -m "Clinic Node ${{ steps.v.outputs.version }} (older releases pruned, last 3 kept)"
+          git push --force origin HEAD:main
 # JJQR - END

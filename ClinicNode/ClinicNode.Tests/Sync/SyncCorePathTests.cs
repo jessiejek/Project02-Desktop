@@ -319,6 +319,29 @@ public class SyncCorePathTests
     }
     //JJQR - END
 
+    //JJQR - AI (Nov 23, 2026) - owner: "be transparent whether we are sending or downloading": a sync reports each step with real numbers
+    [Fact]
+    public async Task A_sync_reports_what_it_is_doing_in_order_with_real_counts()
+    {
+        await using var host = await SyncTestHost.StartAsync();
+        var (_, _, _) = await MakeVisitAsync(host);   // leaves changes waiting on this computer
+        var seen = new List<ClinicNode.Sync.SyncProgress>();
+        var sync = host.Get<ISyncService>();
+        sync.ProgressChanged += seen.Add;
+
+        Assert.True((await sync.RunManualAsync("manual")).Succeeded);
+
+        var stages = seen.Select(p => p.Stage).Distinct().ToList();
+        Assert.True(stages.IndexOf("connect") < stages.IndexOf("send"), string.Join(",", stages));
+        Assert.True(stages.IndexOf("send") < stages.IndexOf("receive"), string.Join(",", stages));
+        Assert.True(stages.IndexOf("receive") < stages.IndexOf("finish"), string.Join(",", stages));
+        var first = seen.First(p => p.Stage == "send");
+        Assert.True(first.Total > 0, "it must say how many changes it is sending");
+        Assert.Contains("Sending", first.Message);
+        Assert.Contains(seen, p => p.Stage == "send" && p.Done > 0);           // and count them as they go
+    }
+    //JJQR - END
+
     //JJQR - AI (Nov 23, 2026) - the owner's Sync review showed 4 items whose "this computer" and "clinic server" columns were the same values; pressing Sync did not clear them
     [Fact]
     public async Task Identical_review_items_clear_themselves_at_the_next_sync_and_real_differences_stay()

@@ -66,7 +66,7 @@ public static class MauiProgram
         var options = new NodeOptions
         {
             DataDirectory = dataDir,
-            Demo = IsDemo(),
+            Demo = IsDemo(dataDir),
             CloudBaseUrl = Environment.GetEnvironmentVariable("CLINIC_NODE_CLOUD_URL") ?? DefaultCloudUrl(),
         };
         AddClinicNodeAppServices(builder.Services, options, new ClinicNodeAppHostOptions
@@ -249,7 +249,7 @@ public static class MauiProgram
     }
     //JJQR - END
 
-    static bool IsDemo()
+    static bool IsDemo(string dataDir)
     {
         var env = Environment.GetEnvironmentVariable("CLINIC_NODE_DEMO");
         if (string.Equals(env, "0", StringComparison.OrdinalIgnoreCase) ||
@@ -259,7 +259,10 @@ public static class MauiProgram
             string.Equals(env, "true", StringComparison.OrdinalIgnoreCase))
             return true;
 #if DEBUG && !CLINIC_PROD
-        return true;
+        //JJQR - AI (Nov 23, 2026) - owner's dev copy showed "Could not open the local clinic database": a debug build starts in demo mode and tried to seed sample accounts and patients into the owner's REAL database. A computer that is registered with the clinic server (it has a node credential)
+        // holds real data: never seed demo data into it, even in a debug build. An empty test folder still gets the demo data.
+        return !File.Exists(Path.Combine(dataDir, "cloud-node-credential.json"));
+        //JJQR - END
 #else
         return false;
 #endif

@@ -126,8 +126,10 @@ public sealed class TopBarView : Grid
         var name = _auth.Current?.FullName ?? "";
         _nameLabel = ClinicTheme.Text(name, "LabelMd");
         _nameLabel.VerticalOptions = LayoutOptions.Center;
-        _nameLabel.LineBreakMode = LineBreakMode.TailTruncation;
-        _nameLabel.MaximumWidthRequest = 160;
+        //JJQR - AI (Nov 23, 2026) - owner: "show the full name". It was cut at 160 px ("Dr. Allyn Grace T. Españ..."). The column sizes itself, so let the whole name show (the narrow-window rule still hides it first when space is short).
+        _nameLabel.LineBreakMode = LineBreakMode.NoWrap;
+        _nameLabel.MaximumWidthRequest = 420;
+        //JJQR - END
         PlaceIn(_nameLabel, 5);
         //JJQR - AI (Nov 23, 2026) - owner: on Windows the admin could not reach Logout in the sidebar (the menu did not scroll). The name and avatar in the top bar are always visible: tap either for a menu with Sign out.
         _nameLabel.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await AccountMenuAsync()) });
@@ -169,16 +171,68 @@ public sealed class TopBarView : Grid
         _ = RefreshAsync();
     }
 
-    //JJQR - AI (Nov 23, 2026) - account menu behind the name / avatar: Sign out is always one tap away, whatever the size of the sidebar
+    //JJQR - AI (Nov 23, 2026) - owner: "when I click the name, a dropdown with Settings or Logout". A small menu under the name: the full name and role on top, then Settings (this person's own account page) and Logout. Logout is always one click away, whatever the size of the sidebar.
     async Task AccountMenuAsync()
     {
         try
         {
             var shell = Shell.Current;
             if (shell is null) return;
-            var who = string.IsNullOrWhiteSpace(_auth.Current?.FullName) ? "Account" : _auth.Current!.FullName;
-            var choice = await shell.DisplayActionSheetAsync(who, "Cancel", null, "Sign out");
-            if (choice == "Sign out" && shell is AppShell app) await app.UserSignOutAsync();
+            var session = _auth.Current;
+            var page = shell.CurrentPage as ContentPage;
+            var who = string.IsNullOrWhiteSpace(session?.FullName) ? "Account" : session!.FullName;
+            var settingsRoute = session?.Role switch { UserRole.Doctor => "doctor-profile", UserRole.Staff => "staff-profile", UserRole.Admin => "admin-profile", _ => null };
+
+            async Task GoSettingsAsync() { if (settingsRoute is not null) { try { await shell.GoToAsync("//" + settingsRoute); } catch (Exception ex) { await shell.DisplayAlertAsync("Settings", ex.Message, "OK"); } } }
+            async Task LogoutAsync() { if (shell is AppShell app) await app.UserSignOutAsync(); }
+
+            if (page is null)
+            {
+                // no page to hang a dropdown on: fall back to the plain choice sheet
+                var choice = await shell.DisplayActionSheetAsync(who, "Cancel", null, "Settings", "Logout");
+                if (choice == "Settings") await GoSettingsAsync();
+                else if (choice == "Logout") await LogoutAsync();
+                return;
+            }
+
+            Border Item(string icon, string text, Color color, Func<Task> action)
+            {
+                var row = new Border
+                {
+                    StrokeThickness = 0, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 }, Padding = new Thickness(12, 10), BackgroundColor = Colors.Transparent,
+                    Content = new HorizontalStackLayout
+                    {
+                        Spacing = 10,
+                        Children =
+                        {
+                            new ClinicNode.App.Controls.ClinicIcon { Name = icon, IconSize = ClinicNode.App.Controls.ClinicIcons.SizeSm, IconColor = color, VerticalOptions = LayoutOptions.Center },
+                            new Label { Text = text, FontSize = 14, FontFamily = ClinicTheme.FontMedium, TextColor = color, VerticalOptions = LayoutOptions.Center },
+                        },
+                    },
+                };
+                var hv = new PointerGestureRecognizer();
+                hv.PointerEntered += (_, _) => row.BackgroundColor = ClinicTheme.Color("PrimarySubtle");
+                hv.PointerExited += (_, _) => row.BackgroundColor = Colors.Transparent;
+                row.GestureRecognizers.Add(hv);
+                row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => { ClinicNode.App.Controls.ClinicPopup.Hide(page); await action(); }) });
+                return row;
+            }
+
+            var menu = new VerticalStackLayout { Spacing = 2 };
+            menu.Children.Add(new VerticalStackLayout
+            {
+                Spacing = 2, Padding = new Thickness(12, 8, 12, 8),
+                Children = { new Label { Text = who, FontSize = 14, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurface") }, ClinicTheme.Text(session?.Role.ToString() ?? "", "MutedSm") },
+            });
+            menu.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.5f), Margin = new Thickness(8, 2) });
+            if (settingsRoute is not null) menu.Children.Add(Item("settings", "Settings", ClinicTheme.Color("OnSurface"), GoSettingsAsync));
+            menu.Children.Add(Item("logout", "Logout", ClinicTheme.Color("StatusDanger"), LogoutAsync));
+            var panel = new Border
+            {
+                Style = ClinicTheme.Style("Card"), Padding = new Thickness(6), WidthRequest = 330, //JJQR - AI (Nov 23, 2026) - wide enough for the full name on one line //JJQR - END
+                Content = menu,
+            };
+            ClinicNode.App.Controls.ClinicPopup.Show(page, _nameLabel.IsVisible ? _nameLabel : this, panel, 330, 150);
         }
         catch { /* never break the bar */ }
     }

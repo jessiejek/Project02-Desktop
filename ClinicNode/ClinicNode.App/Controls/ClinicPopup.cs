@@ -69,6 +69,7 @@ public static class ClinicPopup
         var x = Math.Max(8, Math.Min(px, Math.Max(8, layerW - width - 16)));
         var below = py + anchor.Height + 4;
         var y = below + estimatedHeight > layerH ? Math.Max(8, py - estimatedHeight - 4) : below;
+        y = Math.Max(8, y); //JJQR - AI (Nov 23, 2026) - owner: the top of the name menu hid under the top bar (the anchor sits above this layer, so "below the anchor" came out negative). A pop-up never starts above the page area. //JJQR - END
         //JJQR - END
         AbsoluteLayout.SetLayoutBounds(panel, new Rect(x, y, width, AbsoluteLayout.AutoSize));
         AbsoluteLayout.SetLayoutFlags(panel, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.None);

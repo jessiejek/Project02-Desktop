@@ -116,8 +116,9 @@ public static class MacPrintRenderer
         _activeDelegate = del; // the controller holds its delegate weakly
         controller.Delegate = del;
         controller.PrintInfo = info;
-        controller.PrintFormatter = null;
-        controller.PrintPageRenderer = null;
+        //JJQR - AI (Nov 23, 2026) - owner's Mac: native printing always fell back to Preview. The CLOUD build's Mac toolchain throws ArgumentNullException when these two properties are assigned null (print-errors.log); the local toolchain accepts it, which is why it worked in my local tests.
+        // Both are already null on a fresh controller, so they are simply not assigned.
+        //JJQR - END
         controller.PrintingItem = pdf;
         controller.ShowsPaperSelectionForLoadedPapers = true;
         controller.ShowsNumberOfCopies = true;

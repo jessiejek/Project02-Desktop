@@ -26,8 +26,15 @@ public static class DailySyncRules
 }
 //JJQR - END
 
+//JJQR - AI (Nov 23, 2026) - owner: "be transparent about what is happening; we might be downloading data or sending data". The sync reports what it is doing right now: stage connect | send | receive | apply | blocks | finish, a plain message and, when known, a count.
+public sealed record SyncProgress(string Stage, string Message, int Done = 0, int Total = 0);
+//JJQR - END
+
 public interface ISyncService : ISyncStatusSource
 {
+    //JJQR - AI (Nov 23, 2026) - live progress for the sync screen (raised on a background thread). Default does nothing so test doubles need no change.
+    event Action<SyncProgress>? ProgressChanged { add { } remove { } }
+    //JJQR - END
     Task<SyncStatus> RefreshStatusAsync(CancellationToken ct = default);
     Task<SyncCycleResult> RunOnceAsync(CancellationToken ct = default);
     //JJQR - AI (Nov 22, 2026) - offline-mode plan step 3.1: an awaited run the user asked for (Sync now, first login of the day, before going Online). Checks first, sends everything waiting, receives, tops up queue numbers, and reports.
@@ -379,9 +386,19 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
     }
     //JJQR - END
 
+    //JJQR - AI (Nov 23, 2026) - progress reporting
+    public event Action<SyncProgress>? ProgressChanged;
+    private void Report(string stage, string message, int done = 0, int total = 0)
+    {
+        try { ProgressChanged?.Invoke(new SyncProgress(stage, message, done, total)); }
+        catch { /* a listener must never break a sync */ }
+    }
+    //JJQR - END
+
     private async Task<SyncCycleResult> RunCycleAsync(CancellationToken ct, bool manual = false) //JJQR - AI (Nov 22, 2026) - step 3.1: manual = send until nothing is left //JJQR - END
     {
         var startedAt = DateTimeOffset.UtcNow; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
+        Report("connect", "Checking the connection to the clinic server...");
         await using var db = await _factory.CreateDbContextAsync(ct);
         await SyncLocalStore.EnsureSchemaAsync(db, ct);
         var openBefore = await SyncLocalStore.CountOpenConflictsAsync(db, ct); //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
@@ -415,7 +432,9 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         try { await SyncLocalStore.SweepConsentsAsync(db, _outbox, 500, ct); }
         catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Consent sweep failed ({Type}); will retry next cycle.", ex.GetType().Name); }
         //JJQR - END
-        Publish(With(_current, SyncPhase.Syncing, _current.IsOnline, null, await _outbox.CountPendingAsync(db, ct)));
+        var totalToSend = await _outbox.CountPendingAsync(db, ct); //JJQR - AI (Nov 23, 2026) - how many changes this run will try to send //JJQR - END
+        Publish(With(_current, SyncPhase.Syncing, _current.IsOnline, null, totalToSend));
+        Report("send", totalToSend > 0 ? $"Sending {totalToSend} change{(totalToSend == 1 ? "" : "s")} saved on this computer to the clinic server..." : "Nothing is waiting to be sent from this computer.", 0, totalToSend); //JJQR - AI (Nov 23, 2026) //JJQR - END
 
         // 1) push
         int pushed = 0, acked = 0, retry = 0;
@@ -498,6 +517,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
                 return await FailAsync(db, result.Failure, result.Error, ct, pushed, acked);
 
             pushed += batch.Count;
+            Report("send", $"Sent {Math.Min(pushed, Math.Max(totalToSend, pushed))} of {Math.Max(totalToSend, pushed)} changes to the clinic server...", pushed, Math.Max(totalToSend, pushed)); //JJQR - AI (Nov 23, 2026) //JJQR - END
             var byId = result.Operations.GroupBy(o => o.OperationId).ToDictionary(g => g.Key, g => g.Last());
             var batchAcked = 0;
             foreach (var op in ops)
@@ -530,6 +550,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         }
 
         // 2) pull
+        Report("receive", "Downloading what is new from the clinic server..."); //JJQR - AI (Nov 23, 2026) //JJQR - END
         var cursor = await SyncOutbox.GetCursorAsync(db, CloudStream, ct);
         int pulled = 0, applied = 0, blocksReserved = 0; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
         DateTimeOffset? serverTime = null;
@@ -540,12 +561,15 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
                 return await FailAsync(db, pull.Failure, pull.Error, ct, pushed, acked);
             serverTime = pull.ServerTime ?? serverTime;
             pulled += pull.Changes.Count;
+            Report("receive", pulled > 0 ? $"Downloaded {pulled} change{(pulled == 1 ? "" : "s")} from the clinic server so far..." : "Downloading what is new from the clinic server...", pulled, 0); //JJQR - AI (Nov 23, 2026) //JJQR - END
+            if (pull.Changes.Count > 0) Report("apply", $"Saving {pulled} received change{(pulled == 1 ? "" : "s")} on this computer...", applied, pulled); //JJQR - AI (Nov 23, 2026) //JJQR - END
             applied += await ApplyPageAsync(db, pull, ct);
             cursor = pull.NewCursor;
             if (!pull.HasMore) break;
         }
 
         //JJQR - AI (21 Nov 2026) - online: keep queue-number blocks for today..today+6 in lanes R and S (refill at <= 5 left); never fails the cycle
+        Report("blocks", "Reserving queue numbers for the coming days..."); //JJQR - AI (Nov 23, 2026) //JJQR - END
         try
         {
             var today = ClinicApp.Domain.ClinicClock.Today;
@@ -558,6 +582,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         //JJQR - END
         var at = serverTime ?? DateTimeOffset.UtcNow;
         await SyncOutbox.SetLastSuccessfulSyncAsync(db, at, ct);
+        Report("finish", "Finishing up..."); //JJQR - AI (Nov 23, 2026) //JJQR - END
         //JJQR - AI (Nov 23, 2026) - first clear the review items whose two copies are the same (so they are never shown, nor sent to the admin as review items)
         try { var cleared = await SyncLocalStore.AutoResolveHarmlessConflictsAsync(db, ct); if (cleared > 0) _logger.LogInformation("Cleared {Cleared} review item(s) whose copies were identical.", cleared); }
         catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Could not clear identical review items ({Type}).", ex.GetType().Name); }
