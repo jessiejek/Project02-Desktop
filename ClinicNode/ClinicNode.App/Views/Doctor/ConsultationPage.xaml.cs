@@ -2052,7 +2052,7 @@ public partial class ConsultationPage : ContentPage
         //JJQR - END
         ShowOverlay("Completion Checklist", body,
             ("Go Back", HideOverlay, "SecondaryButton"),
-            ("Confirm & Complete", () => _ = CompleteAsync(), "PrimaryButton"));
+            ("Confirm & Complete", () => _ = CompleteWithFeedbackAsync(), "PrimaryButton"));
         if (stillMissing.Count > 0 && OverlayActions.Children.LastOrDefault() is Button confirmBtn) { confirmBtn.IsEnabled = false; confirmBtn.Opacity = 0.4; } //JJQR - AI (Nov 21, 2026) //JJQR - END
     }
 
@@ -2137,6 +2137,26 @@ public partial class ConsultationPage : ContentPage
         return new Border { Style = ClinicTheme.Style("Card"), BackgroundColor = ClinicTheme.Color("StatusWarningSurface"), Content = l };
     }
 
+    //JJQR - AI (Nov 23, 2026) - owner (Windows): "Review & complete shows the modal but after that there is no action". The button now shows "Completing…" while it works and any failure is shown in the checklist and written to errors.log
+    async Task CompleteWithFeedbackAsync()
+    {
+        var btn = OverlayActions.Children.OfType<Button>().LastOrDefault();
+        var label = btn?.Text;
+        if (btn is not null) { btn.IsEnabled = false; btn.Text = "Completing…"; }
+        try { await CompleteAsync(); }
+        catch (Exception ex)
+        {
+            ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.Complete", ex);
+            ChecklistError("Could not complete the consultation: " + ex.Message);
+        }
+        finally
+        {
+            // when the checklist is still open (a failure), give the button back
+            if (btn is not null && Overlay.IsVisible && btn.Text == "Completing…") { btn.Text = label ?? "Confirm & Complete"; btn.IsEnabled = true; }
+        }
+    }
+    //JJQR - END
+
     async Task CompleteAsync()
     {
         if (_busy || _workspace is null) return;
@@ -2163,9 +2183,18 @@ public partial class ConsultationPage : ContentPage
             AfterSaved(amended: false);
             await LoadAmendmentsAsync();
             //JJQR - END
-            ShowJustCompleted();
+            //JJQR - AI (Nov 23, 2026) - the visit IS saved at this point: if the "Consultation saved" card cannot be drawn, still close the checklist and show the record
+            try { ShowJustCompleted(); }
+            catch (Exception ex)
+            {
+                ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.ShowJustCompleted", ex);
+                HideOverlay();
+                try { RenderAll(); } catch (Exception ex2) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.RenderAll", ex2); }
+                ShowToast("Consultation saved.", null, ++_noticeSeq);
+            }
+            //JJQR - END
         }
-        catch (Exception) { ChecklistError("Could not complete the consultation. Check your connection and try again."); } //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 //JJQR - END
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.CompleteAsync", ex); ChecklistError("Could not complete the consultation. Check your connection and try again."); } //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 //JJQR - END
         finally { _busy = false; UpdateFooter(); }
     }
 
@@ -2237,7 +2266,13 @@ public partial class ConsultationPage : ContentPage
     static Button Btn(string text, Action onClick, string style = "SecondaryButton")
     {
         var b = new Button { Text = text, Style = ClinicTheme.Style(style), Margin = new Thickness(0, 0, 8, 8) };
-        b.Clicked += (_, _) => onClick();
+        //JJQR - AI (Nov 23, 2026) - a button action that throws used to do nothing at all (owner: "after the modal there is no action"); now the reason goes to errors.log
+        b.Clicked += (_, _) =>
+        {
+            try { onClick(); }
+            catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.Button:" + text, ex); }
+        };
+        //JJQR - END
         return b;
     }
 
