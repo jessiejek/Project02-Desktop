@@ -129,8 +129,11 @@ public sealed class TopBarView : Grid
         _nameLabel.LineBreakMode = LineBreakMode.TailTruncation;
         _nameLabel.MaximumWidthRequest = 160;
         PlaceIn(_nameLabel, 5);
+        //JJQR - AI (Nov 23, 2026) - owner: on Windows the admin could not reach Logout in the sidebar (the menu did not scroll). The name and avatar in the top bar are always visible: tap either for a menu with Sign out.
+        _nameLabel.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await AccountMenuAsync()) });
+        //JJQR - END
         var initials = string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
-        PlaceIn(new Border
+        var avatar = new Border
         {
             WidthRequest = 32,
             HeightRequest = 32,
@@ -148,7 +151,11 @@ public sealed class TopBarView : Grid
                 FontSize = 13,
                 TextColor = ClinicTheme.Color("OnSurfaceVariant"),
             },
-        }, 6);
+        };
+        PlaceIn(avatar, 6);
+        //JJQR - AI (Nov 23, 2026) - the avatar opens the same menu
+        avatar.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await AccountMenuAsync()) });
+        //JJQR - END
 
         _events.Changed += OnEvent;
         _sync.PropertyChanged += OnSync;
@@ -161,6 +168,21 @@ public sealed class TopBarView : Grid
         SizeChanged += (_, _) => ApplyNarrowLayout();
         _ = RefreshAsync();
     }
+
+    //JJQR - AI (Nov 23, 2026) - account menu behind the name / avatar: Sign out is always one tap away, whatever the size of the sidebar
+    async Task AccountMenuAsync()
+    {
+        try
+        {
+            var shell = Shell.Current;
+            if (shell is null) return;
+            var who = string.IsNullOrWhiteSpace(_auth.Current?.FullName) ? "Account" : _auth.Current!.FullName;
+            var choice = await shell.DisplayActionSheetAsync(who, "Cancel", null, "Sign out");
+            if (choice == "Sign out" && shell is AppShell app) await app.UserSignOutAsync();
+        }
+        catch { /* never break the bar */ }
+    }
+    //JJQR - END
 
     //JJQR - AI (Nov 22, 2026) - step 1.5
     void OnMonitor() => MainThread.BeginInvokeOnMainThread(ApplyModePill);

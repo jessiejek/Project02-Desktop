@@ -70,7 +70,11 @@ public sealed class ConnectionPanelPage : ContentPage
     private readonly Label _reason = ClinicTheme.Text("", "MutedSm");
     private readonly SampleChartDrawable _drawable = new();
     private readonly GraphicsView _chart = new() { HeightRequest = 90 };
-    private readonly VerticalStackLayout _facts = new() { Spacing = 6 };
+    private readonly VerticalStackLayout _facts = new() { Spacing = 8 };
+    //JJQR - AI (Nov 23, 2026) - owner: "the UI I don't like". The panel was a long list of small rows with link-style buttons. Now: a status dot, four summary cards, the chart in a card, a short details list, and three real buttons.
+    private readonly Microsoft.Maui.Controls.Shapes.Ellipse _dot = new() { WidthRequest = 12, HeightRequest = 12, VerticalOptions = LayoutOptions.Center };
+    private readonly Grid _tiles = new() { ColumnSpacing = 12, RowSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+    //JJQR - END
     private readonly Label _modeNote = ClinicTheme.Text("", "MutedSm");
     private Button _modeBtn = null!;
     private Button _syncBtn = null!;
@@ -87,23 +91,30 @@ public sealed class ConnectionPanelPage : ContentPage
         ControlTemplate = null;
         _chart.Drawable = _drawable;
 
-        _modeBtn = StaffUi.Btn("", async () => await SwitchModeAsync(), "GhostButton");
+        _modeBtn = StaffUi.Btn("", async () => await SwitchModeAsync(), "SecondaryButton");
         _syncBtn = StaffUi.Btn("Sync now", async () => await SyncNowAsync(), "PrimaryButton");
-        var buttons = new HorizontalStackLayout { Spacing = 10, Children = { _modeBtn, _syncBtn } };
-        //JJQR - AI (Nov 22, 2026) - OTA
-        buttons.Children.Add(StaffUi.Btn("Check for updates", async () => { await ClinicNode.App.Views.Shared.UpdateUi.ShowAsync(_sp); Render(); }, "GhostButton"));
-        //JJQR - END
+        var buttons = StaffUi.Wrap(DoctorSpaced(_syncBtn), DoctorSpaced(StaffUi.Btn("Check for updates", async () => { await ClinicNode.App.Views.Shared.UpdateUi.ShowAsync(_sp); Render(); }, "SecondaryButton")), DoctorSpaced(_modeBtn));
         //JJQR - AI (Nov 22, 2026) - owner request: developer log button, only when the log is on (Debug builds)
-        if (DevNetworkLog.Enabled) buttons.Children.Add(StaffUi.Btn("Developer log", async () => await Navigation.PushModalAsync(new DevLogPage()), "GhostButton"));
+        if (DevNetworkLog.Enabled) buttons.Children.Add(DoctorSpaced(StaffUi.Btn("Developer log", async () => await Navigation.PushModalAsync(new DevLogPage()), "GhostButton")));
         //JJQR - END
+        //JJQR - AI (Nov 23, 2026) - header (dot + word + reason), summary cards, chart card, details, actions
+        var header = new VerticalStackLayout { Spacing = 2, Children = { new HorizontalStackLayout { Spacing = 8, Children = { _dot, _word } }, _reason } };
+        var chartCard = new Border
+        {
+            Style = ClinicTheme.Style("Card"), Padding = new Thickness(12),
+            Content = new VerticalStackLayout { Spacing = 6, Children = { _chart, ClinicTheme.Text("Last 60 checks, newest on the right. Red = no answer.", "MutedSm") } },
+        };
         var body = new VerticalStackLayout
         {
-            Spacing = 12,
-            Children = { _word, _reason, _chart, ClinicTheme.Text("Last 60 checks, newest on the right. Red = no answer.", "MutedSm"), _facts, _modeNote, buttons, _syncMsg },
+            Spacing = 16,
+            Children = { header, _tiles, chartCard, _facts, _modeNote, buttons, _syncMsg },
         };
+        //JJQR - END
         Content = ClinicModal.Build("Connection", body, null, () => Navigation.PopModalAsync(), 560, 640);
         Render();
     }
+
+    static View DoctorSpaced(View v) { v.Margin = new Thickness(0, 0, 8, 8); return v; } //JJQR - AI (Nov 23, 2026) - gap between wrapped buttons //JJQR - END
 
     protected override void OnAppearing()
     {
@@ -135,22 +146,45 @@ public sealed class ConnectionPanelPage : ContentPage
         _chart.Invalidate();
 
         var n = ConnectionPanelModel.Compute(samples);
+        _dot.Fill = new SolidColorBrush(ClinicTheme.Color(ConnectionColors.KeyOf(st.Quality)));
+        string ms(int? v) => v is null ? "-" : v + " ms";
+        //JJQR - AI (Nov 23, 2026) - summary cards
+        View Tile(string label, string value, string sub) => new Border
+        {
+            Style = ClinicTheme.Style("Card"), Padding = new Thickness(14, 12),
+            Content = new VerticalStackLayout
+            {
+                Spacing = 2,
+                Children =
+                {
+                    ClinicTheme.Text(label, "MutedSm"),
+                    new Label { Text = value, FontSize = 20, FontFamily = ClinicTheme.FontSemiBold, TextColor = ClinicTheme.Color("OnSurface"), LineBreakMode = LineBreakMode.TailTruncation },
+                    ClinicTheme.Text(sub, "MutedSm"),
+                },
+            },
+        };
+        var pending = _sync.PendingCount;
+        var lastSync = _sync.LastSyncedAt?.ToOffset(ClinicApp.Domain.ClinicClock.Offset);
+        _tiles.Children.Clear();
+        _tiles.RowDefinitions.Clear();
+        _tiles.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); _tiles.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        _tiles.Add(Tile("Response time", ms(n.MedianMs), $"last {ms(n.LastMs)} · worst {ms(n.WorstMs)}"), 0, 0);
+        _tiles.Add(Tile("Changes waiting", pending.ToString(), pending == 0 ? "everything is saved on the server" : "waiting to be sent"), 1, 0);
+        _tiles.Add(Tile("Last sync", lastSync is null ? "never" : lastSync.Value.ToString("h:mm tt"), lastSync is null ? "" : lastSync.Value.ToString("MMM d") + " (Manila)"), 0, 1);
+        _tiles.Add(Tile("Work mode", _mode.Mode == WorkMode.Offline ? "Offline" : "Online", _mode.Mode == WorkMode.Offline ? "saved on this computer" : "connected to the server"), 1, 1);
+        //JJQR - END
+
         _facts.Children.Clear();
         void Row(string k, string v)
         {
-            var g = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(190), new ColumnDefinition(GridLength.Star) } };
+            var g = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(170), new ColumnDefinition(GridLength.Star) } };
             g.Add(ClinicTheme.Text(k, "MutedSm"), 0, 0);
             g.Add(new Label { Text = v, FontSize = 13, TextColor = ClinicTheme.Color("OnSurface"), LineBreakMode = LineBreakMode.WordWrap }, 1, 0);
             _facts.Children.Add(g);
         }
-        string ms(int? v) => v is null ? "-" : v + " ms";
-        Row("Work mode", _mode.Mode == WorkMode.Offline ? "Offline mode" : "Online");
-        Row("Last check / typical / worst", $"{ms(n.LastMs)} / {ms(n.MedianMs)} / {ms(n.WorstMs)}");
-        Row("Checks failed", $"{n.Failed} of {n.Checks}");
         Row("Last contact with the server", ConnectionColors.Manila(n.LastContactAt));
         Row("Database on the server", n.Database);
-        Row("Changes waiting to sync", _sync.PendingCount.ToString());
-        Row("Last successful sync", ConnectionColors.Manila(_sync.LastSyncedAt));
+        Row("Checks failed", $"{n.Failed} of {n.Checks}");
         //JJQR - AI (Nov 22, 2026) - OTA: version and update status
         var upd = _sp.GetService<ClinicNode.App.Services.AppUpdateService>();
         if (upd is not null)

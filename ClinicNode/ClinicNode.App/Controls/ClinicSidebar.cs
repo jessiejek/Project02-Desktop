@@ -70,6 +70,11 @@ public sealed class ClinicSidebar : Grid
         if (!_light)
             ((Label)header.Children[1]).Text = ClinicTheme.RoleSubtitle(role).ToUpperInvariant();
 
+        //JJQR - AI (Nov 23, 2026) - owner: "Microsoft still cannot log out; I can only see This computer". On Windows the sidebar does not scroll, so the Logout row at the bottom is out of reach. Put a Logout row in the fixed header (always visible), and keep the one at the bottom.
+#if WINDOWS
+        header.Children.Add(new ContentView { Margin = new Thickness(-16, 8, -16, 0), Content = BuildRow("Logout", "logout", isActive: false, action: async () => await _shell.UserSignOutAsync()) });
+#endif
+        //JJQR - END
         var nav = new VerticalStackLayout { Spacing = 16, Padding = new Thickness(8, 0) };
         foreach (var group in _groups)
         {
