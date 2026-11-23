@@ -1946,8 +1946,20 @@ public partial class ConsultationPage : ContentPage
         foreach (var v in body) OverlayBody.Children.Add(v);
         OverlayActions.Children.Clear();
         foreach (var a in actions) OverlayActions.Children.Add(Btn(a.Text, a.Do, a.Style));
+        FitOverlay();
         Overlay.IsVisible = true;
     }
+
+    //JJQR - AI (Nov 23, 2026) - owner (Windows laptop): the Completion Checklist's Confirm & Complete row was cut off below the page. The scroll area now gets the page height minus
+    // the card margin (56), title bar (~60) and button row (~80), so the buttons always show; the body scrolls instead. Re-fits when the window is resized.
+    bool _overlayFitHooked;
+    void FitOverlay()
+    {
+        if (!_overlayFitHooked) { _overlayFitHooked = true; Root.SizeChanged += (_, _) => FitOverlay(); }
+        if (Root.Height <= 0) return;
+        OverlayScroll.MaximumHeightRequest = Math.Clamp(Root.Height - Root.Padding.VerticalThickness - 200, 160, 560);
+    }
+    //JJQR - END
 
     void HideOverlay() => Overlay.IsVisible = false;
     void OnOverlayClose(object? sender, EventArgs e) => HideOverlay(); //JJQR - AI (Nov 21, 2026) - title-bar close //JJQR - END

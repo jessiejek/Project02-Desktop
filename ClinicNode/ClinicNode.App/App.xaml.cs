@@ -100,19 +100,24 @@ public partial class App : Application
             MainThread.BeginInvokeOnMainThread(ClinicNode.App.Platforms.MacCatalyst.WindowZoom.ZoomFirstWindow);
         };
 #endif
+        //JJQR - AI (Nov 23, 2026) - Windows: this alert could fire before the window had drawn anything; WinUI then throws "This element does not have a XamlRoot" and the app closed instead of showing the message.
+        // Wait (up to 10 s) until the shell is on screen, and never let the alert itself crash the app.
+        async Task ShowDatabaseErrorAsync(string reason)
+        {
+            for (var i = 0; i < 100 && !shell.IsLoaded; i++) await Task.Delay(100);
+            try { await shell.DisplayAlert("Database", "Could not open the local clinic database: " + reason, "OK"); }
+            catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("App.DatabaseAlert", ex); }
+        }
         window.Created += async (_, _) =>
         {
             try
             {
                 await _startup;
-                if (_database.InitializationError is { } err)
-                    await shell.DisplayAlert("Database", "Could not open the local clinic database: " + err, "OK");
+                if (_database.InitializationError is { } err) await ShowDatabaseErrorAsync(err);
             }
-            catch (Exception ex)
-            {
-                await shell.DisplayAlert("Database", "Could not open the local clinic database: " + ex.Message, "OK");
-            }
+            catch (Exception ex) { await ShowDatabaseErrorAsync(ex.Message); }
         };
+        //JJQR - END
         //JJQR - AI (Nov 22, 2026) - offline-mode plan step 0.4: a save that was refused because this computer cannot sync (not registered / revoked / app too old) says why, once, whichever screen it came from
         var lastBlockedAt = DateTimeOffset.MinValue;
         ClinicNode.Api.OnlineFirst.OnlineRouteStatus.LocalWriteBlocked += reason =>
