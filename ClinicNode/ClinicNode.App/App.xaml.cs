@@ -70,6 +70,26 @@ public partial class App : Application
         //JJQR - AI (Nov 21, 2026) - desktop window: a sensible first size and a minimum so the three-column workspace never gets squeezed
         window.Width = 1360; window.Height = 860; window.MinimumWidth = 1100; window.MinimumHeight = 700;
         //JJQR - END
+#if WINDOWS
+        //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: 1360 x 860 was bigger than a laptop at 150% (1280 x 752 usable), so the bottom fell off the screen.
+        // The Mac zooms its first window to fill the screen (below); Windows does the same by opening maximised. The restore size is 90% of the screen, centred, and the minimum fits a 150% laptop.
+        window.MinimumWidth = 1024; window.MinimumHeight = 640;
+        window.Created += (_, _) =>
+        {
+            try
+            {
+                if (window.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
+                {
+                    var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(w.AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
+                    int rw = (int)(area.Width * 0.9), rh = (int)(area.Height * 0.9);
+                    w.AppWindow.MoveAndResize(new global::Windows.Graphics.RectInt32(area.X + (area.Width - rw) / 2, area.Y + (area.Height - rh) / 2, rw, rh));
+                    (w.AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter)?.Maximize();
+                }
+            }
+            catch { /* the window still opens, at its normal size */ }
+        };
+        //JJQR - END
+#endif
 #if MACCATALYST
         var zoomed = false;
         window.Activated += async (_, _) =>
