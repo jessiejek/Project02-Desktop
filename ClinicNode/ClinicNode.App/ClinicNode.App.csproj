@@ -18,6 +18,9 @@
     <ApplicationId>ph.clinicnode.app</ApplicationId>
     <ApplicationDisplayVersion>0.2.7</ApplicationDisplayVersion>
     <ApplicationVersion>9</ApplicationVersion>
+    <!--JJQR - AI (Nov 23, 2026) - the unpackaged Windows app reads its version from the assembly, not from ApplicationDisplayVersion, so it said "0.1.0" and always offered an update. Mirror the release version into the assembly version. -->
+    <Version>$(ApplicationDisplayVersion)</Version>
+    <!--JJQR - END-->
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>

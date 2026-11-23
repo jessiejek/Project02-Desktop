@@ -97,7 +97,11 @@ public static class UpdateUi
 #elif WINDOWS
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch { /* the file is in Downloads\Clinic Node: the alert below says so */ }
 #endif
+#if WINDOWS
+        await shell.DisplayAlertAsync("Update downloaded and checked", "The installer is starting. Follow it (Next, Install), and Clinic Node reopens by itself. If nothing opens, run the file in Downloads\\Clinic Node. (Windows may say 'Windows protected your PC': click More info, then Run anyway.)", "OK");
+#else
         await shell.DisplayAlertAsync("Update downloaded and checked", "The installer is open. Drag Clinic Node onto Applications and choose Replace, then open it again. (macOS may ask you to right-click > Open the first time.)", "OK");
+#endif
     }
 }
 //JJQR - END
