@@ -2,8 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- JJQR - AI (Nov 23, 2026) - sandbox OFF so the app can update itself in one click (it is not sold through the App Store). -->
     <key>com.apple.security.app-sandbox</key>
-    <true/>
+    <false/>
     <key>com.apple.security.network.client</key>
     <true/>
     <key>com.apple.security.files.user-selected.read-write</key>

@@ -59,6 +59,9 @@ public static class MauiProgram
         ClinicNode.Core.Diagnostics.DevNetworkLog.Enabled = false; //JJQR - AI (Nov 22, 2026) - the packaged app has no developer log //JJQR - END
 #endif
         var dataDir = Path.Combine(FileSystem.AppDataDirectory, "ClinicNode");
+#if MACCATALYST
+        ClinicNode.App.Platforms.MacCatalyst.LegacySandboxMigration.Run(dataDir); //JJQR - AI (Nov 23, 2026) - copy the old sandbox data once //JJQR - END
+#endif
         var options = new NodeOptions
         {
             DataDirectory = dataDir,

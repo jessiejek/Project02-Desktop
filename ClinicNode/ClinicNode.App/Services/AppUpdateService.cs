@@ -1,6 +1,5 @@
 //JJQR - AI (Nov 22, 2026) - OTA: checks the signed update feed in the background, remembers the answer for the screens, and downloads + verifies an update on request.
-// The app is sandboxed (Apple's safety box): it can download and CHECK an update but cannot overwrite itself, so after the download it opens the file and the person drags it to Applications
-// (or pastes the one-line installer, which needs no warning). On Windows the same service feeds the installer (see docs/DISTRIBUTION-AND-OTA-PLAN.md).
+// Nov 23: the Mac app is no longer sandboxed, so "Install now" downloads + verifies the signed zip and a small helper swaps the app in place and reopens it. The older ways (download and open, pasted installer) remain as fallbacks. On Windows the same service feeds the installer (see docs/DISTRIBUTION-AND-OTA-PLAN.md).
 using System.Security.Cryptography;
 using ClinicNode.Core.Update;
 
@@ -69,13 +68,13 @@ public sealed class AppUpdateService : IDisposable
     }
 
     /// <summary>Downloads the installer into Downloads/Clinic Node, checks its SHA-256 against the signed feed, and returns the file path (null + message when it fails).</summary>
-    public async Task<(string? Path, string? Error)> DownloadAsync(UpdateInfo info, IProgress<double>? progress = null, CancellationToken ct = default)
+    public async Task<(string? Path, string? Error)> DownloadAsync(UpdateInfo info, IProgress<double>? progress = null, CancellationToken ct = default, bool preferZip = false, string? dirOverride = null)
     {
-        var pkg = info.Installer ?? info.Package;
+        var pkg = preferZip ? info.Package : (info.Installer ?? info.Package);
         if (pkg is null) return (null, "There is no download for this kind of computer yet.");
         try
         {
-            var dir = System.IO.Path.Combine(Foundation_DownloadsDir(), "Clinic Node");
+            var dir = dirOverride ?? System.IO.Path.Combine(Foundation_DownloadsDir(), "Clinic Node");
             Directory.CreateDirectory(dir);
             var file = System.IO.Path.Combine(dir, System.IO.Path.GetFileName(new Uri(pkg.Url).AbsolutePath));
             using (var res = await _http.GetAsync(pkg.Url, HttpCompletionOption.ResponseHeadersRead, ct))
@@ -103,6 +102,58 @@ public sealed class AppUpdateService : IDisposable
             return (null, "The download failed. Check the internet and try again.");
         }
     }
+
+
+#if MACCATALYST
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libSystem.dylib")] static extern int system(string command);
+
+    /// <summary>True when this app sits in a folder the person can write to (normally /Applications), so it can replace itself.</summary>
+    public static bool CanInstallInPlace()
+    {
+        try
+        {
+            var app = Foundation.NSBundle.MainBundle.BundlePath;
+            var parent = System.IO.Path.GetDirectoryName(app);
+            if (!app.EndsWith(".app") || string.IsNullOrEmpty(parent)) return false;
+            var t = System.IO.Path.Combine(parent, ".cn-write-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(t, ""); File.Delete(t);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>One-click update: downloads the signed zip, checks its SHA-256, then starts a tiny helper that waits for this app to quit, swaps the app in place, and opens the new one. Returns an error message, or null when the helper has started (the caller then quits the app).</summary>
+    public async Task<string?> PrepareInstallAsync(UpdateInfo info, IProgress<double>? progress = null, CancellationToken ct = default)
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ClinicNodeUpdate-" + Guid.NewGuid().ToString("N"));
+        var (zip, error) = await DownloadAsync(info, progress, ct, preferZip: true, dirOverride: dir);
+        if (zip is null) return error ?? "The download failed.";
+        try
+        {
+            var app = Foundation.NSBundle.MainBundle.BundlePath;
+            var script = System.IO.Path.Combine(dir, "swap.sh");
+            File.WriteAllText(script, """
+                APP="$1"; ZIP="$2"; PID="$3"; DIR="$(dirname "$ZIP")"; STAGE="$DIR/new"
+                while kill -0 "$PID" 2>/dev/null; do sleep 0.5; done
+                mkdir -p "$STAGE"
+                /usr/bin/ditto -x -k "$ZIP" "$STAGE" || { /usr/bin/open "$APP"; exit 1; }
+                NEW="$(find "$STAGE" -maxdepth 1 -name '*.app' | head -1)"
+                [ -d "$NEW" ] || { /usr/bin/open "$APP"; exit 1; }
+                /usr/bin/xattr -cr "$NEW"
+                mv "$APP" "$APP.old" || { /usr/bin/open "$APP"; exit 1; }
+                if mv "$NEW" "$APP"; then rm -rf "$APP.old"; else mv "$APP.old" "$APP"; fi
+                /usr/bin/open "$APP"
+                rm -rf "$DIR"
+                """.Replace("\r", ""));
+            File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            static string Q(string v) => "'" + v.Replace("'", "'\\''") + "'";
+            var pid = Environment.ProcessId;
+            system($"nohup /bin/bash {Q(script)} {Q(app)} {Q(zip)} {pid} >/dev/null 2>&1 &");
+            return null;
+        }
+        catch (Exception ex) { return "Could not start the installer: " + ex.Message; }
+    }
+#endif
 
     static string Foundation_DownloadsDir()
     {

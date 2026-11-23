@@ -29,7 +29,23 @@ public static class UpdateUi
 
         var notes = info.Notes is { Count: > 0 } n ? "\n\nWhat is new:\n• " + string.Join("\n• ", n) : "";
         var required = info.Status == UpdateStatus.Required ? "\n\nThis update is required." : "";
-        var choice = await shell.DisplayActionSheetAsync($"Update to {info.Latest!.ToString(3)} (you have {svc.CurrentText}){notes}{required}", "Later", null, "Download and open", "Copy the install command");
+#if MACCATALYST
+        var canInstall = AppUpdateService.CanInstallInPlace();
+#else
+        var canInstall = false;
+#endif
+        var buttons = canInstall ? new[] { "Install now (the app restarts)", "Download and open", "Copy the install command" } : new[] { "Download and open", "Copy the install command" };
+        var choice = await shell.DisplayActionSheetAsync($"Update to {info.Latest!.ToString(3)} (you have {svc.CurrentText}){notes}{required}", "Later", null, buttons);
+#if MACCATALYST
+        if (choice == "Install now (the app restarts)") //JJQR - AI (Nov 23, 2026) - one-click update //JJQR - END
+        {
+            var err = await svc.PrepareInstallAsync(info);
+            if (err is not null) { await shell.DisplayAlertAsync("Update", err, "OK"); return; }
+            await shell.DisplayAlertAsync("Updating", "Clinic Node will close, update itself and reopen in a few seconds.", "OK");
+            Environment.Exit(0);
+            return;
+        }
+#endif
         if (choice == "Copy the install command")
         {
             await Clipboard.Default.SetTextAsync(AppUpdateService.InstallCommand);
