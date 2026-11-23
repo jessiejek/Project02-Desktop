@@ -12,7 +12,11 @@ public static class WindowsCrashLog
         try
         {
             if (Microsoft.UI.Xaml.Application.Current is { } app)
-                app.UnhandledException += (_, e) => Write("Windows crash (UI)", e.Exception);
+                app.UnhandledException += (_, e) =>
+                {
+                    Write("Windows error (UI, app kept open)", e.Exception);
+                    e.Handled = true; // owner: a failure in one screen must not close the whole app in the middle of a consultation
+                };
             AppDomain.CurrentDomain.UnhandledException += (_, e) => Write("Windows crash (unhandled)", e.ExceptionObject as Exception);
             TaskScheduler.UnobservedTaskException += (_, e) => Write("Windows background error", e.Exception);
         }

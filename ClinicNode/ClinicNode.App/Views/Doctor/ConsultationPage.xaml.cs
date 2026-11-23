@@ -1506,11 +1506,11 @@ public partial class ConsultationPage : ContentPage
         var gDates = SectionHost.Children.Count; //JJQR - AI (Nov 21, 2026) //JJQR - END
         SectionHost.Children.Add(ClinicTheme.Text("Examination from", "FieldLabel"));
         var from = new DatePicker { Date = D.McExamFrom?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today };
-        from.DateSelected += (_, e) => { D.McExamFrom = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = true; RenderSection(); Changed(); };
+        from.DateSelected += (_, e) => { D.McExamFrom = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = true; ClinicNode.App.Controls.UiTurn.Next(RenderSection); Changed(); };
         SectionHost.Children.Add(DateBox(from)); //JJQR - AI (Nov 21, 2026) //JJQR - END
         SectionHost.Children.Add(ClinicTheme.Text("Examination until", "FieldLabel"));
         var until = new DatePicker { Date = D.McExamTo?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today };
-        until.DateSelected += (_, e) => { D.McExamTo = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = true; RenderSection(); Changed(); };
+        until.DateSelected += (_, e) => { D.McExamTo = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = true; ClinicNode.App.Controls.UiTurn.Next(RenderSection); Changed(); };
         SectionHost.Children.Add(DateBox(until)); //JJQR - AI (Nov 21, 2026) //JJQR - END
         GroupColumns(gDates, 2, 2); //JJQR - AI (Nov 21, 2026) //JJQR - END
         var gDx = SectionHost.Children.Count; //JJQR - AI (Nov 21, 2026) //JJQR - END
@@ -1526,7 +1526,7 @@ public partial class ConsultationPage : ContentPage
 
         SectionHost.Children.Add(ClinicTheme.Text("Please come back on", "FieldLabel"));
         var comeBack = new DatePicker { Date = D.McComeBackOn?.ToDateTime(TimeOnly.MinValue) };
-        comeBack.DateSelected += (_, e) => { D.McComeBackOn = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = false; RenderSection(); Changed(); };
+        comeBack.DateSelected += (_, e) => { D.McComeBackOn = e.NewDate is { } d ? DateOnly.FromDateTime(d) : null; _mcComeBackStale = false; ClinicNode.App.Controls.UiTurn.Next(RenderSection); Changed(); };
         var before = ConsultRules.ComeBackBeforeUntil(D.McComeBackOn, D.McExamTo);
         if (before || _mcComeBackStale) comeBack.BackgroundColor = ClinicTheme.Color("StatusWarningSurface");
         SectionHost.Children.Add(DateBox(comeBack)); //JJQR - AI (Nov 21, 2026) //JJQR - END
@@ -2269,8 +2269,11 @@ public partial class ConsultationPage : ContentPage
         //JJQR - AI (Nov 23, 2026) - a button action that throws used to do nothing at all (owner: "after the modal there is no action"); now the reason goes to errors.log
         b.Clicked += (_, _) =>
         {
-            try { onClick(); }
-            catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.Button:" + text, ex); }
+            ClinicNode.App.Controls.UiTurn.Next(() =>
+            {
+                try { onClick(); }
+                catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("ConsultationPage.Button:" + text, ex); }
+            });
         };
         //JJQR - END
         return b;
@@ -2374,7 +2377,7 @@ public partial class ConsultationPage : ContentPage
     static Button Pill(string text, bool on, Action onClick)
     {
         var b = new Button { Text = text, Style = ClinicTheme.Style(on ? "StepButtonActive" : "StepButton"), Margin = new Thickness(0, 0, 8, 8) };
-        b.Clicked += (_, _) => onClick();
+        b.Clicked += (_, _) => ClinicNode.App.Controls.UiTurn.Next(onClick); //JJQR - AI (Nov 23, 2026) - Windows: redraw on the next UI turn //JJQR - END
         return b;
     }
 

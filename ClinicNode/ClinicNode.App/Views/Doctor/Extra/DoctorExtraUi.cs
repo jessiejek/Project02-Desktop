@@ -42,7 +42,7 @@ public static class DoctorExtraUi
                 };
                 var bar = new BoxView { HeightRequest = 3, Color = on ? ClinicTheme.Color("Primary") : Colors.Transparent, CornerRadius = 2 };
                 var tab = new VerticalStackLayout { Spacing = 0, Children = { text, bar } };
-                tab.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { select(id); Render(); }) });
+                tab.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => ClinicNode.App.Controls.UiTurn.Next(() => { select(id); Render(); })) }); //JJQR - AI (Nov 23, 2026) - Windows: redraw on the next UI turn //JJQR - END
                 if (!on)
                 {
                     var hover = new PointerGestureRecognizer();

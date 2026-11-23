@@ -74,7 +74,7 @@ public sealed class StaffDoctorStatusPage : StaffLivePage
             if (_selectMode)
             {
                 var cb = new CheckBox { IsChecked = _selected.Contains(doc.DoctorId) };
-                cb.CheckedChanged += (_, e) => { if (e.Value) _selected.Add(doc.DoctorId); else _selected.Remove(doc.DoctorId); RenderBulk(); };
+                cb.CheckedChanged += (_, e) => { if (e.Value) _selected.Add(doc.DoctorId); else _selected.Remove(doc.DoctorId); ClinicNode.App.Controls.UiTurn.Next(RenderBulk); };
                 views.Add(new HorizontalStackLayout { Spacing = 8, Children = { cb, ClinicTheme.Text(NameOf(doc.Name), "HeadlineSm") } });
             }
             else views.Add(ClinicTheme.Text(NameOf(doc.Name), "HeadlineSm"));

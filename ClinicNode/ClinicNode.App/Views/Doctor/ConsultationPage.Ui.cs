@@ -129,7 +129,7 @@ public partial class ConsultationPage
         if (canEdit)
         {
             var tap = new TapGestureRecognizer();
-            tap.Tapped += (_, _) => { _allergyEditorOpen = !_allergyEditorOpen; RenderBanner(); };
+            tap.Tapped += (_, _) => { _allergyEditorOpen = !_allergyEditorOpen; ClinicNode.App.Controls.UiTurn.Next(RenderBanner); }; //JJQR - AI (Nov 23, 2026) - Windows: redraw on the next UI turn //JJQR - END
             chip.GestureRecognizers.Add(tap);
         }
         row.Children.Add(chip);

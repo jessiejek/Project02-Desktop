@@ -71,7 +71,7 @@ public static class StaffUi
         if (onTap is not null)
         {
             var tap = new TapGestureRecognizer();
-            tap.Tapped += async (_, _) => await onTap();
+            tap.Tapped += async (_, _) => { await Task.Yield(); try { await onTap(); } catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffUi.Link", ex); } }; //JJQR - AI (Nov 23, 2026) - an error here used to close the app //JJQR - END
             card.GestureRecognizers.Add(tap);
         }
         return card;
@@ -98,7 +98,7 @@ public static class StaffUi
     public static Button Chip(string text, bool selected, Action onTap)
     {
         var b = new Button { Text = text, Style = ClinicTheme.Style(selected ? "PrimaryButton" : "SecondaryButton"), Padding = new Thickness(14, 6), MinimumHeightRequest = 32 };
-        b.Clicked += (_, _) => onTap();
+        b.Clicked += (_, _) => ClinicNode.App.Controls.UiTurn.Next(onTap); //JJQR - AI (Nov 23, 2026) - Windows: redraw on the next UI turn //JJQR - END
         return b;
     }
     //JJQR - END

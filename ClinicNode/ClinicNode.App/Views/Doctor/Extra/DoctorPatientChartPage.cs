@@ -453,7 +453,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     private View SortSelect(bool newest, Action<bool> set)
     {
         var picker = new Picker { ItemsSource = new[] { "Newest first", "Oldest first" }, SelectedIndex = newest ? 0 : 1, WidthRequest = 160 };
-        picker.SelectedIndexChanged += (_, _) => { set(picker.SelectedIndex != 1); RenderTab(); };
+        picker.SelectedIndexChanged += (_, _) => { set(picker.SelectedIndex != 1); ClinicNode.App.Controls.UiTurn.Next(RenderTab); };
         return ClinicPickers.PickerBox(null, picker, 170);
     }
     //JJQR - END
