@@ -128,6 +128,14 @@ public partial class AdminStaffPage : ContentPage
         }
         b.IsEnabled = !busyOther;
         b.HorizontalOptions = LayoutOptions.End;
+        //JJQR - AI (Nov 23, 2026) - admin can set a staff member's password (not for pending invites)
+        if (row.StatusKey != "Invited")
+        {
+            var pwd = ClinicUi.Button("Set password", async () => await AdminSetPasswordDialog.ShowAsync(this, row.StaffId, row.Name), ButtonKind.Secondary);
+            pwd.IsEnabled = !busyOther;
+            return new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { pwd, b } };
+        }
+        //JJQR - END
         return b;
     }
 }

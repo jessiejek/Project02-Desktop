@@ -119,6 +119,7 @@ public sealed class AdminDoctorEditViewModel : AdminViewModelBase, IQueryAttribu
     readonly IAdminDoctorService _doctors;
     readonly IAdminSettingsService _settings;
     Guid _id;
+    public Guid DoctorStaffId => _id; //JJQR - AI (Nov 23, 2026) - DoctorId = StaffId; used by the admin Set password button //JJQR - END
 
     public AdminDoctorEditViewModel(IAdminDoctorService doctors, IAdminSettingsService settings)
     {

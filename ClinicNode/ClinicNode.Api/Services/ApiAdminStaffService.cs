@@ -119,5 +119,18 @@ public sealed class ApiAdminStaffService(IApiClient api) : IAdminStaffService
         }
         catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult.Fail(ex.Message); }
     }
+
+    //JJQR - AI (Nov 23, 2026) - PUT /api/staff-accounts/{id}/password { newPassword } (Admin only; the server checks the password rule, ends their sessions, makes them choose their own)
+    public async Task<AdminResult> SetPasswordAsync(Guid staffId, string newPassword, CancellationToken ct = default)
+    {
+        try
+        {
+            await api.SendAsync(HttpMethod.Put, $"/api/staff-accounts/{staffId:D}/password", new Dictionary<string, object?> { ["newPassword"] = newPassword }, null, ct);
+            return AdminResult.Ok();
+        }
+        catch (ApiNotFoundException) { return AdminResult.Fail("Account not found."); }
+        catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult.Fail(ex.Message); }
+    }
+    //JJQR - END
 }
 //JJQR - END

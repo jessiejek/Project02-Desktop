@@ -84,6 +84,7 @@ public sealed class OfflineGuardedAdminStaffService(AdminStaffService local) : I
     public Task<AdminResult<StaffInviteResult>> InviteAsync(StaffInviteRequest request, CancellationToken ct = default) => AdminOnlineOnly.Fail<StaffInviteResult>();
     public Task<AdminResult> SetInvitedPasswordAsync(Guid userId, string password, CancellationToken ct = default) => local.SetInvitedPasswordAsync(userId, password, ct);
     public Task<AdminResult> RevokeInviteAsync(Guid userId, CancellationToken ct = default) => AdminOnlineOnly.Fail();
+    public Task<AdminResult> SetPasswordAsync(Guid staffId, string newPassword, CancellationToken ct = default) => AdminOnlineOnly.Fail(); //JJQR - AI (Nov 23, 2026) //JJQR - END
 }
 
 /// <summary>Offline announcements: reads only (announcement is cloud-owned).</summary>

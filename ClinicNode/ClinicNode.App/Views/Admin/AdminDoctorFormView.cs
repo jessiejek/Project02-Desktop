@@ -142,7 +142,19 @@ public static class AdminDoctorFormView
                 Refresh();
             }
         };
-        root.Children.Add(new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { cancel, save } });
+        var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { cancel, save } };
+        //JJQR - AI (Nov 23, 2026) - admin can set this doctor's password
+        if (vm is AdminDoctorEditViewModel editVm)
+        {
+            var setPw = new Button { Text = "Set password", Style = ClinicTheme.Style("SecondaryButton") };
+            setPw.Clicked += async (_, _) =>
+            {
+                if (Shell.Current?.CurrentPage is { } pg) await AdminSetPasswordDialog.ShowAsync(pg, editVm.DoctorStaffId, string.IsNullOrWhiteSpace(editVm.FullName) ? "this doctor" : editVm.FullName);
+            };
+            footer.Children.Insert(0, setPw);
+        }
+        //JJQR - END
+        root.Children.Add(footer);
 
         if (vm is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged += (_, _) => root.Dispatcher.Dispatch(Refresh);

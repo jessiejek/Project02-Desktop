@@ -54,6 +54,9 @@ public interface IAdminStaffService
     Task<AdminResult<StaffInviteResult>> InviteAsync(StaffInviteRequest request, CancellationToken ct = default);
     Task<AdminResult> SetInvitedPasswordAsync(Guid userId, string password, CancellationToken ct = default);
     Task<AdminResult> RevokeInviteAsync(Guid userId, CancellationToken ct = default);
+    //JJQR - AI (Nov 23, 2026) - owner wishlist: the admin sets a temporary password for a Staff or Doctor member (staffId = doctorId for doctors). Online only; they choose their own at next sign-in.
+    Task<AdminResult> SetPasswordAsync(Guid staffId, string newPassword, CancellationToken ct = default);
+    //JJQR - END
 }
 
 public sealed class AdminStaffService : IAdminStaffService
@@ -288,6 +291,11 @@ public sealed class AdminStaffService : IAdminStaffService
         // JJQR - END
         return AdminResult<StaffInviteResult>.Ok(new StaffInviteResult(user.Id, staffId, !string.IsNullOrWhiteSpace(request.InitialPassword)));
     }
+
+    //JJQR - AI (Nov 23, 2026) - the server owns passwords; a local-only change would be overwritten, so this needs the internet
+    public Task<AdminResult> SetPasswordAsync(Guid staffId, string newPassword, CancellationToken ct = default) =>
+        Task.FromResult(AdminResult.Fail(AdminOnlineOnly.NeedsInternet));
+    //JJQR - END
 
     public async Task<AdminResult> SetInvitedPasswordAsync(Guid userId, string password, CancellationToken ct = default)
     {
