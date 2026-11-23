@@ -179,7 +179,11 @@ public sealed class TopBarView : Grid
             var shell = Shell.Current;
             if (shell is null) return;
             var session = _auth.Current;
-            var page = shell.CurrentPage as ContentPage;
+            //JJQR - AI (Nov 23, 2026) - Windows: find the visible content page even when CurrentPage is wrapped or a modal is up
+            var page = shell.CurrentPage as ContentPage
+                ?? shell.Navigation.ModalStack.LastOrDefault() as ContentPage
+                ?? shell.Navigation.NavigationStack.LastOrDefault() as ContentPage;
+            //JJQR - END
             var who = string.IsNullOrWhiteSpace(session?.FullName) ? "Account" : session!.FullName;
             var settingsRoute = session?.Role switch { UserRole.Doctor => "doctor-profile", UserRole.Staff => "staff-profile", UserRole.Admin => "admin-profile", _ => null };
 
@@ -232,7 +236,7 @@ public sealed class TopBarView : Grid
                 Style = ClinicTheme.Style("Card"), Padding = new Thickness(6), WidthRequest = 330, //JJQR - AI (Nov 23, 2026) - wide enough for the full name on one line //JJQR - END
                 Content = menu,
             };
-            ClinicNode.App.Controls.ClinicPopup.Show(page, _nameLabel.IsVisible ? _nameLabel : this, panel, 330, 150);
+            ClinicNode.App.Controls.ClinicPopup.ShowTopRight(page, panel, 330);
         }
         catch { /* never break the bar */ }
     }

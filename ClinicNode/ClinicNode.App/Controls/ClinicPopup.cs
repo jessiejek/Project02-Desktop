@@ -77,6 +77,26 @@ public static class ClinicPopup
         layer.IsVisible = true;
     }
 
+    //JJQR - AI (Nov 23, 2026) - owner (Windows): the name menu opened as a modal in the CENTER. The top bar is not inside the page, so "under the name" cannot be measured there. This menu is pinned to the top-right corner of the page instead, where the name and avatar are, on every platform.
+    public static void ShowTopRight(ContentPage page, View panel, double width)
+    {
+        if (Ensure(page) is not { } host) return;
+        var (_, layer) = host;
+        layer.Children.Clear();
+        var scrim = new BoxView { Color = Colors.Transparent };
+        scrim.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => Hide(page)) });
+        AbsoluteLayout.SetLayoutBounds(scrim, new Rect(0, 0, 1, 1));
+        AbsoluteLayout.SetLayoutFlags(scrim, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.All);
+        layer.Children.Add(scrim);
+        // right-aligned, 8 px from the top: proportional X (1 = right edge) with the panel's own width
+        AbsoluteLayout.SetLayoutBounds(panel, new Rect(1, 8, width, AbsoluteLayout.AutoSize));
+        AbsoluteLayout.SetLayoutFlags(panel, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.XProportional);
+        panel.Margin = new Thickness(0, 0, 16, 0);
+        layer.Children.Add(panel);
+        layer.IsVisible = true;
+    }
+    //JJQR - END
+
     public static void Hide(ContentPage page)
     {
         if (page.Content is Grid g && g.ClassId == RootId && g.Children.OfType<AbsoluteLayout>().FirstOrDefault(l => l.ClassId == LayerId) is { } layer)
