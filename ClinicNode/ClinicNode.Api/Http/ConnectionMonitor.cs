@@ -29,7 +29,9 @@ public static class ConnectionRules
         if (run >= 3) return new(ConnectionQuality.Down, $"The clinic server is not answering ({run} failed checks in a row).", median);
         if (failed >= 5) return new(ConnectionQuality.Down, $"The clinic server is not answering ({failed} of the last {last.Count} checks failed).", median);
         if (failed >= 2) return new(ConnectionQuality.Unstable, $"The connection keeps dropping ({failed} of the last {last.Count} checks failed).", median);
-        if (failed == 1) return new(ConnectionQuality.Slow, "One of the last checks failed.", median);
+        //JJQR - AI (Nov 23, 2026) - a single failed check only counts while it is among the 3 newest; once 3 good checks follow it, the status recovers instead of showing "Slow" for 10 checks (owner: it should update all the time).
+        if (failed == 1 && last.Skip(Math.Max(0, last.Count - 3)).Any(s => !s.Ok)) return new(ConnectionQuality.Slow, "One of the last checks failed.", median);
+        //JJQR - END
         if (median is { } m && m >= SlowMs) return new(ConnectionQuality.Slow, $"The clinic server is slow to answer (typically {m} ms).", median);
         return new(ConnectionQuality.Good, median is { } g ? $"The clinic server answers in {g} ms." : "The clinic server answers.", median);
     }

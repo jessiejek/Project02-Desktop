@@ -26,8 +26,12 @@ public class ConnectionMonitorTests
         => Assert.Equal(ConnectionQuality.Good, ConnectionRules.Evaluate(Many(9, 90).Append(Ok(2000)).ToList()).Quality);
 
     [Fact]
-    public void One_failed_check_in_the_last_ten_is_Slow()
-        => Assert.Equal(ConnectionQuality.Slow, ConnectionRules.Evaluate(Many(4, 80).Append(Fail()).Concat(Many(5, 80)).ToList()).Quality);
+    public void One_failed_check_among_the_newest_three_is_Slow()
+        => Assert.Equal(ConnectionQuality.Slow, ConnectionRules.Evaluate(Many(7, 80).Append(Fail()).Concat(Many(2, 80)).ToList()).Quality);
+
+    [Fact] //JJQR - AI (Nov 23, 2026) - recovery: a lone failure followed by 3 good checks no longer keeps the status on Slow //JJQR - END
+    public void One_old_failed_check_followed_by_three_good_ones_is_Good_again()
+        => Assert.Equal(ConnectionQuality.Good, ConnectionRules.Evaluate(Many(4, 80).Append(Fail()).Concat(Many(5, 80)).ToList()).Quality);
 
     [Theory]
     [InlineData(2)]
