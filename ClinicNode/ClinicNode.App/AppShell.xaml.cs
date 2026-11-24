@@ -159,6 +159,7 @@ public partial class AppShell : Shell
         {
             case UserRole.Doctor:
                 AddFlyout("Today", "today", typeof(TodayPage));
+                AddFlyout("Walk-In", "doctor-walk-in", typeof(StaffWalkInPage)); //JJQR - AI (Nov 24, 2026) - owner: "the staff can add new walk-in, and the doctor can add new walk-in" (online too) //JJQR - END
                 // JJQR - AI (Nov 21, 2026) - allen3 doctor extra screens; Performance stays a placeholder
                 AddFlyout("Appointments", "appointments", typeof(DoctorAppointmentsPage));
                 AddFlyout("Patient charts", "patient-charts", typeof(DoctorPatientsPage));
@@ -176,6 +177,7 @@ public partial class AppShell : Shell
                     new("Patient care",
                     [
                         new ClinicNavItem("Today", "today", true, "dashboard"),
+                        new ClinicNavItem("Walk-In", "doctor-walk-in", true, "directions_walk"), //JJQR - AI (Nov 24, 2026) - between Today and Appointments //JJQR - END
                         new ClinicNavItem("Appointments", "appointments", true, "event_note"),
                         new ClinicNavItem("Patient charts", "patient-charts", true, "groups"),
                     ]),

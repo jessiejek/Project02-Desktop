@@ -34,6 +34,13 @@ public interface ISyncStatus : INotifyPropertyChanged, ISyncStatusSource
     void RequestSync();
     Task<IReadOnlyList<SyncConflict>> GetOpenConflictsAsync(CancellationToken ct = default);
     Task ResolveConflictAsync(Guid conflictId, CancellationToken ct = default);
+    //JJQR - AI (Nov 24, 2026) - owner: "Mark all reviewed" took long. Close many at once: one database pass and ONE status refresh (one screen redraw) instead of one per item.
+    // Default = one by one (test fakes); SyncService overrides it.
+    async Task ResolveConflictsAsync(IReadOnlyList<Guid> conflictIds, CancellationToken ct = default)
+    {
+        foreach (var id in conflictIds) await ResolveConflictAsync(id, ct);
+    }
+    //JJQR - END
 
     //JJQR - AI (Nov 21, 2026) - reprint signal: a queue slip (cloud renumbered a booking) or patient card (code replaced) must be printed again
     /// <summary>Open (not dismissed) reprint flags. PropertyChanged("ReprintCount") fires when it changes.</summary>

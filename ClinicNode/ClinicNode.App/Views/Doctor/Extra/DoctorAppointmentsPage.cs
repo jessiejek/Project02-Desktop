@@ -309,7 +309,21 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
                 var r = (AppointmentRow)o;
                 var (opensConsult, _) = DoctorExtraRules.ActionFor(r.Status);
                 var text = r.Status == BookingStatus.InProgress ? "Resume" : r.Status == BookingStatus.CheckedIn ? "Open consultation" : "View";
-                return StaffUi.Btn(text + "  →", () => opensConsult ? DoctorExtraUi.OpenConsultAsync(r.BookingId) : StaffUi.PushAsync<DoctorAppointmentDetailPage>(this, r.BookingId), "SecondaryButton");
+                var open = StaffUi.Btn(text + "  →", () => opensConsult ? DoctorExtraUi.OpenConsultAsync(r.BookingId) : StaffUi.PushAsync<DoctorAppointmentDetailPage>(this, r.BookingId), "SecondaryButton");
+                //JJQR - AI (Nov 24, 2026) - owner: "add it in todays also". A red Cancel right of the main button, only before the patient is seen and while unpaid
+                if (r.Status is not (BookingStatus.Pending or BookingStatus.ProofSubmitted or BookingStatus.Confirmed or BookingStatus.CheckedIn or BookingStatus.OnHold)
+                    || string.Equals(r.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase))
+                    return open;
+                var cancel = StaffUi.DangerGhost("Cancel", async () =>
+                {
+                    var label = string.IsNullOrWhiteSpace(r.QueueNumber) ? "this booking" : "queue " + r.QueueNumber;
+                    var done = await CancelReasonDialog.ShowAsync(this,
+                        $"Cancel {label} for {r.PatientName}? The booking is kept as Cancelled and leaves today's queue.",
+                        async reason => (await Svc<ClinicNode.Core.Staff.IStaffBookingService>().CancelAsync(r.BookingId, reason)).Error);
+                    if (done) await ReloadAsync();
+                });
+                return new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { open, cancel } };
+                //JJQR - END
             }),
         };
         return new ScrollView

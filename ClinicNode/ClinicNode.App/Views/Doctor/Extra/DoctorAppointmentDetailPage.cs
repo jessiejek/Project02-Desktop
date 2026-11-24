@@ -184,6 +184,25 @@ public sealed class DoctorAppointmentDetailPage : StaffLivePage
                 actions.Children.Add(Txt($"This booking is still {d.Status} — open the consultation after staff confirms or checks the patient in.", "MutedBody"));
                 break;
         }
+        //JJQR - AI (Nov 24, 2026) - owner: "can doctor also cancel a booking?" A red "Cancel booking" at the bottom of the actions card, only before the patient is seen and while unpaid.
+        // Asks for a reason (5+ characters). Same service as the front desk's booking page (PUT bookings/{id}/status Cancelled; the server lets a doctor cancel only her own bookings and refuses a paid one).
+        if (d.Status is ClinicApp.Domain.Enums.BookingStatus.Pending or ClinicApp.Domain.Enums.BookingStatus.ProofSubmitted or ClinicApp.Domain.Enums.BookingStatus.Confirmed
+                or ClinicApp.Domain.Enums.BookingStatus.CheckedIn or ClinicApp.Domain.Enums.BookingStatus.OnHold
+            && d.PaymentLabel != "Paid")
+        {
+            var cancel = StaffUi.DangerGhost("Cancel booking", async () =>
+            {
+                var label = string.IsNullOrWhiteSpace(d.QueueNumber) ? "this booking" : "queue " + d.QueueNumber;
+                var done = await CancelReasonDialog.ShowAsync(this,
+                    $"Cancel {label} for {d.PatientName}? The booking is kept as Cancelled and leaves today's queue.",
+                    async reason => (await Svc<ClinicNode.Core.Staff.IStaffBookingService>().CancelAsync(d.BookingId, reason)).Error);
+                if (done) await ReloadAsync();
+            });
+            cancel.HorizontalOptions = LayoutOptions.Start;
+            actions.Children.Add(Divider());
+            actions.Children.Add(cancel);
+        }
+        //JJQR - END
         _body.Children.Add(StaffUi.Card(actions));
         //JJQR - END
 

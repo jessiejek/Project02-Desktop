@@ -104,12 +104,25 @@ public sealed class SyncConflictsPage : ContentPage
     async Task ResolveAllAsync()
     {
         if (!await DisplayAlertAsync("Mark all reviewed", $"Close all {_rows.Count} items? The clinic server's version stays as it is.", "Mark reviewed", "Cancel")) return;
+        //JJQR - AI (Nov 24, 2026) - owner: "took time when I pressed Mark all reviewed". All items are closed in one go (one status refresh), the button says what is happening,
+        // and the page redraws once at the end instead of after every item.
+        var text = _resolveAll.Text;
+        _resolveAll.IsEnabled = false;
+        _resolveAll.Text = "Marking reviewed…";
+        _loading = true; // the status change below must not redraw the list while we work
         try
         {
-            foreach (var row in _rows) await _sync.ResolveConflictAsync(row.Id);
+            await _sync.ResolveConflictsAsync(_rows.Select(r => r.Id).ToList());
         }
         catch (Exception ex) { _error.Text = ex.Message; _error.IsVisible = true; }
+        finally
+        {
+            _loading = false;
+            _resolveAll.Text = text;
+            _resolveAll.IsEnabled = true;
+        }
         await ReloadAsync();
+        //JJQR - END
     }
 
     static (string Label, string Pill) KindInfo(string kind) => kind switch

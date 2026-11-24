@@ -353,6 +353,18 @@ public sealed class TodayPage : ContentPage
         await GoAsync($"consult?bookingId={res.Id}");
     }
 
+    //JJQR - AI (Nov 24, 2026) - doctor cancels a waiting patient from Today's queue: reason (5+ characters), same service as the front desk's booking page
+    // (PUT bookings/{id}/status Cancelled; the server lets a doctor cancel only her own bookings and refuses a paid one). Today reloads afterwards.
+    async Task CancelQueueAsync(Guid bookingId, string? queueNumber, string patientName)
+    {
+        var label = string.IsNullOrWhiteSpace(queueNumber) ? "this booking" : "queue " + queueNumber;
+        var done = await CancelReasonDialog.ShowAsync(this,
+            $"Cancel {label} for {patientName}? The booking is kept as Cancelled and leaves today's queue.",
+            async reason => (await _services.GetRequiredService<ClinicNode.Core.Staff.IStaffBookingService>().CancelAsync(bookingId, reason)).Error);
+        if (done) await ReloadAsync();
+    }
+    //JJQR - END
+
     async Task StartConsultAsync(Guid bookingId, bool resume)
     {
         if (DoctorId is not { } id) return;
@@ -475,6 +487,13 @@ public sealed class TodayPage : ContentPage
                 var print = PrintButtons(id, u.HasPrescription, u.HasLabOrders);
                 if (print is not null) act.Children.Add(print);
                 act.Children.Add(StaffUi.Btn(resume ? "Resume" : "Start", () => StartConsultAsync(id, resume), resume ? "PrimaryButton" : "SecondaryButton"));
+                //JJQR - AI (Nov 24, 2026) - owner: "where is cancel??" A red Cancel right after Start on each WAITING row (not on the one in progress). On Windows it stacks under Start (rule below).
+                if (!resume)
+                {
+                    var queueNo = u.QueueNumber; var patient = u.PatientName;
+                    act.Children.Add(StaffUi.DangerGhost("Cancel", () => CancelQueueAsync(id, queueNo, patient)));
+                }
+                //JJQR - END
 #if WINDOWS
                 //JJQR - AI (Nov 23, 2026) - WINDOWS ONLY: owner "CUT": Print Rx + Print Labs + Resume (about 300 wide) did not fit the fixed 170 action column (line 437), so Print Labs was cut and Resume was hidden.
                 // With two or more buttons, stack them one under another, each the full column width, so every button is always visible at any window size. One button stays as it was.

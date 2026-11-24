@@ -229,6 +229,21 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         await RefreshStatusAsync(ct);
     }
 
+    //JJQR - AI (Nov 24, 2026) - "Mark all reviewed": one connection, one transaction, one status refresh (was a full refresh + screen redraw per item)
+    public async Task ResolveConflictsAsync(IReadOnlyList<Guid> conflictIds, CancellationToken ct = default)
+    {
+        if (conflictIds.Count == 0) return;
+        await using (var db = await _factory.CreateDbContextAsync(ct))
+        {
+            await SyncLocalStore.EnsureSchemaAsync(db, ct);
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            foreach (var id in conflictIds) await SyncLocalStore.ResolveConflictAsync(db, id, ct);
+            await tx.CommitAsync(ct);
+        }
+        await RefreshStatusAsync(ct);
+    }
+    //JJQR - END
+
     public async Task<SyncStatus> RefreshStatusAsync(CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
