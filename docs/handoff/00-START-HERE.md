@@ -14,7 +14,10 @@ Clinic system for **Grace Medical Clinic** (one doctor + front desk). Four repos
 
 **Where an older numbered file disagrees with this page, this page wins** (for example `7-OFFLINE-MODE-AUDIT.md` still describes the old reserved queue blocks, and `1-SYSTEM-OVERVIEW.md` still lists patient self-registration). Read `1-SYSTEM-OVERVIEW.md` for the picture, `2-OPERATIONS-RUNBOOK.md` for how to operate, `5-TODO-AND-RISKS.md` for the open list.
 
-## 2. State on 24 Nov 2026 (latest released desktop: v0.2.42)
+## 2. State on 24 Nov 2026 (latest released desktop: v0.2.44; backend deploy 145; web main d50f752)
+
+**SHIPPED 24 Nov 2026 ~9 PM (owner said "Ship", no backup by owner's choice):** backend deploy 145 live 20:59 with migration `AddAutoPaidOnComplete` (`/api/settings` shows `auto_paid_on_complete: false`); web pushed; desktop **v0.2.44** on the update feed 21:10. It contains everything below marked "built 24 Nov evening" (Templates fix, auto-paid switch, doctor Walk-In and Cancel, fast Mark all reviewed). The "NOT released" notes below are history. Still to do: the owner tries the auto-paid switch on the live server (it is OFF).
+
 Done and live: admin Set-password for staff/doctor; clinic-wide **Printing settings** (Admin → Settings → Printing: mode PDF/native/off/each computer, per-document on/off, background pictures, editable lab-test list); A5 lab request, crisp traced pictures, license number printed when filled, "Include PTR in print" tick (default off, desktop only); patient **self-registration closed** (backend refuses; web shows a notice; reopen with host variable `Registration__PatientSelfSignUp=true`); **queue numbers now start at R-001 each day and an offline computer carries on from the last number it knows** (no more reserved blocks of 20; the server raises its counter to the number a computer pushes; a duplicate number from two offline computers is flagged for the admin, never renumbered); web now applies the same print settings, leaves PTR off, and on iPhone/iPad makes a real A5 PDF.
 
 **Checked on the Windows laptop, 24 Nov 2026 evening:**
