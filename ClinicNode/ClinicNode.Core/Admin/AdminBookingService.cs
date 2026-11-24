@@ -477,14 +477,13 @@ public sealed class AdminBookingService : IAdminBookingService
         payment.WaivedAt = now;
         payment.ConfirmedByUserId = _auth.Current.UserId;
         payment.ConfirmedAt = now;
-        //JJQR - AI (21 Nov 2026) - the admin waiver also gets this computer's next OR number (OR-XXXX-YYYYMMDD-NNNN), like /admin/bookings/[id] shows one after a waive;
-        // allocated inside this transaction, so it cannot collide with a confirmation running at the same time.
-        payment.OrNumber = await StaffPaymentsService.AllocateOrNumberAsync(db, payment, ct);
+        //JJQR - AI (Nov 24, 2026) - owner: a waiver collects nothing, so it issues NO official receipt number. The doctor's waiver (confirmed by the front desk) already works this way, and so does the web.
+        // (The 21 Nov change that gave an admin waiver an OR number is undone: it used up a receipt-booklet number for a free visit.)
         //JJQR - END
         payment.UpdatedAt = now;
         payment.Booking.AmountDue = 0;
         payment.Booking.UpdatedAt = now;
-        AdminAudit.Add(db, AuditEntityType.Payment, payment.PaymentId, "Waived", _auth.Current.UserId, /*JJQR - AI (21 Nov 2026)*/ $"OR {payment.OrNumber}; {trimmed}" /*JJQR - END*/);
+        AdminAudit.Add(db, AuditEntityType.Payment, payment.PaymentId, "Waived", _auth.Current.UserId, /*JJQR - AI (Nov 24, 2026)*/ trimmed /*JJQR - END*/);
         await _outbox.EnqueueAsync(db, Outbox("payment", payment.PaymentId, "waive", now), ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

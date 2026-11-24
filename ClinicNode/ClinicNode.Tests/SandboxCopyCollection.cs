@@ -35,13 +35,10 @@ public sealed class SandboxCopyCollection : ICollectionFixture<object>
         }
         else
         {
-            var sandbox = Path.Combine(DefaultSandboxDir, "clinic-node.db");
-            if (File.Exists(sandbox)) src = sandbox;
-            else
-            {
-                skipReason = "No CLINIC_COPY_DIR and sandbox clinic-node.db is not on this machine.";
-                return false;
-            }
+            //JJQR - AI (Nov 24, 2026) - these tests used to copy the clinic's REAL database on their own (patient data in test runs, and demo data pushed into the copy). They now run only when CLINIC_COPY_DIR points at a copy on purpose.
+            skipReason = "Set CLINIC_COPY_DIR to a COPY of a clinic-node.db to run this test (it never picks up the live clinic data by itself).";
+            return false;
+            //JJQR - END
         }
 
         Directory.CreateDirectory(destDir);

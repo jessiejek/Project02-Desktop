@@ -23,6 +23,11 @@ public class StaffOrIndexTests
     static Task<long> IndexCountAsync(ClinicApp.Infrastructure.ClinicAppDbContext db) =>
         ScalarAsync(db, $"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='{SchemaRepair.OrIndexName}'");
 
+    //JJQR - AI (Nov 24, 2026) - an old node database had no "ix_payments_or_number_cloud" index (added 21 Nov), so it could hold duplicate legacy receipt numbers; drop it to simulate such a database
+    static Task DropCloudIndexAsync(ClinicApp.Infrastructure.ClinicAppDbContext db) =>
+        db.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS ix_payments_or_number_cloud");
+    //JJQR - END
+
     [Fact]
     public async Task Startup_creates_the_index_and_repair_is_idempotent()
     {
@@ -43,6 +48,7 @@ public class StaffOrIndexTests
         var t1 = await host.CompletedVisitAsync("IdxA");
         var t2 = await host.CompletedVisitAsync("IdxB");
         await using var db = await host.DbAsync();
+        await DropCloudIndexAsync(db);
         var p1 = await db.Payments.SingleAsync(p => p.BookingId == t1.BookingId);
         var p2 = await db.Payments.SingleAsync(p => p.BookingId == t2.BookingId);
 
@@ -64,6 +70,7 @@ public class StaffOrIndexTests
         var t1 = await host.CompletedVisitAsync("LegA");
         var t2 = await host.CompletedVisitAsync("LegB");
         await using var db = await host.DbAsync();
+        await DropCloudIndexAsync(db);
         await db.Database.ExecuteSqlRawAsync($"DROP INDEX IF EXISTS {SchemaRepair.OrIndexName}");
         // force at least two legacy rows regardless of key casing
         await db.Database.ExecuteSqlRawAsync("UPDATE payments SET or_number='OR-F2111111'");
@@ -84,6 +91,7 @@ public class StaffOrIndexTests
         await host.CompletedVisitAsync("DupA");
         await host.CompletedVisitAsync("DupB");
         await using var db = await host.DbAsync();
+        await DropCloudIndexAsync(db);
         await db.Database.ExecuteSqlRawAsync($"DROP INDEX IF EXISTS {SchemaRepair.OrIndexName}");
         await db.Database.ExecuteSqlRawAsync("UPDATE payments SET or_number='OR-AB12-20261121-0001'");
         var n = await ScalarAsync(db, "SELECT COUNT(*) FROM payments WHERE or_number='OR-AB12-20261121-0001'");
