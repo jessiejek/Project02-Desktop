@@ -17,9 +17,10 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
 
     sealed record ConfigDto(
         [property: JsonPropertyName("mode")] string? Mode,
-        [property: JsonPropertyName("backgrounds")] List<BackgroundDto>? Backgrounds);
+        [property: JsonPropertyName("backgrounds")] List<BackgroundDto>? Backgrounds,
+        [property: JsonPropertyName("disabled")] List<string>? Disabled);
 
-    static readonly TimeSpan Stale = TimeSpan.FromMinutes(10);
+    static readonly TimeSpan Stale = TimeSpan.FromMinutes(2); // an Admin change reaches a computer within about two minutes of it being used
     readonly IApiClient _api;
     readonly PrintPolicyCache _cache;
     readonly object _gate = new();
@@ -42,6 +43,12 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
         var bytes = _cache.Bytes(key);
         var type = bytes is null ? null : PrintPolicyCache.ContentTypeOf(bytes);
         return bytes is null || type is null ? null : "data:" + type + ";base64," + Convert.ToBase64String(bytes);
+    }
+
+    public bool IsEnabled(ClinicPrintKind kind)
+    {
+        RefreshIfStale();
+        return PrintPolicyKinds.KeyOf(kind) is not { } key || !_cache.IsDisabled(key);
     }
 
     public byte[]? BackgroundBytes(ClinicPrintKind kind) =>
@@ -78,9 +85,10 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
                 if (_cache.Version(b.Kind) == b.Version && _cache.Bytes(b.Kind) is not null) continue; // already have this exact picture
                 var file = await _api.DownloadAsync("/api/print-config/backgrounds/" + b.Kind, ct);
                 if (file.Bytes.Length > 0 && PrintPolicyCache.ContentTypeOf(file.Bytes) is not null) images[b.Kind] = file.Bytes;
+                else if (_cache.Bytes(b.Kind) is not null) versions[b.Kind] = _cache.Version(b.Kind); // a bad download never wipes the picture we already have
                 else versions.Remove(b.Kind);
             }
-            _cache.Save(PrintPolicyKinds.ParseMode(cfg.Mode), versions, images);
+            _cache.Save(PrintPolicyKinds.ParseMode(cfg.Mode), versions, images, cfg.Disabled?.Where(k => PrintPolicyKinds.KindOf(k) is not null));
         }
         catch (Exception)
         {
@@ -98,7 +106,8 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
             if (cfg is null) return null;
             var versions = new Dictionary<ClinicPrintKind, int>();
             foreach (var b in cfg.Backgrounds ?? []) if (PrintPolicyKinds.KindOf(b.Kind) is { } k) versions[k] = b.Version;
-            return new PrintConfigView(PrintPolicyKinds.ParseMode(cfg.Mode), versions);
+            var off = (cfg.Disabled ?? []).Select(PrintPolicyKinds.KindOf).Where(k => k is not null).Select(k => k!.Value).ToHashSet();
+            return new PrintConfigView(PrintPolicyKinds.ParseMode(cfg.Mode), versions, off);
         }
         catch (Exception) { return null; }
     }
@@ -129,6 +138,20 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
         }
         catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return ex.Message; }
         catch (Exception) { return "The picture could not be saved. Check the connection and try again."; }
+    }
+
+    public async Task<string?> SetEnabledAsync(ClinicPrintKind kind, bool enabled, CancellationToken ct = default)
+    {
+        var key = PrintPolicyKinds.KeyOf(kind);
+        if (key is null) return "Unknown document.";
+        try
+        {
+            await _api.SendAsync(HttpMethod.Put, "/api/print-config/enabled/" + key, new Dictionary<string, object?> { ["enabled"] = enabled }, null, ct);
+            await RefreshAsync(ct);
+            return null;
+        }
+        catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return ex.Message; }
+        catch (Exception) { return "The setting could not be saved. Check the connection and try again."; }
     }
 
     public async Task<string?> ClearBackgroundAsync(ClinicPrintKind kind, CancellationToken ct = default)

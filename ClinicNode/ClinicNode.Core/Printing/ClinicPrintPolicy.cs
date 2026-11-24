@@ -14,6 +14,8 @@ public interface IClinicPrintPolicy
     ClinicPrintMode Mode { get; }
     /// <summary>The background picture for a document as a data: URI, or null when none is set.</summary>
     string? BackgroundDataUri(ClinicPrintKind kind);
+    /// <summary>False when the Admin switched printing off for this one document.</summary>
+    bool IsEnabled(ClinicPrintKind kind);
     /// <summary>Fetch the latest settings from the server into this computer's copy. Best effort: offline or any error keeps the copy we have.</summary>
     Task RefreshAsync(CancellationToken ct = default);
 }
@@ -26,17 +28,22 @@ public interface IPrintConfigAdmin
     /// <summary>Null = saved; otherwise the message to show.</summary>
     Task<string?> UploadBackgroundAsync(ClinicPrintKind kind, byte[] image, CancellationToken ct = default);
     Task<string?> ClearBackgroundAsync(ClinicPrintKind kind, CancellationToken ct = default);
+    Task<string?> SetEnabledAsync(ClinicPrintKind kind, bool enabled, CancellationToken ct = default);
     /// <summary>The picture currently saved on this computer for a document (for the preview), or null.</summary>
     byte[]? BackgroundBytes(ClinicPrintKind kind);
 }
 
-public sealed record PrintConfigView(ClinicPrintMode Mode, IReadOnlyDictionary<ClinicPrintKind, int> BackgroundVersions);
+public sealed record PrintConfigView(ClinicPrintMode Mode, IReadOnlyDictionary<ClinicPrintKind, int> BackgroundVersions, IReadOnlySet<ClinicPrintKind>? DisabledKinds = null)
+{
+    public bool IsEnabled(ClinicPrintKind kind) => DisabledKinds is null || !DisabledKinds.Contains(kind);
+}
 
 /// <summary>Default when nothing is registered (tests, first start): each computer decides, no backgrounds.</summary>
 public sealed class NoPrintPolicy : IClinicPrintPolicy
 {
     public ClinicPrintMode Mode => ClinicPrintMode.Computer;
     public string? BackgroundDataUri(ClinicPrintKind kind) => null;
+    public bool IsEnabled(ClinicPrintKind kind) => true;
     public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
@@ -80,6 +87,7 @@ public sealed class PrintPolicyCache
     {
         [JsonPropertyName("mode")] public string Mode { get; set; } = "computer";
         [JsonPropertyName("versions")] public Dictionary<string, int> Versions { get; set; } = new();
+        [JsonPropertyName("disabled")] public List<string> Disabled { get; set; } = new();
     }
 
     readonly string _dir;
@@ -106,6 +114,8 @@ public sealed class PrintPolicyCache
 
     public ClinicPrintMode Mode { get { lock (_gate) { Load(); return PrintPolicyKinds.ParseMode(_state.Mode); } } }
 
+    public bool IsDisabled(string key) { lock (_gate) { Load(); return _state.Disabled.Contains(key); } }
+
     public int Version(string key) { lock (_gate) { Load(); return _state.Versions.TryGetValue(key, out var v) ? v : 0; } }
 
     public byte[]? Bytes(string key)
@@ -125,12 +135,12 @@ public sealed class PrintPolicyCache
     }
 
     /// <summary>Replace the saved copy with what the server just said. <paramref name="images"/> holds only the pictures that changed.</summary>
-    public void Save(ClinicPrintMode mode, IReadOnlyDictionary<string, int> serverVersions, IReadOnlyDictionary<string, byte[]> images)
+    public void Save(ClinicPrintMode mode, IReadOnlyDictionary<string, int> serverVersions, IReadOnlyDictionary<string, byte[]> images, IEnumerable<string>? disabled = null)
     {
         lock (_gate)
         {
             Load();
-            var next = new State { Mode = PrintPolicyKinds.ModeKey(mode), Versions = new Dictionary<string, int>(serverVersions) };
+            var next = new State { Mode = PrintPolicyKinds.ModeKey(mode), Versions = new Dictionary<string, int>(serverVersions), Disabled = (disabled ?? []).ToList() };
             if (_dir.Length > 0)
             {
                 try

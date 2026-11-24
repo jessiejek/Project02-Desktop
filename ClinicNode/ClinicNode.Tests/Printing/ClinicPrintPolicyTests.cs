@@ -158,5 +158,45 @@ public class ClinicPrintPolicyTests : IDisposable
         Assert.Null(await policy.ClearBackgroundAsync(ClinicPrintKind.Receipt));
         Assert.Contains("DELETE /api/print-config/backgrounds/receipt", api.Sent);
     }
+    [Fact]
+    public async Task One_document_can_be_switched_off_while_the_others_keep_printing()
+    {
+        var api = new FakeApi { ConfigJson = """{"mode":"native","backgrounds":[],"disabled":["receipt","queue_slip"]}""" };
+        var policy = new ApiClinicPrintPolicy(api, _dir);
+        await policy.RefreshAsync();
+        Assert.False(policy.IsEnabled(ClinicPrintKind.Receipt));
+        Assert.False(policy.IsEnabled(ClinicPrintKind.QueueSlip));
+        Assert.True(policy.IsEnabled(ClinicPrintKind.Prescription));
+        Assert.True(policy.IsEnabled(ClinicPrintKind.LabRequest));
+        Assert.True(policy.IsEnabled(ClinicPrintKind.MedicalCertificate));
+        Assert.Equal(ClinicPrintMode.Native, policy.Mode);                           // the way of printing is separate from which documents may print
+
+        api.Offline = true;                                                           // no internet: the switch still holds from this computer's copy
+        await policy.RefreshAsync();
+        Assert.False(new ApiClinicPrintPolicy(api, _dir).IsEnabled(ClinicPrintKind.Receipt));   // and after a restart
+
+        api.Offline = false;
+        api.ConfigJson = """{"mode":"native","backgrounds":[],"disabled":[]}""";   // the Admin switched it back on
+        await policy.RefreshAsync();
+        Assert.True(policy.IsEnabled(ClinicPrintKind.Receipt));
+
+        Assert.Null(await policy.SetEnabledAsync(ClinicPrintKind.Receipt, false));
+        Assert.Contains("PUT /api/print-config/enabled/receipt", api.Sent);
+        Assert.True(new NoPrintPolicy().IsEnabled(ClinicPrintKind.Receipt));
+    }
+
+    [Fact]
+    public async Task A_bad_download_never_wipes_the_picture_a_computer_already_has()
+    {
+        var api = new FakeApi { Files = { ["receipt"] = Jpg },
+            ConfigJson = """{"mode":"computer","backgrounds":[{"kind":"receipt","version":1}]}""" };
+        var policy = new ApiClinicPrintPolicy(api, _dir);
+        await policy.RefreshAsync();
+        Assert.NotNull(policy.BackgroundDataUri(ClinicPrintKind.Receipt));
+        api.Files["receipt"] = [1, 2, 3];                                            // version 2 arrives damaged
+        api.ConfigJson = """{"mode":"computer","backgrounds":[{"kind":"receipt","version":2}]}""";
+        await policy.RefreshAsync();
+        Assert.NotNull(policy.BackgroundDataUri(ClinicPrintKind.Receipt));           // the old picture is still used
+    }
 }
 //JJQR - END

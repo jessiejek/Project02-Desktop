@@ -538,7 +538,10 @@ public sealed class AdminBookingDetailViewModel : AdminViewModelBase, IQueryAttr
         if (path is null) { StatusMessage = "Save cancelled."; return; }
         if (_receiptPrinter is not null)
         {
-            await _receiptPrinter.PrintReceiptAsync(model);
+            //JJQR - AI (Nov 24, 2026) - printing can be switched off by the Admin (or fail): say so instead of closing the app
+            try { await _receiptPrinter.PrintReceiptAsync(model); }
+            catch (Exception ex) { StatusMessage = $"{ex.Message} A copy was saved at {path}."; return; }
+            //JJQR - END
             StatusMessage = $"Receipt sent to the printer. A copy was also saved at {path}.";
             return;
         }
@@ -560,7 +563,10 @@ public sealed class AdminBookingDetailViewModel : AdminViewModelBase, IQueryAttr
         if (path is null) { StatusMessage = "Save cancelled."; return; }
         if (Shell.Current is Page page && page.Handler?.MauiContext?.Services.GetService<IPrinter>() is { } printer)
         {
-            await printer.PrintAsync(new PrintDocument(title, PrintPageSize.A5, html));
+            //JJQR - AI (Nov 24, 2026) - printing can be switched off by the Admin (or fail): say so instead of closing the app
+            try { await printer.PrintAsync(new PrintDocument(title, PrintPageSize.A5, html)); }
+            catch (Exception ex) { StatusMessage = $"{ex.Message} A copy was saved at {path}."; return; }
+            //JJQR - END
             StatusMessage = $"Summary printed. A copy was also saved at {path}.";
             return;
         }

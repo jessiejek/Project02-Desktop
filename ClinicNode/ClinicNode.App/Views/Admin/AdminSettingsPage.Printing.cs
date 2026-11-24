@@ -88,6 +88,9 @@ public partial class AdminSettingsPage
             else
                 thumb.Content = new Label { Text = has ? "…" : "Default", FontSize = 11, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
 
+            var on = _print.IsEnabled(kind);
+            var toggle = ClinicUi.Button(on ? "Printing: On" : "Printing: Off", async () => await SetPrintEnabledAsync(k, !on), on ? ButtonKind.Primary : ButtonKind.Danger);
+            toggle.IsEnabled = !busy;
             var upload = ClinicUi.Button(has ? "Replace picture" : "Upload picture", async () => await UploadPrintBackgroundAsync(k), ButtonKind.Secondary);
             var clear = ClinicUi.Button("Back to default", async () => await ClearPrintBackgroundAsync(k), ButtonKind.Ghost);
             upload.IsEnabled = !busy;
@@ -98,8 +101,8 @@ public partial class AdminSettingsPage
                 Children =
                 {
                     ClinicTheme.Text(label, "LabelLg"),
-                    ClinicTheme.Text(busy ? "Saving…" : has ? "Your own background" : "Plain default layout", "MutedSm"),
-                    new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, Children = { upload, clear } },
+                    ClinicTheme.Text(busy ? "Saving…" : (on ? "" : "Printing is off for this document. ") + (has ? "Your own background" : "Plain default layout"), "MutedSm"),
+                    new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, Children = { toggle, upload, clear } },
                 },
             };
             var line = new Grid { ColumnSpacing = 14, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
@@ -145,6 +148,18 @@ public partial class AdminSettingsPage
         _printBusyKind = null;
         _printMessageOk = err is null;
         _printMessage = err ?? "Saved. Prints now use your picture.";
+        _print = await admin.GetAsync() ?? _print;
+        Render();
+    }
+
+    async Task SetPrintEnabledAsync(ClinicPrintKind kind, bool enabled)
+    {
+        if (PrintAdmin is not { } admin) return;
+        _printBusyKind = kind; Render();
+        var err = await admin.SetEnabledAsync(kind, enabled);
+        _printBusyKind = null;
+        _printMessageOk = err is null;
+        _printMessage = err ?? (enabled ? "Printing is on for this document." : "Printing is off for this document on every computer.");
         _print = await admin.GetAsync() ?? _print;
         Render();
     }

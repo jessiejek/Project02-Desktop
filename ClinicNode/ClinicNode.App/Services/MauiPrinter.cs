@@ -24,6 +24,11 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         var mode = _policy.Mode;
         if (mode == ClinicPrintMode.Off)
             throw new InvalidOperationException("Printing is turned off by the clinic admin. Ask the admin to turn it on in Settings.");
+        if (info.Kind != ClinicPrintKind.Other && !_policy.IsEnabled(info.Kind))
+        {
+            var label = PrintPolicyKinds.All.FirstOrDefault(k => k.Kind == info.Kind).Label ?? "this document";
+            throw new InvalidOperationException($"Printing of the {label.ToLowerInvariant()} is turned off by the clinic admin. Ask the admin to turn it on in Settings.");
+        }
         if (info.Kind != ClinicPrintKind.Other && _policy.BackgroundDataUri(info.Kind) is { } backgroundUri)
             document = PrintBackground.Apply(document, backgroundUri);
         //JJQR - END
