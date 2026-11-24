@@ -70,7 +70,9 @@ public static class WindowsPdfPrintService
         manager.PrintTaskRequested += OnRequested;
         try
         {
-            if (!await PrintManagerInterop.ShowPrintUIForWindowAsync(hwnd)) return;
+            var shown = await PrintManagerInterop.ShowPrintUIForWindowAsync(hwnd);
+            ClinicNode.App.Controls.PrintBusy.End(); //JJQR - AI (Nov 24, 2026) - the print window is on screen: stop the loading message //JJQR - END
+            if (!shown) return;
             await done.Task.WaitAsync(ct);
         }
         finally

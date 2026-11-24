@@ -17,7 +17,16 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         _policy = policy ?? new NoPrintPolicy();
     }
 
+    //JJQR - AI (Nov 24, 2026) - every print shows "Preparing the print…" until the print window is on screen (the Mac / Windows print code ends it as soon as the window shows) or the job fails
     public async Task PrintAsync(PrintDocument document, CancellationToken ct = default)
+    {
+        ClinicNode.App.Controls.PrintBusy.Begin();
+        try { await PrintCoreAsync(document, ct); }
+        finally { ClinicNode.App.Controls.PrintBusy.End(); }
+    }
+    //JJQR - END
+
+    async Task PrintCoreAsync(PrintDocument document, CancellationToken ct)
     {
         var info = document.Info();
         //JJQR - AI (Nov 24, 2026) - the Admin's clinic-wide choice: Off stops the job with a plain message; a background picture goes behind the document.

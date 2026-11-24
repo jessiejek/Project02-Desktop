@@ -267,6 +267,51 @@ public static class ClinicToast
         Remove(host, toast);
     }
 
+    //JJQR - AI (Nov 24, 2026) - a loading message with a spinner that stays until it is disposed (a safety timeout of 45 s removes it if nobody does)
+    public static IDisposable ShowBusy(string message)
+    {
+        var handle = new BusyToast();
+        MainThread.BeginInvokeOnMainThread(() => handle.Attach(message));
+        return handle;
+    }
+
+    private sealed class BusyToast : IDisposable
+    {
+        Border? _toast;
+        VerticalStackLayout? _host;
+        bool _disposed;
+
+        public void Attach(string message)
+        {
+            if (_disposed) return;
+            var page = Shell.Current?.CurrentPage ?? Application.Current?.Windows.FirstOrDefault()?.Page;
+            if (page is not ContentPage cp || cp.Content is null) return;
+            var host = EnsureHost(cp);
+            if (host is null) return;
+            var text = ClinicTheme.Text(message, "PillLabelInfo");
+            text.TextTransform = TextTransform.None;
+            text.VerticalOptions = LayoutOptions.Center;
+            var spin = new ActivityIndicator { IsRunning = true, WidthRequest = 18, HeightRequest = 18, VerticalOptions = LayoutOptions.Center };
+            var row = new HorizontalStackLayout { Spacing = 10, Children = { spin, text } };
+            var toast = new Border { Style = ClinicTheme.Style("ToastInfo"), Content = row };
+            SemanticProperties.SetDescription(toast, message);
+            host.Children.Insert(0, toast);
+            _toast = toast; _host = host;
+            Application.Current?.Dispatcher.StartTimer(TimeSpan.FromSeconds(45), () => { Dispose(); return false; });
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (_toast is not null && _host is not null) _host.Children.Remove(_toast);
+                _toast = null;
+            });
+        }
+    }
+    //JJQR - END
+
     private static void Remove(VerticalStackLayout host, Border toast)
     {
         Live.Remove(toast);

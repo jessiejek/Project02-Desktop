@@ -79,14 +79,16 @@ public partial class AdminSettingsPage
             var busy = _printBusyKind == kind;
             var thumb = new Border
             {
-                WidthRequest = 72, HeightRequest = 96, StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"),
+                WidthRequest = 112, HeightRequest = 148, StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"),
                 BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
                 StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 4 },
             };
             if (has && admin?.BackgroundBytes(kind) is { Length: > 0 } bytes)
                 thumb.Content = new Image { Aspect = Aspect.AspectFit, Source = ImageSource.FromStream(() => new MemoryStream(bytes)) };
+            else if (!has && PrintDefaultPreviews.For(kind) is { } defaultPreview)
+                thumb.Content = new Image { Aspect = Aspect.AspectFit, Source = defaultPreview };       // the real built-in layout, as it prints today
             else
-                thumb.Content = new Label { Text = has ? "…" : "Default", FontSize = 11, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
+                thumb.Content = new Label { Text = "…", FontSize = 11, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
 
             var on = _print.IsEnabled(kind);
             var toggle = ClinicUi.Button(on ? "Printing: On" : "Printing: Off", async () => await SetPrintEnabledAsync(k, !on), on ? ButtonKind.Primary : ButtonKind.Danger);
@@ -101,7 +103,7 @@ public partial class AdminSettingsPage
                 Children =
                 {
                     ClinicTheme.Text(label, "LabelLg"),
-                    ClinicTheme.Text(busy ? "Saving…" : (on ? "" : "Printing is off for this document. ") + (has ? "Your own background" : "Plain default layout"), "MutedSm"),
+                    ClinicTheme.Text(busy ? "Saving…" : (on ? "" : "Printing is off for this document. ") + (has ? "Your own background" : "Default layout (this is what prints now)"), "MutedSm"),
                     new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, Children = { toggle, upload, clear } },
                 },
             };

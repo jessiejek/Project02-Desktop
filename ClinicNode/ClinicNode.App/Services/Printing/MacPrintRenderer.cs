@@ -141,6 +141,7 @@ public static class MacPrintRenderer
         {
             tcs.TrySetException(new InvalidOperationException("The print dialog could not be shown."));
         }
+        else ClinicNode.App.Controls.PrintBusy.End(); //JJQR - AI (Nov 24, 2026) - the print window is coming up: stop the loading message //JJQR - END
         return tcs.Task;
     }
 

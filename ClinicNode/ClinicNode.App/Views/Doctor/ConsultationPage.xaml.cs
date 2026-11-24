@@ -2281,13 +2281,14 @@ public partial class ConsultationPage : ContentPage
             //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs) - online: copy the server rows into SQLite first so the print matches what was just saved
             await WriteThroughBeforePrintAsync();
             //JJQR - END
+            ClinicNode.App.Controls.PrintBusy.Begin(); //JJQR - AI (Nov 24, 2026) - "Preparing the print…" until the print window shows //JJQR - END
             var document = await build(D.BookingId);
             await _printer.PrintAsync(document);
             ShowToast(title + " sent to the printer.", null, ++_noticeSeq);
             ErrorLabel.IsVisible = false;
         }
         catch (Exception ex) { Error(ex.Message); }
-        finally { _busy = false; UpdateFooter(); }
+        finally { ClinicNode.App.Controls.PrintBusy.End(); _busy = false; UpdateFooter(); }
     }
 
     // ---------- small builders ----------
