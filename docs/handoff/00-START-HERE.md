@@ -14,7 +14,13 @@ Clinic system for **Grace Medical Clinic** (one doctor + front desk). Four repos
 
 **Where an older numbered file disagrees with this page, this page wins** (for example `7-OFFLINE-MODE-AUDIT.md` still describes the old reserved queue blocks, and `1-SYSTEM-OVERVIEW.md` still lists patient self-registration). Read `1-SYSTEM-OVERVIEW.md` for the picture, `2-OPERATIONS-RUNBOOK.md` for how to operate, `5-TODO-AND-RISKS.md` for the open list.
 
-## 2. State on 24 Nov 2026 (latest released desktop: v0.2.44; backend deploy 145; web main d50f752)
+## 2. State on 24 Nov 2026 (latest released desktop: v0.2.45; backend main e4494a3; web main bd0f449)
+
+**SHIPPED 24 Nov 2026 late evening (v0.2.45, owner tried it: "Works, ship it"): what a consultation needs before Complete is now an Admin choice.**
+- **Admin → Settings → Consultation** (tab after Payments; web and desktop): tick boxes Clinical notes / Vital signs / Prescription, saved right away; **Professional fee always required** (shown ticked and locked). Default (nothing chosen yet) = Clinical notes + fee, so **vital signs are no longer required** (owner: the doctor does not want them required).
+- Stored in `clinic_settings.consult_required` (comma list `notes,vitals,prescription`; null = `notes`; `""` = fee only), additive migration `AddConsultRequired`, changed only by `PUT /api/settings/consult-required` (Admin). The server does NOT enforce it; the web (`requiredSectionsFor` in consultation2/page.tsx) and the desktop (`ConsultSteps.RequiredFrom`, `ConsultSteps.ConfiguredRequired` set whenever clinic settings are read, including the offline synced copy) both apply it.
+- **Follow-up never blocks**: no follow-up date = no follow-up. Offline save no longer creates a follow-up dated today when "Schedule date" has no date (online already behaved this way).
+- Tests: backend 523 pass (+3 new) and the 4 known old queue-clash failures; desktop consultation tests 12/12; web tsc clean (`diagnosis-hidden.test.mjs` updated for the new code; web node tests not run here: Node 16).
 
 **SHIPPED 24 Nov 2026 ~9 PM (owner said "Ship", no backup by owner's choice):** backend deploy 145 live 20:59 with migration `AddAutoPaidOnComplete` (`/api/settings` shows `auto_paid_on_complete: false`); web pushed; desktop **v0.2.44** on the update feed 21:10. It contains everything below marked "built 24 Nov evening" (Templates fix, auto-paid switch, doctor Walk-In and Cancel, fast Mark all reviewed). The "NOT released" notes below are history. Still to do: the owner tries the auto-paid switch on the live server (it is OFF).
 
