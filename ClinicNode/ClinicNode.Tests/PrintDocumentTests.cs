@@ -68,6 +68,29 @@ public class PrintDocumentTests
         var cert = await print.MedicalCertificateAsync(bookingId);
         Assert.Contains("148mm 210mm", cert.Html);
         Assert.Contains("Viral illness", cert.Html);
+
+        //JJQR - AI (Nov 24, 2026) - owner: "Include PTR in print" is OFF by default and is chosen per visit and per document; the license number prints whenever it is filled in
+        var dbf = host.Get<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>();
+        await using (var db = await dbf.CreateDbContextAsync())
+        {
+            var d = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(db.Doctors, x => x.DoctorId == doctor.DoctorId!.Value);
+            d.PtrNumber = "PTR-555"; d.LicenseNumber = "LIC-777";
+            await db.SaveChangesAsync();
+        }
+        var choice = new ClinicNode.Core.Printing.PtrPrintChoice(Path.Combine(Path.GetTempPath(), "cn-ptr-" + Guid.NewGuid().ToString("N")));
+        IPrintDocumentFactory print2 = new ClinicNode.Core.Printing.ClinicFormsPrintDocumentFactory(dbf, null, null, null, null, choice);   // the real clinic-forms factory
+        Assert.DoesNotContain("PTR-555", (await print2.PrescriptionAsync(bookingId)).Html);
+        Assert.DoesNotContain("PTR-555", (await print2.LabRequestAsync(bookingId)).Html);
+        Assert.DoesNotContain("PTR-555", (await print2.MedicalCertificateAsync(bookingId)).Html);
+        Assert.Contains("LIC-777", (await print2.PrescriptionAsync(bookingId)).Html);
+        choice.Set(bookingId, ClinicNode.Core.Printing.ClinicPrintKind.Prescription, true);
+        Assert.Contains("PTR-555", (await print2.PrescriptionAsync(bookingId)).Html);
+        Assert.DoesNotContain("PTR-555", (await print2.LabRequestAsync(bookingId)).Html);          // another document: still off
+        choice.Set(bookingId, ClinicNode.Core.Printing.ClinicPrintKind.MedicalCertificate, true);
+        Assert.Contains("PTR-555", (await print2.MedicalCertificateAsync(bookingId)).Html);
+        choice.Set(bookingId, ClinicNode.Core.Printing.ClinicPrintKind.Prescription, false);
+        Assert.DoesNotContain("PTR-555", (await print2.PrescriptionAsync(bookingId)).Html);
+        //JJQR - END
     }
 }
 // JJQR - END

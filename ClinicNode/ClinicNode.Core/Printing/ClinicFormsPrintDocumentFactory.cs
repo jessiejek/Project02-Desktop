@@ -15,16 +15,22 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
     readonly TimeProvider _clock;
     readonly ClinicNode.Core.Staff.IStaffPaymentsService? _payments;
     readonly IClinicPrintPolicy? _policy; //JJQR - AI (Nov 24, 2026) - the Admin's list of lab tests //JJQR - END
+    readonly IPtrPrintChoice? _ptr; //JJQR - AI (Nov 24, 2026) - "Include PTR in print" (off unless the doctor ticked it for this visit and document) //JJQR - END
 
     public ClinicFormsPrintDocumentFactory(IDbContextFactory<ClinicAppDbContext> factory, PrintingOptions? options = null, TimeProvider? clock = null,
-        ClinicNode.Core.Staff.IStaffPaymentsService? payments = null, IClinicPrintPolicy? policy = null)
+        ClinicNode.Core.Staff.IStaffPaymentsService? payments = null, IClinicPrintPolicy? policy = null, IPtrPrintChoice? ptr = null)
     {
         _policy = policy;
+        _ptr = ptr;
         _factory = factory;
         _payments = payments;
         _options = options ?? new PrintingOptions();
         _clock = clock ?? TimeProvider.System;
     }
+
+    /// <summary>The PTR number prints only when the doctor ticked "Include PTR in print" for this visit and document.</summary>
+    PrintDoctor PtrFor(Guid bookingId, ClinicPrintKind kind, PrintDoctor doctor) =>
+        _ptr?.IsOn(bookingId, kind) == true ? doctor : doctor with { PtrNumber = null };
 
     public async Task<PrintDocument> PrescriptionAsync(Guid bookingId, CancellationToken ct = default)
     {
@@ -52,7 +58,7 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
         }).ToList() ?? [];
         if (items.Count == 0)
             throw new InvalidOperationException("No medicines have been prescribed for this visit.");
-        var doc = ClinicPrintForms.Prescription(await ClinicAsync(db, ct), Doctor(b, includeS2: true), Patient(b), items,
+        var doc = ClinicPrintForms.Prescription(await ClinicAsync(db, ct), PtrFor(bookingId, ClinicPrintKind.Prescription, Doctor(b, includeS2: true)), Patient(b), items,
             date: ClinicPrintForms.Iso(b.AppointmentDate), clock: _clock);
         return doc.WithInfo(new PrintJobInfo(ClinicPrintKind.Prescription));
     }
@@ -80,7 +86,7 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
                 .Where(s => s.Length > 0).ToList();
             notes = (consult.Assessment ?? "").Trim();
         }
-        var doc = ClinicPrintForms.LabRequest(await ClinicAsync(db, ct), Doctor(b, includeS2: true), Patient(b), tests,
+        var doc = ClinicPrintForms.LabRequest(await ClinicAsync(db, ct), PtrFor(bookingId, ClinicPrintKind.LabRequest, Doctor(b, includeS2: true)), Patient(b), tests,
             date: ClinicPrintForms.Iso(b.AppointmentDate), diagnoses: diagnoses, clinicalNotes: notes, clock: _clock, items: _policy?.LabTests);
         return doc.WithInfo(new PrintJobInfo(ClinicPrintKind.LabRequest));
     }
@@ -108,7 +114,7 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
             ComeBackOn = ClinicPrintForms.Iso(c.ComeBackOn),
         };
         // The consultation page prints the certificate without the S2 line (doctor: name, license, PTR only).
-        var doc = ClinicPrintForms.MedicalCertificate(await ClinicAsync(db, ct), Doctor(b, includeS2: false), Patient(b), cert, _clock);
+        var doc = ClinicPrintForms.MedicalCertificate(await ClinicAsync(db, ct), PtrFor(bookingId, ClinicPrintKind.MedicalCertificate, Doctor(b, includeS2: false)), Patient(b), cert, _clock);
         return doc.WithInfo(new PrintJobInfo(ClinicPrintKind.MedicalCertificate));
     }
 

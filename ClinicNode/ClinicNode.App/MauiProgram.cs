@@ -159,6 +159,7 @@ public static class MauiProgram
 
         services.AddSingleton<ClinicNode.App.Services.AppUpdateService>(); //JJQR - AI (Nov 22, 2026) - OTA //JJQR - END
         services.AddSingleton(ClinicNode.Core.Printing.PrintingOptions.Load(dataDir));
+        services.AddSingleton<ClinicNode.Core.Printing.IPtrPrintChoice>(new ClinicNode.Core.Printing.PtrPrintChoice(dataDir)); //JJQR - AI (Nov 24, 2026) - "Include PTR in print", off by default //JJQR - END
         services.AddSingleton<ClinicNode.Core.Print.IPrintDocumentFactory, ClinicNode.Core.Printing.ClinicFormsPrintDocumentFactory>();
         if (host.UsePlatformStores)
         {

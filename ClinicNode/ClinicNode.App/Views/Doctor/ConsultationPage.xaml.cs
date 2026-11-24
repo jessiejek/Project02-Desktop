@@ -507,6 +507,7 @@ public partial class ConsultationPage : ContentPage
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - card title "{indicator} {n}. {Section}"
         SectionHost.Children.Add(SectionTitle(_section));
         //JJQR - END
+        if (_section is 3 or 4 or 7) SectionHost.Children.Add(PtrIncludeRow(_section)); //JJQR - AI (Nov 24, 2026) - "Include PTR in print", off by default //JJQR - END
         switch (_section)
         {
             case 0: RenderNotes(); break;
@@ -971,6 +972,23 @@ public partial class ConsultationPage : ContentPage
 
     //JJQR - AI (Nov 21, 2026) - Prescription as two panes: LEFT = what is prescribed, RIGHT = "Add medicine" form
     int _rxMarkA = -1, _rxMarkB = -1;
+    //JJQR - AI (Nov 24, 2026) - owner: "Include PTR in print", OFF by default, on the Prescription, Lab Orders and Medical Certificate steps. Kept per visit and per document on this computer; no redraw when ticked.
+    View PtrIncludeRow(int section)
+    {
+        var kind = section switch { 3 => ClinicNode.Core.Printing.ClinicPrintKind.Prescription, 4 => ClinicNode.Core.Printing.ClinicPrintKind.LabRequest, _ => ClinicNode.Core.Printing.ClinicPrintKind.MedicalCertificate };
+        var choice = _gapServices?.GetService<ClinicNode.Core.Printing.IPtrPrintChoice>();
+        var bookingId = D.BookingId;
+        var box = new CheckBox { IsChecked = choice?.IsOn(bookingId, kind) == true };
+        box.CheckedChanged += (_, e) => choice?.Set(bookingId, kind, e.Value);
+        var hint = string.IsNullOrWhiteSpace(_doctor?.PtrNumber)
+            ? "Off by default. Your PTR No. is empty: enter it under Profile first."
+            : "Off by default. Tick it to print your PTR No. on this document.";
+        var row = ClinicPickers.CheckRow(box, "Include PTR in print", hint);
+        row.Margin = new Thickness(0, 0, 0, 8);
+        return row;
+    }
+    //JJQR - END
+
     void RenderPrescription()
     {
         _rxMarkA = _rxMarkB = -1;
@@ -1457,14 +1475,16 @@ public partial class ConsultationPage : ContentPage
         }
         bar.Add(barActions, 1, 0);
         //JJQR - AI (Nov 22, 2026) - a certificate without the doctor's License / PTR number is not valid when printed: say so before it is issued //JJQR - END
-        if (string.IsNullOrWhiteSpace(_doctor?.LicenseNumber) || string.IsNullOrWhiteSpace(_doctor?.PtrNumber))
+        var missingLicense = string.IsNullOrWhiteSpace(_doctor?.LicenseNumber);
+        var missingPtr = string.IsNullOrWhiteSpace(_doctor?.PtrNumber) && (_gapServices?.GetService<ClinicNode.Core.Printing.IPtrPrintChoice>()?.IsOn(D.BookingId, ClinicNode.Core.Printing.ClinicPrintKind.MedicalCertificate) ?? false); //JJQR - AI (Nov 24, 2026) - the PTR only matters when "Include PTR in print" is ticked //JJQR - END
+        if (missingLicense || missingPtr)
             SectionHost.Children.Add(new Border
             {
                 BackgroundColor = Color.FromArgb("#FFF4D6"),
                 StrokeThickness = 0,
                 Padding = new Thickness(12, 8),
                 Margin = new Thickness(0, 0, 0, 8),
-                Content = ClinicTheme.Text("Your License No. and/or PTR No. is missing, so the printed certificate will show a blank. Enter them under Profile before issuing.", "MutedSm"),
+                Content = ClinicTheme.Text($"Your {(missingLicense && missingPtr ? "License No. and PTR No. are" : missingLicense ? "License No. is" : "PTR No. is")} missing, so the printed certificate will show a blank. Enter {(missingLicense && missingPtr ? "them" : "it")} under Profile before issuing.", "MutedSm"),
             });
         SectionHost.Children.Add(new Border
         {
