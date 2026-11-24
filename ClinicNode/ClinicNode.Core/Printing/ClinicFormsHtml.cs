@@ -118,7 +118,7 @@ public static class ClinicFormsHtml
         var lines = new List<string>
         {
             "<div class=\"sig-name\">" + E(RxMcSigName(doctor)) + "</div>",
-            CredLine("License No:", ""), //JJQR - AI (Nov 24, 2026) - owner: the license number is left blank on the prescription, medical certificate and lab request //JJQR - END
+            CredLine("License No:", doctor.LicenseNumber ?? ""), //JJQR - AI (Nov 24, 2026) - owner: what the doctor fills in under Profile prints on the prescription, medical certificate and lab request; the line stays blank when it is empty //JJQR - END
             CredLine("PTR No:", doctor.PtrNumber ?? ""),
         };
         if (!string.IsNullOrEmpty(doctor.S2Number)) lines.Add(CredLine("S2 No:", doctor.S2Number));

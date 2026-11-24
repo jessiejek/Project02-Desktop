@@ -79,16 +79,23 @@ public class ClinicPrintFormsTests
     }
 
     [Fact]
-    public void The_license_number_is_left_blank_on_the_prescription_the_medical_certificate_and_the_lab_request()
+    public void License_and_PTR_numbers_print_when_the_doctor_filled_them_in_and_stay_blank_when_empty()
     {
-        var rx = ClinicPrintForms.Prescription(Clinic, Doctor, Patient, [Paracetamol], "2026-11-21", clock: Nov21);
-        var mc = ClinicPrintForms.MedicalCertificate(Clinic, Doctor, Patient, new MedCertData { IssueDate = "2026-11-21" }, Nov21);
-        var lab = ClinicPrintForms.LabRequest(Clinic, Doctor, Patient, ["CBC"], "2026-11-21", null, null, Nov21);
-        foreach (var doc in new[] { rx, mc, lab })
+        ClinicNode.Core.PrintDocument[] Forms(PrintDoctor d) =>
+        [
+            ClinicPrintForms.Prescription(Clinic, d, Patient, [Paracetamol], "2026-11-21", clock: Nov21),
+            ClinicPrintForms.MedicalCertificate(Clinic, d, Patient, new MedCertData { IssueDate = "2026-11-21" }, Nov21),
+            ClinicPrintForms.LabRequest(Clinic, d, Patient, ["CBC"], "2026-11-21", null, null, Nov21),
+        ];
+        foreach (var doc in Forms(Doctor with { LicenseNumber = "0125232", PtrNumber = "7788" }))
         {
-            Assert.Contains("License No:", doc.Html);          // the label and the line stay, to write on
-            Assert.DoesNotContain(Doctor.LicenseNumber!, doc.Html);
-            Assert.Contains(Doctor.PtrNumber!, doc.Html);      // the PTR number is unchanged
+            Assert.Contains("License No:</span><span class=\"u sig-u\">0125232</span>", doc.Html);
+            Assert.Contains("PTR No:</span><span class=\"u sig-u\">7788</span>", doc.Html);
+        }
+        foreach (var doc in Forms(Doctor with { LicenseNumber = null, PtrNumber = "" }))
+        {
+            Assert.Contains("License No:</span><span class=\"u sig-u\"></span>", doc.Html);   // a blank line to write on
+            Assert.Contains("PTR No:</span><span class=\"u sig-u\"></span>", doc.Html);
         }
     }
 
