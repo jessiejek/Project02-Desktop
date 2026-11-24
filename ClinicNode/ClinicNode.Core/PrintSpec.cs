@@ -6,7 +6,7 @@ public static class PrintSpec
 {
     public static readonly PrintPageSize Prescription = PrintPageSize.A5;
     public static readonly PrintPageSize MedicalCertificate = PrintPageSize.A5;
-    public static readonly PrintPageSize LabRequest = PrintPageSize.LabForm;
+    public static readonly PrintPageSize LabRequest = PrintPageSize.A5; //JJQR - AI (Nov 24, 2026) - the lab request is A5 like the other two forms //JJQR - END
     public static readonly PrintPageSize QueueSlip = PrintPageSize.Slip;
 }
 

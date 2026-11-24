@@ -120,14 +120,14 @@ public static class ClinicPrintForms
         return Form("Medical Certificate", PrintPaper.A5, body);
     }
 
-    /// <summary>printLabRequest(): 4.3 x 6.4 in lab request pad.</summary>
+    /// <summary>printLabRequest(): A5 (148 x 210 mm), the same sheet as the prescription and the medical certificate.</summary>
     public static PrintDocument LabRequest(PrintClinic clinic, PrintDoctor doctor, PrintPatient patient, IReadOnlyList<string> tests,
         string? date = null, IReadOnlyList<string>? diagnoses = null, string? clinicalNotes = null, TimeProvider? clock = null)
     {
         var today = TodayManila(clock);
         var body = ClinicFormsHtml.BuildLabRequestHtml(new LabHtmlOptions(
             Origin: "",
-            PageSize: PrintPaper.WebPageLab,
+            PageSize: PrintPaper.WebPageA5, //JJQR - AI (Nov 24, 2026) - the lab request is the same A5 sheet as the prescription and the medical certificate //JJQR - END
             Doctor: doctor,
             Patient: patient,
             Age: AgeFromDob(patient.DateOfBirth, today),
@@ -135,7 +135,7 @@ public static class ClinicPrintForms
             Tests: tests,
             Diagnoses: diagnoses,
             ClinicalNotes: clinicalNotes));
-        return Form("Laboratory Request", PrintPaper.LabForm, body);
+        return Form("Laboratory Request", PrintPaper.A5, body);
     }
 
     static PrintDocument Form(string title, PrintPageSize page, string body) =>

@@ -46,21 +46,50 @@ public class ClinicPrintFormsTests
         Assert.Contains("form form-rx form-tall", html);
     }
 
+    //JJQR - AI (Nov 24, 2026) - owner: the lab request is the SAME A5 sheet as the prescription and the medical certificate, lists only the clinic's tests (TSH, FT3, FT4, HbA1c added), and the license number is left blank
     [Fact]
-    public void Lab_request_is_4_3_by_6_4_inches_ticks_checklist_and_handwrites_extras()
+    public void Lab_request_is_A5_like_the_other_forms_ticks_the_clinics_tests_and_lists_the_rest_under_Others()
     {
-        var doc = ClinicPrintForms.LabRequest(Clinic, Doctor, Patient, ["CBC", "Urine test", "Serum creatinine", "HbA1c"], "2026-11-21",
+        var doc = ClinicPrintForms.LabRequest(Clinic, Doctor, Patient, ["CBC", "Urine test", "Serum creatinine", "HbA1c", "free T4", "TSH", "Vitamin D"], "2026-11-21",
             ["J06.9 — Acute URTI"], " r/o dengue ", Nov21);
         Assert.Equal("Laboratory Request", doc.Title);
-        Assert.Same(PrintPaper.LabForm, doc.Page);
-        Assert.Equal(4.3, PrintPaper.WidthInches(doc.Page), 6);
-        Assert.Equal(6.4, PrintPaper.HeightInches(doc.Page), 6);
-        Assert.Contains("@page { size: 4.3in 6.4in; margin: 0; }", doc.Html);
-        Assert.Contains("<span class=\"tick\">✓</span>___</span><span class=\"lab-name\">CBC</span>", doc.Html);
-        Assert.Contains("<span class=\"tick\">✓</span>___</span><span class=\"lab-name\">URINALYSIS</span>", doc.Html);
-        Assert.Contains("<span class=\"tick\">✓</span>___</span><span class=\"lab-name\">CREA</span>", doc.Html);
-        Assert.Contains("<div class=\"lab-extra\">HbA1c</div>", doc.Html);
+        Assert.Same(PrintPaper.A5, doc.Page);
+        Assert.Equal(PrintPaper.WidthInches(PrintPaper.A5), PrintPaper.WidthInches(doc.Page), 6);
+        Assert.Contains("@page { size: 148mm 210mm; margin: 0; }", doc.Html);
+        Assert.DoesNotContain("4.3in", doc.Html);
+        foreach (var name in new[] { "CBC", "URINALYSIS", "CREA", "HbA1c", "FT4", "TSH" })
+            Assert.Contains("<span class=\"tick\">✓</span>___</span><span class=\"lab-name\">" + name + "</span>", doc.Html);
+        foreach (var name in new[] { "LIPID PROFILE", "SGPT", "FBS", "BUA", "FT3", "ECG 12L" })
+            Assert.Contains("<span class=\"lab-blank\">___</span><span class=\"lab-name\">" + name + "</span>", doc.Html);
+        Assert.Contains("<div class=\"lab-others-lbl\">Others:</div><div class=\"lab-extra\">Vitamin D</div>", doc.Html);
         Assert.Contains("J06.9 — Acute URTI — r/o dengue", doc.Html);
+        // the clinic's lab does these tests and no others
+        Assert.Equal(["CBC", "URINALYSIS", "LIPID PROFILE", "SGPT", "CREA", "FBS", "BUA", "TSH", "FT3", "FT4", "HbA1c", "DENGUE NS1, IgG, IgM", "ECG 12L"],
+            ClinicFormsHtml.LabItems.Select(i => i.Name).ToArray());
+    }
+
+    [Fact]
+    public void An_old_Lab_pad_paper_choice_no_longer_shrinks_the_A5_lab_request()
+    {
+        var o = new PrintingOptions();
+        o.For(ClinicPrintKind.LabRequest).Paper = PrinterPaper.LabPad;
+        o.For(ClinicPrintKind.Prescription).Paper = PrinterPaper.LabPad;   // only the lab request is migrated
+        Assert.Equal(PrinterPaper.Auto, o.Resolve(ClinicPrintKind.LabRequest).Paper);
+        Assert.Equal(PrinterPaper.LabPad, o.Resolve(ClinicPrintKind.Prescription).Paper);
+    }
+
+    [Fact]
+    public void The_license_number_is_left_blank_on_the_prescription_the_medical_certificate_and_the_lab_request()
+    {
+        var rx = ClinicPrintForms.Prescription(Clinic, Doctor, Patient, [Paracetamol], "2026-11-21", clock: Nov21);
+        var mc = ClinicPrintForms.MedicalCertificate(Clinic, Doctor, Patient, new MedCertData { IssueDate = "2026-11-21" }, Nov21);
+        var lab = ClinicPrintForms.LabRequest(Clinic, Doctor, Patient, ["CBC"], "2026-11-21", null, null, Nov21);
+        foreach (var doc in new[] { rx, mc, lab })
+        {
+            Assert.Contains("License No:", doc.Html);          // the label and the line stay, to write on
+            Assert.DoesNotContain(Doctor.LicenseNumber!, doc.Html);
+            Assert.Contains(Doctor.PtrNumber!, doc.Html);      // the PTR number is unchanged
+        }
     }
 
     [Fact]

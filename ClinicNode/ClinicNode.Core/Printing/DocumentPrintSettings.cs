@@ -60,7 +60,11 @@ public static class DocumentPrintSettingsExtensions
         var fallback = kind == ClinicPrintKind.QueueSlip ? o.ThermalPrinterName : o.FormsPrinterName;
         var printer = string.IsNullOrWhiteSpace(s?.PrinterName) ? fallback : s!.PrinterName!.Trim();
         var dialog = (s?.ShowDialog ?? o.ShowDialog) || string.IsNullOrWhiteSpace(printer);
-        return new ResolvedPrintSettings(string.IsNullOrWhiteSpace(printer) ? null : printer, dialog, s?.Paper ?? PrinterPaper.Auto);
+        //JJQR - AI (Nov 24, 2026) - the lab request is now the same A5 sheet as the other forms: an old "Lab pad" paper choice saved on a computer must not shrink it back to 4.3 x 6.4 in
+        var paper = s?.Paper ?? PrinterPaper.Auto;
+        if (kind == ClinicPrintKind.LabRequest && paper == PrinterPaper.LabPad) paper = PrinterPaper.Auto;
+        //JJQR - END
+        return new ResolvedPrintSettings(string.IsNullOrWhiteSpace(printer) ? null : printer, dialog, paper);
     }
 }
 //JJQR - END

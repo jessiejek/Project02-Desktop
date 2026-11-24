@@ -25,18 +25,24 @@ public static class ClinicFormsHtml
         public const string SaturdayHours = "10:00pm- 5:00pm";
     }
 
-    public static readonly IReadOnlyList<(string Name, string Y)> LabItems =
+    //JJQR - AI (Nov 24, 2026) - owner: the clinic's lab only does these tests (the pad's printed list plus the hand-written TSH, FT3, FT4, HbA1c). C = column, R = row on the A5 sheet (same list as the web).
+    public static readonly IReadOnlyList<(string Name, int C, int R)> LabItems =
     [
-        ("CBC", "2.94in"),
-        ("URINALYSIS", "3.13in"),
-        ("LIPID PROFILE", "3.31in"),
-        ("SGPT", "3.49in"),
-        ("CREA", "3.68in"),
-        ("FBS", "3.87in"),
-        ("BUA", "4.05in"),
-        ("DENGUE NS1, IgG, IgM", "4.40in"),
-        ("ECG 12L", "5.15in"),
+        ("CBC", 0, 0),
+        ("URINALYSIS", 0, 1),
+        ("LIPID PROFILE", 0, 2),
+        ("SGPT", 0, 3),
+        ("CREA", 0, 4),
+        ("FBS", 0, 5),
+        ("BUA", 0, 6),
+        ("TSH", 1, 0),
+        ("FT3", 1, 1),
+        ("FT4", 1, 2),
+        ("HbA1c", 1, 3),
+        ("DENGUE NS1, IgG, IgM", 1, 4),
+        ("ECG 12L", 1, 5),
     ];
+    //JJQR - END
 
     const RegexOptions Js = RegexOptions.ECMAScript | RegexOptions.CultureInvariant;
     const RegexOptions JsI = Js | RegexOptions.IgnoreCase;
@@ -104,7 +110,7 @@ public static class ClinicFormsHtml
         var lines = new List<string>
         {
             "<div class=\"sig-name\">" + E(RxMcSigName(doctor)) + "</div>",
-            CredLine("License No:", doctor.LicenseNumber ?? ""),
+            CredLine("License No:", ""), //JJQR - AI (Nov 24, 2026) - owner: the license number is left blank on the prescription, medical certificate and lab request //JJQR - END
             CredLine("PTR No:", doctor.PtrNumber ?? ""),
         };
         if (!string.IsNullOrEmpty(doctor.S2Number)) lines.Add(CredLine("S2 No:", doctor.S2Number));
@@ -141,7 +147,7 @@ public static class ClinicFormsHtml
         var shiftAll = (rowsRes + rowsExam) * 0.16;
         string In(double n) => n.ToString("0.00", CultureInfo.InvariantCulture) + "in";
         // every pinned line used width:100% inside left/right margins, so its underline ran past the right margin to the page edge: let it fill only the margin box
-        css += "\n.form-mc .ln { width: auto; }";
+        // (the ".form-mc .ln { width: auto; }" rule now comes from the generated MedicalCertificateCss, same as the web)
         if (shiftAll > 0 || resLong || examLong)
         {
             css += "\n.form-mc .mc-residing, .form-mc .mc-exam { align-items: baseline; }" +
@@ -360,6 +366,12 @@ public static class ClinicFormsHtml
         if (i.Contains("ecg") && o.Contains("ecg")) return true;
         if (item == "CREA" && (n == "crea" || o.Contains("creatinine"))) return true;
         if (item == "LIPID PROFILE" && o.Contains("lipid")) return true;
+        //JJQR - AI (Nov 24, 2026) - thyroid and HbA1c names as a doctor might type them
+        if (item == "TSH" && (Regex.IsMatch(" " + n + " ", "(^| )tsh( |$)", Js) || o.Contains("thyroid stimulating"))) return true;
+        if (item == "FT3" && (Regex.IsMatch(" " + n + " ", "(^| )ft3( |$)", Js) || Regex.IsMatch(o, "free t ?3", Js))) return true;
+        if (item == "FT4" && (Regex.IsMatch(" " + n + " ", "(^| )ft4( |$)", Js) || Regex.IsMatch(o, "free t ?4", Js))) return true;
+        if (item == "HbA1c" && (Regex.IsMatch(o, "hb ?a1c", Js) || o.Contains("glycated") || o.Contains("glycosylated") || Regex.IsMatch(" " + n + " ", "(^| )a1c( |$)", Js))) return true;
+        //JJQR - END
         if (item == "URINALYSIS" && (o.Contains("urinalysis") || Regex.IsMatch(" " + n + " ", "(^| )urine( |$)", Js))) return true;
         return false;
     }
@@ -372,7 +384,7 @@ public static class ClinicFormsHtml
         foreach (var test in tests)
         {
             var hit = "";
-            foreach (var (name, _) in LabItems)
+            foreach (var (name, _, _) in LabItems)
                 if (MatchLabItem(test, name)) { hit = name; break; }
             if (hit.Length > 0) chk.Add(hit);
             else extras.Add(test);
@@ -380,56 +392,48 @@ public static class ClinicFormsHtml
         return (chk, extras);
     }
 
-    static string LabItemHtml(string name, bool on, string y)
+    static string LabItemHtml(string name, bool on, int c, int r)
     {
         var tick = on ? "<span class=\"tick\">✓</span>" : "";
-        return "<div class=\"lab-item\" style=\"top:" + y + "\"><span class=\"lab-blank\">" + tick + "___</span><span class=\"lab-name\">" + name + "</span></div>";
+        return "<div class=\"lab-item lab-c" + c + " lab-r" + r + "\"><span class=\"lab-blank\">" + tick + "___</span><span class=\"lab-name\">" + name + "</span></div>";
     }
 
+    //JJQR - AI (Nov 24, 2026) - owner: the lab request is re-laid out on the SAME A5 sheet as the prescription and the medical certificate (same letterhead, same patient lines, same signature block). Mirrors the web builder.
     public static string BuildLabRequestHtml(LabHtmlOptions opts)
     {
         var (chk, extrasList) = LabMatch(opts.Tests);
-        var list = string.Concat(LabItems.Select(r => LabItemHtml(r.Name, chk.Contains(r.Name), r.Y)));
+        var list = string.Concat(LabItems.Select(r => LabItemHtml(r.Name, chk.Contains(r.Name), r.C, r.R)));
 
         var extras = extrasList.Count > 0
-            ? "<div class=\"lab-extras\">" + string.Concat(extrasList.Select(x => "<div class=\"lab-extra\">" + E(x) + "</div>")) + "</div>"
+            ? "<div class=\"lab-others\"><div class=\"lab-others-lbl\">Others:</div>" + string.Concat(extrasList.Select(x => "<div class=\"lab-extra\">" + E(x) + "</div>")) + "</div>"
             : "";
 
         var dxBits = new List<string>();
         if (opts.Diagnoses is { Count: > 0 }) dxBits.Add(string.Join("; ", opts.Diagnoses));
         if (!string.IsNullOrWhiteSpace(opts.ClinicalNotes) && opts.ClinicalNotes.Trim().Length > 0) dxBits.Add(opts.ClinicalNotes.Trim());
         var dx = dxBits.Count > 0
-            ? "<div class=\"lab-dx\"><div class=\"lab-dx-lbl\">Dx:</div>" + E(string.Join(" — ", dxBits)) + "</div>"
+            ? "<div class=\"lab-dx\"><span class=\"lab-dx-lbl\">Dx:</span> " + E(string.Join(" — ", dxBits)) + "</div>"
             : "";
 
-        var sigWritten = LabSigName(opts.Doctor);
-        var css = FormsCss.ShellCss(opts.PageSize, "4.3in", "6.4in") + FormsCss.LabRequestCss();
+        var css = FormsCss.ShellCss(opts.PageSize, "148mm", "210mm") + FormsCss.A5LetterheadCss("1.58in") + FormsCss.LabRequestCss();
 
         var inner =
             LetterheadHtml(opts.Origin) +
-            "<div class=\"rule-single\"></div>" +
-            "<div class=\"lab-id-name\">" +
-              "<div class=\"lab-ids-left\"><span>Patient Name:</span><span class=\"u grow\">" + E(opts.Patient.FullName) + "</span></div>" +
-              "<div class=\"lab-ids-right\"><span>Date:</span><span class=\"u date\">" + E(opts.Date) + "</span></div>" +
-            "</div>" +
-            "<div class=\"lab-id-addr\">" +
-              "<div class=\"lab-ids-left\"><span>Address:</span><span class=\"u grow\">" + E(opts.Patient.Address) + "</span></div>" +
-              "<div class=\"lab-ids-right\"><span>Age:</span><span class=\"u age\">" + E(opts.Age) +
-              "</span><span>Sex:</span><span class=\"u sex\">" + E(opts.Patient.Sex) + "</span></div>" +
-            "</div>" +
+            "<div class=\"rule-double\"></div>" +
+            "<div class=\"rx-name\"><span>Patient's Name:</span><span class=\"u grow\">" + E(opts.Patient.FullName) + "</span></div>" +
+            "<div class=\"rx-age\"><span>Age:</span><span class=\"u age\">" + E(opts.Age) + "</span></div>" +
+            "<div class=\"rx-sex\"><span>Sex:</span><span class=\"u sex\">" + E(opts.Patient.Sex) + "</span></div>" +
+            "<div class=\"rx-addr\"><span>Address:</span><span class=\"u grow\">" + E(opts.Patient.Address) + "</span></div>" +
+            "<div class=\"rx-date\"><span>Date:</span><span class=\"u date\">" + E(opts.Date) + "</span></div>" +
             "<div class=\"lab-rx\">R<span class=\"lab-rx-x\">x</span></div>" +
-            extras +
             "<div class=\"lab-list\">" + list + "</div>" +
+            extras +
             dx +
             "<img class=\"lab-cartoon\" src=\"" + Asset(opts.Origin, "cartoon.png") + "\" alt=\"\" />" +
-            "<div class=\"lab-sig\">" +
-              "<div class=\"lab-sig-name\"><span class=\"lab-sig-written\" style=\"font-size:" + LabSigFontSize(sigWritten) + "\">" + E(sigWritten) +
-              "</span><span class=\"lab-md\">MD</span></div>" +
-              "<div class=\"lab-lic\">" + CredLine("LIC No:", opts.Doctor.LicenseNumber ?? "") + "</div>" +
-              "<div class=\"lab-ptr\">" + CredLine("PTR No:", opts.Doctor.PtrNumber ?? "") + "</div>" +
-            "</div>";
+            "<div class=\"rx-sig-block\">" + SignatureBlock(opts.Doctor) + "</div>";
 
         return "<style>" + css + "</style><div class=\"form form-lab\">" + inner + "</div>";
     }
+    //JJQR - END
 }
 //JJQR - END

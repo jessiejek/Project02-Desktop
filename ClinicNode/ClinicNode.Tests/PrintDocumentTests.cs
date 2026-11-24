@@ -16,7 +16,7 @@ public class PrintDocumentTests
     {
         Assert.Equal("148mm 210mm", PrintSpec.Prescription.CssSize);
         Assert.Equal("148mm 210mm", PrintSpec.MedicalCertificate.CssSize);
-        Assert.Equal("4.3in 6.4in", PrintSpec.LabRequest.CssSize);
+        Assert.Equal("148mm 210mm", PrintSpec.LabRequest.CssSize); //JJQR - AI (Nov 24, 2026) - the lab request is now the same A5 sheet as the other two forms //JJQR - END
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public class PrintDocumentTests
         Assert.Contains("Paracetamol", rx.Html);
 
         var lab = await print.LabRequestAsync(bookingId);
-        Assert.Equal("4.3in 6.4in", lab.Page.CssSize);
-        Assert.Contains("4.3in 6.4in", lab.Html);
+        Assert.Equal("148mm 210mm", lab.Page.CssSize); //JJQR - AI (Nov 24, 2026) - A5 like the prescription and the medical certificate //JJQR - END
+        Assert.Contains("148mm 210mm", lab.Html);
         Assert.Contains("CBC", lab.Html);
 
         var cert = await print.MedicalCertificateAsync(bookingId);
