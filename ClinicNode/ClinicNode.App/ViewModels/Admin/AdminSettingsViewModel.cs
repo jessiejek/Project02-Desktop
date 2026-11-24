@@ -69,6 +69,7 @@ public sealed class AdminSettingsViewModel : AdminViewModelBase
     public string DefaultPaymentMode { get; set; } = "Pay at clinic";
     public string RefundPolicy { get; set; } = "";
     public bool AutoPaidOnComplete { get; set; } //JJQR - AI (Nov 24, 2026) - Payments tab switch (saved on its own, right away) //JJQR - END
+    public string ConsultRequired { get; set; } = ClinicNode.Core.ConsultSteps.DefaultRequired; //JJQR - AI (Nov 24, 2026) - Consultation tab: comma list of required parts //JJQR - END
     public string FeeConsultation { get; set; } = "";
     public string FeeFollowUp { get; set; } = "";
     public string FeeSeniorPwd { get; set; } = "";
@@ -132,6 +133,7 @@ public sealed class AdminSettingsViewModel : AdminViewModelBase
             DefaultPaymentMode = s.DefaultPaymentMode == PaymentMode.Online ? "Online" : "Pay at clinic";
             RefundPolicy = s.RefundPolicy ?? "";
             AutoPaidOnComplete = s.AutoPaidOnComplete; //JJQR - AI (Nov 24, 2026) //JJQR - END
+            ConsultRequired = s.ConsultRequired ?? ClinicNode.Core.ConsultSteps.DefaultRequired; //JJQR - AI (Nov 24, 2026) - Consultation tab //JJQR - END
             FeeConsultation = s.FeeConsultation.ToString("0.##");
             FeeFollowUp = s.FeeFollowUp.ToString("0.##");
             FeeSeniorPwd = s.FeeSeniorPwd.ToString("0.##");
@@ -419,6 +421,25 @@ public sealed class AdminSettingsViewModel : AdminViewModelBase
             return null;
         }
         catch { AutoPaidOnComplete = before; return "The switch could not be saved. Try again."; }
+    }
+    //JJQR - END
+
+    //JJQR - AI (Nov 24, 2026) - Consultation tab: one tick changed = the whole list saved right away; on failure the old list is kept. Null when saved, else the error.
+    public bool IsConsultRequired(string key) =>
+        ConsultRequired.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(key, StringComparer.OrdinalIgnoreCase);
+
+    public async Task<string?> SetConsultPartRequiredAsync(string key, bool required)
+    {
+        var keys = ClinicNode.Core.ConsultSteps.ConfigurableRequired.Select(c => c.Key)
+            .Where(k => k == key ? required : IsConsultRequired(k)).ToList();
+        try
+        {
+            var r = await _settings.SetConsultRequiredAsync(keys);
+            if (!r.Succeeded) return string.IsNullOrWhiteSpace(r.Error) ? "The setting could not be saved. Try again." : r.Error;
+            ConsultRequired = r.Value ?? string.Join(",", keys);
+            return null;
+        }
+        catch { return "The setting could not be saved. Try again."; }
     }
     //JJQR - END
 

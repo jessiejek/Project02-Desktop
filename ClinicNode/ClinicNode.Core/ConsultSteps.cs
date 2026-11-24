@@ -51,10 +51,26 @@ public static class ConsultSteps
 
     public const bool ShowRequiredLeftBanner = false;
 
-    public static IReadOnlyList<int> EffectiveRequiredSections =>
-        ShowDiagnosisStep
-            ? RequiredSections
-            : RequiredSections.Where(i => i != DiagnosisSectionIndex).ToArray();
+    //JJQR - AI (Nov 24, 2026) - owner: the Admin chooses what is required to complete a visit (Admin > Settings > Consultation, clinic_settings.consult_required).
+    // Keys: notes (Clinical notes), vitals (Vital Signs), prescription (Prescription). Null = default: Clinical notes only. The Professional Fee Decision is ALWAYS required.
+    // Follow-up is never required any more: a visit with no follow-up date simply has no follow-up. Diagnosis stays hidden.
+    public static readonly (string Key, int Section, string Label)[] ConfigurableRequired =
+        [("notes", 0, "Clinical notes"), ("vitals", 1, "Vital signs"), ("prescription", 3, "Prescription")];
+    public const string DefaultRequired = "notes";
+
+    /// <summary>The clinic's choice, set whenever the clinic settings are read (online or from this computer's copy). Null = the default.</summary>
+    public static volatile string? ConfiguredRequired;
+
+    /// <summary>Sections required to complete a visit for a consult_required value (fee always included).</summary>
+    public static IReadOnlyList<int> RequiredFrom(string? consultRequired)
+    {
+        var keys = (consultRequired ?? DefaultRequired).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(k => k.ToLowerInvariant()).ToHashSet();
+        return ConfigurableRequired.Where(c => keys.Contains(c.Key)).Select(c => c.Section).Append(FeeSectionIndex).ToArray();
+    }
+
+    public static IReadOnlyList<int> EffectiveRequiredSections => RequiredFrom(ConfiguredRequired);
+    //JJQR - END
 
     /// <summary>Vaccinations stay behind "More". The fee step is always visible and last.</summary>
     public static IReadOnlyList<int> OccasionalSections { get; } = [VaccinationsSectionIndex];

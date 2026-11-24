@@ -14,6 +14,17 @@ public class ConsultStepsTests
         Assert.Equal(ConsultSteps.FeeSectionIndex, ConsultSteps.VisibleSectionOrder[^1]);
     }
 
+    //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation
+    [Fact]
+    public void Required_parts_follow_the_clinic_setting_and_the_fee_is_always_required()
+    {
+        Assert.Equal(new[] { 0, ConsultSteps.FeeSectionIndex }, ConsultSteps.RequiredFrom(null));           // default: clinical notes + fee
+        Assert.Equal(new[] { ConsultSteps.FeeSectionIndex }, ConsultSteps.RequiredFrom(""));               // nothing ticked: fee only
+        Assert.Equal(new[] { 0, 1, 3, ConsultSteps.FeeSectionIndex }, ConsultSteps.RequiredFrom("prescription, VITALS,notes"));
+        Assert.DoesNotContain(ConsultSteps.FollowUpSectionIndex, ConsultSteps.RequiredFrom("notes,vitals,prescription")); // follow-up never blocks
+    }
+    //JJQR - END
+
     [Fact]
     public void Follow_up_prn_or_none_is_satisfied_without_a_date()
     {

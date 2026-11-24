@@ -579,7 +579,10 @@ public sealed class ConsultationService : IConsultationService
     private static async Task UpsertFollowUpAsync(ClinicAppDbContext db, Consultation consult, ConsultationDraft draft, DateTimeOffset now, CancellationToken ct)
     {
         var existing = await db.FollowUps.SingleOrDefaultAsync(f => f.ConsultationId == consult.ConsultationId, ct);
-        if (draft.FollowUpMode == FollowUpMode.None)
+        //JJQR - AI (Nov 24, 2026) - owner: "if nothing entered, automatic no follow-up". "Schedule date" with no date used to save a follow-up dated TODAY here (offline);
+        // online it already deleted it. Both now mean: no follow-up.
+        if (draft.FollowUpMode == FollowUpMode.None || (draft.FollowUpMode == FollowUpMode.Dated && draft.FollowUpDate is null))
+        //JJQR - END
         {
             if (existing is not null) db.FollowUps.Remove(existing);
             return;

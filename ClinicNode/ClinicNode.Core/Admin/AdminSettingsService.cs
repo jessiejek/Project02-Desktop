@@ -54,6 +54,10 @@ public interface IAdminSettingsService
     // the server does the marking when the visit is completed. Returns the saved value.
     Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default);
     //JJQR - END
+    //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation: which parts must be filled to complete a visit (keys notes / vitals / prescription; the fee always is). Online only.
+    // Returns the saved comma list.
+    Task<AdminResult<string>> SetConsultRequiredAsync(IReadOnlyList<string> sections, CancellationToken ct = default);
+    //JJQR - END
 }
 
 public sealed class AdminSettingsService : IAdminSettingsService
@@ -286,6 +290,10 @@ public sealed class AdminSettingsService : IAdminSettingsService
     //JJQR - AI (Nov 24, 2026) - the switch lives on the server (it marks the payment there); this computer never changes it
     public Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default) =>
         Task.FromResult(AdminResult<bool>.Fail(OnlineOnlyAdminSettingsService.NeedsInternet));
+
+    //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation: lives on the server; this computer only keeps the synced copy
+    public Task<AdminResult<string>> SetConsultRequiredAsync(IReadOnlyList<string> sections, CancellationToken ct = default) =>
+        Task.FromResult(AdminResult<string>.Fail(OnlineOnlyAdminSettingsService.NeedsInternet));
     //JJQR - END
 }
 // JJQR - END

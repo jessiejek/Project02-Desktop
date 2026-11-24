@@ -57,7 +57,12 @@ public sealed class ApiConsultationLibraryService(IApiClient api) : IConsultatio
 
     public async Task<ClinicSetting> GetClinicSettingsAsync(CancellationToken ct = default)
     {
-        try { return await api.GetAsync<ClinicSetting>("/api/settings", null, ct) ?? new ClinicSetting(); }
+        try
+        {
+            var s = await api.GetAsync<ClinicSetting>("/api/settings", null, ct) ?? new ClinicSetting();
+            ClinicNode.Core.ConsultSteps.ConfiguredRequired = s.ConsultRequired; //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation //JJQR - END
+            return s;
+        }
         catch (ApiNotFoundException) { return new ClinicSetting(); }
     }
 

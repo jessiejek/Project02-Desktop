@@ -50,5 +50,10 @@ public sealed class OnlineOnlyAdminSettingsService : IAdminSettingsService
     public Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default) =>
         Task.FromResult(AdminResult<bool>.Fail(NeedsInternet));
     //JJQR - END
+
+    //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation: online only
+    public Task<AdminResult<string>> SetConsultRequiredAsync(IReadOnlyList<string> sections, CancellationToken ct = default) =>
+        Task.FromResult(AdminResult<string>.Fail(NeedsInternet));
+    //JJQR - END
 }
 //JJQR - END

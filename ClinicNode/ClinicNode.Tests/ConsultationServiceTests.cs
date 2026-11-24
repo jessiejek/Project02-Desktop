@@ -25,13 +25,24 @@ public class ConsultationServiceTests
         var bookingId = await visits.StartWalkInConsultAsync(patient.PatientId, session.DoctorId!.Value, null);
         var workspace = await consults.LoadByBookingAsync(bookingId);
 
+        //JJQR - AI (Nov 24, 2026) - owner: by default only Clinical notes and the Professional fee are required (Admin > Settings > Consultation can add Vital signs / Prescription); follow-up never blocks
+        ConsultSteps.ConfiguredRequired = null;
         var missing = consults.MissingRequired(workspace.Draft);
         Assert.Contains("Clinical notes", missing);
-        Assert.Contains("Vital Signs", missing);
-        Assert.Contains("Prescription", missing);
-        Assert.Contains("Follow-up", missing);
         Assert.Contains("Professional Fee Decision", missing);
+        Assert.DoesNotContain("Vital Signs", missing);
+        Assert.DoesNotContain("Prescription", missing);
+        Assert.DoesNotContain("Follow-up", missing);
         Assert.DoesNotContain("Diagnosis", missing);
+        try
+        {
+            ConsultSteps.ConfiguredRequired = "notes,vitals,prescription";
+            missing = consults.MissingRequired(workspace.Draft);
+            Assert.Contains("Vital Signs", missing);
+            Assert.Contains("Prescription", missing);
+        }
+        finally { ConsultSteps.ConfiguredRequired = null; }
+        //JJQR - END
 
         var failed = await consults.CompleteAsync(workspace.Draft);
         Assert.False(failed.Succeeded);

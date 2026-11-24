@@ -139,5 +139,22 @@ public sealed class ApiAdminSettingsService(IApiClient api) : IAdminSettingsServ
         catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult<bool>.Fail(ex.Message); }
     }
     //JJQR - END
+
+    //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation, its own endpoint (the full settings PUT never changes it)
+    sealed record ConsultRequiredAnswer(string? ConsultRequired);
+
+    public async Task<AdminResult<string>> SetConsultRequiredAsync(IReadOnlyList<string> sections, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await api.SendAsync<ConsultRequiredAnswer>(HttpMethod.Put, "/api/settings/consult-required", new { Sections = sections }, null, ct);
+            var saved = r?.ConsultRequired ?? string.Join(",", sections);
+            ClinicNode.Core.ConsultSteps.ConfiguredRequired = saved; // this computer follows at once
+            return AdminResult<string>.Ok(saved);
+        }
+        catch (ApiNotFoundException) { return AdminResult<string>.Fail("The clinic server does not have this setting yet (it needs the newest server update)."); }
+        catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult<string>.Fail(ex.Message); }
+    }
+    //JJQR - END
 }
 //JJQR - END

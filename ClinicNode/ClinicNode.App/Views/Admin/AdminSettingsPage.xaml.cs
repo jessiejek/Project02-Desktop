@@ -12,7 +12,8 @@ public partial class AdminSettingsPage : ContentPage
     static readonly (string Id, string Label)[] Tabs =
     [
         ("general", "General"), ("hours", "Hours"), ("fees", "Fees"),
-        ("payments", "Payments"), ("privacy", "Privacy & consent"), ("branding", "Branding"), ("printing", "Printing"), //JJQR - AI (Nov 24, 2026) //JJQR - END
+        ("payments", "Payments"), ("consultation", "Consultation"), //JJQR - AI (Nov 24, 2026) - Consultation tab after Payments //JJQR - END
+        ("privacy", "Privacy & consent"), ("branding", "Branding"), ("printing", "Printing"), //JJQR - AI (Nov 24, 2026) //JJQR - END
     ];
 
     readonly AdminSettingsViewModel _vm;
@@ -81,6 +82,7 @@ public partial class AdminSettingsPage : ContentPage
             case "hours": HoursTab(body); break;
             case "fees": Fees(body); break;
             case "payments": Payments(body); break;
+            case "consultation": ConsultationTab(body); break; //JJQR - AI (Nov 24, 2026) //JJQR - END
             case "privacy": Privacy(body); break;
             case "branding": Branding(body); break;
             case "printing": Printing(body); break; //JJQR - AI (Nov 24, 2026) //JJQR - END
@@ -284,6 +286,39 @@ public partial class AdminSettingsPage : ContentPage
         body.Children.Add(ClinicUi.Field("Refund policy", Area(_vm.RefundPolicy, v => _vm.RefundPolicy = v, 3)));
         body.Children.Add(SaveBar(() => _vm.SaveWebAsync("Payment settings could not be saved. Try again.")));
     }
+
+    //JJQR - AI (Nov 24, 2026) - owner: "admin settings on what of the consultation will be required". Tick boxes, each saves right away (no Save button); a failure puts it back.
+    // Professional fee is shown ticked and locked (payment depends on it). Follow-up is not listed: no date = no follow-up.
+    void ConsultationTab(VerticalStackLayout body)
+    {
+        body.Children.Add(ClinicTheme.Text("Required to complete a visit", "HeadlineSm"));
+        body.Children.Add(ClinicTheme.Text("The doctor cannot press Complete until every ticked part is filled in. Changes save right away and apply the next time a consultation is opened.", "MutedBody"));
+        foreach (var (key, _, label) in ClinicNode.Core.ConsultSteps.ConfigurableRequired)
+        {
+            var hint = key switch
+            {
+                "notes" => "Needs the chief complaint.",
+                "vitals" => "Needs blood pressure and pulse rate.",
+                _ => "Needs at least one medicine, or the \"no medicine needed\" tick.",
+            };
+            var cb = new CheckBox { IsChecked = _vm.IsConsultRequired(key), Color = ClinicTheme.Color("Primary") };
+            var reverting = false;
+            var k = key;
+            cb.CheckedChanged += async (_, e) =>
+            {
+                if (reverting) return;
+                var error = await _vm.SetConsultPartRequiredAsync(k, e.Value);
+                if (error is null) { ClinicToast.Show($"Settings saved at {DateTime.Now:h:mm:ss tt}.", ToastKind.Success); return; }
+                ClinicToast.Show(error, ToastKind.Error);
+                reverting = true; cb.IsChecked = _vm.IsConsultRequired(k); reverting = false;
+            };
+            body.Children.Add(ClinicPickers.CheckRow(cb, label, hint));
+        }
+        var fee = new CheckBox { IsChecked = true, IsEnabled = false, Color = ClinicTheme.Color("Primary") };
+        body.Children.Add(ClinicPickers.CheckRow(fee, "Professional fee (always required)", "Charge or Waive must be chosen, because the payment depends on it."));
+        body.Children.Add(ClinicTheme.Text("Follow-up is never required: if no follow-up date is entered, the visit has no follow-up.", "FieldHint"));
+    }
+    //JJQR - END
 
     void Privacy(VerticalStackLayout body)
     {

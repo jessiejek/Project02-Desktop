@@ -103,7 +103,9 @@ public sealed class ConsultationLibraryService : IConsultationLibraryService
     public async Task<ClinicSetting> GetClinicSettingsAsync(CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
-        return await db.ClinicSettings.AsNoTracking().SingleOrDefaultAsync(s => s.Id == 1, ct) ?? new ClinicSetting();
+        var s = await db.ClinicSettings.AsNoTracking().SingleOrDefaultAsync(s => s.Id == 1, ct) ?? new ClinicSetting();
+        if (s.Id == 1) ClinicNode.Core.ConsultSteps.ConfiguredRequired = s.ConsultRequired; //JJQR - AI (Nov 24, 2026) - Admin > Settings > Consultation (this computer's synced copy) //JJQR - END
+        return s;
     }
 
     public async Task<DoctorCredentials?> GetDoctorCredentialsAsync(Guid doctorId, CancellationToken ct = default)
