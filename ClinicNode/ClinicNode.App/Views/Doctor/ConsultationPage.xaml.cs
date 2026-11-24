@@ -507,7 +507,6 @@ public partial class ConsultationPage : ContentPage
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - card title "{indicator} {n}. {Section}"
         SectionHost.Children.Add(SectionTitle(_section));
         //JJQR - END
-        if (_section is 3 or 4 or 7) SectionHost.Children.Add(PtrIncludeRow(_section)); //JJQR - AI (Nov 24, 2026) - "Include PTR in print", off by default //JJQR - END
         switch (_section)
         {
             case 0: RenderNotes(); break;
@@ -973,18 +972,24 @@ public partial class ConsultationPage : ContentPage
     //JJQR - AI (Nov 21, 2026) - Prescription as two panes: LEFT = what is prescribed, RIGHT = "Add medicine" form
     int _rxMarkA = -1, _rxMarkB = -1;
     //JJQR - AI (Nov 24, 2026) - owner: "Include PTR in print", OFF by default, on the Prescription, Lab Orders and Medical Certificate steps. Kept per visit and per document on this computer; no redraw when ticked.
-    View PtrIncludeRow(int section)
+    // compact tick-box that sits in the step's title bar: [ ] Include PTR in print
+    View PtrIncludeInline(int section)
     {
         var kind = section switch { 3 => ClinicNode.Core.Printing.ClinicPrintKind.Prescription, 4 => ClinicNode.Core.Printing.ClinicPrintKind.LabRequest, _ => ClinicNode.Core.Printing.ClinicPrintKind.MedicalCertificate };
         var choice = _gapServices?.GetService<ClinicNode.Core.Printing.IPtrPrintChoice>();
         var bookingId = D.BookingId;
-        var box = new CheckBox { IsChecked = choice?.IsOn(bookingId, kind) == true };
-        box.CheckedChanged += (_, e) => choice?.Set(bookingId, kind, e.Value);
-        var hint = string.IsNullOrWhiteSpace(_doctor?.PtrNumber)
-            ? "Off by default. Your PTR No. is empty: enter it under Profile first."
-            : "Off by default. Tick it to print your PTR No. on this document.";
-        var row = ClinicPickers.CheckRow(box, "Include PTR in print", hint);
-        row.Margin = new Thickness(0, 0, 0, 8);
+        return PtrInlineControl(isOn: () => choice?.IsOn(bookingId, kind) == true, set: on => choice?.Set(bookingId, kind, on));
+    }
+
+    View PtrInlineControl(Func<bool> isOn, Action<bool> set)
+    {
+        var box = new CheckBox { IsChecked = isOn(), VerticalOptions = LayoutOptions.Center, Color = ClinicTheme.Color("Primary") };
+        box.CheckedChanged += (_, e) => set(e.Value);   // no redraw: nothing on screen changes
+        var label = new Label { Text = "Include PTR in print", FontSize = 13, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurface") };
+        label.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => box.IsChecked = !box.IsChecked) });
+        var row = new HorizontalStackLayout { Spacing = 6, VerticalOptions = LayoutOptions.Center, Children = { box, label } };
+        if (string.IsNullOrWhiteSpace(_doctor?.PtrNumber))
+            row.Children.Add(new Label { Text = "(PTR No. is empty: set it under Profile)", FontSize = 11, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") });
         return row;
     }
     //JJQR - END

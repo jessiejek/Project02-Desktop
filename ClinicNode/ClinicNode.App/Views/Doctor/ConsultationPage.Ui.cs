@@ -282,10 +282,19 @@ public partial class ConsultationPage
         var order = ConsultRules.VisibleOrder(_showMore, _section).ToList();
         var n = order.IndexOf(i) + 1;
         var title = ClinicTheme.Text($"{StepMark(i)}  {(n > 0 ? n + ". " : "")}{ConsultSteps.Sections[i]}", "HeadlineMd");
+        //JJQR - AI (Nov 24, 2026) - owner: "Include PTR in print" sits BESIDE the step title (same bar, on the right) on the Prescription, Lab Orders and Medical Certificate steps //JJQR - END
+        View head = title;
+        if (i is 3 or 4 or 7)
+        {
+            var bar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+            bar.Add(title, 0, 0);
+            bar.Add(PtrIncludeInline(i), 1, 0);
+            head = bar;
+        }
         return new VerticalStackLayout
         {
             Spacing = 0, Padding = new Thickness(0, 0, 0, 12),
-            Children = { title, new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant"), Margin = new Thickness(0, 12, 0, 0) } },
+            Children = { head, new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant"), Margin = new Thickness(0, 12, 0, 0) } },
         };
     }
 

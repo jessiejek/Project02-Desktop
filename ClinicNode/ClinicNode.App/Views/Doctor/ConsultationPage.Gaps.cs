@@ -210,6 +210,16 @@ public partial class ConsultationPage
         if (ident.Count > 0) head.Children.Add(ClinicTheme.Text(string.Join(" · ", ident), "LabelSm"));
         head.Children.Add(ClinicTheme.Text($"Completed {Date(w.AppointmentDate)} by {w.DoctorName}", "LabelMd"));
         var actions = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, JustifyContent = Microsoft.Maui.Layouts.FlexJustify.End };
+        //JJQR - AI (Nov 24, 2026) - owner: "Include PTR in print" (off by default) beside the buttons of a completed visit; one tick covers the prescription, the lab request and the certificate
+        {
+            var ptrChoice = _gapServices?.GetService<ClinicNode.Core.Printing.IPtrPrintChoice>();
+            var bookingId = D.BookingId;
+            ClinicNode.Core.Printing.ClinicPrintKind[] kinds = [ClinicNode.Core.Printing.ClinicPrintKind.Prescription, ClinicNode.Core.Printing.ClinicPrintKind.LabRequest, ClinicNode.Core.Printing.ClinicPrintKind.MedicalCertificate];
+            var ptr = PtrInlineControl(() => ptrChoice is not null && kinds.All(k => ptrChoice.IsOn(bookingId, k)), on => { if (ptrChoice is not null) foreach (var k in kinds) ptrChoice.Set(bookingId, k, on); });
+            ptr.Margin = new Thickness(0, 0, 12, 8);
+            actions.Children.Add(ptr);
+        }
+        //JJQR - END
         actions.Children.Add(Btn("History", ShowAmendmentHistory));
         //JJQR - AI (21 Nov 2026) - a draft opened with &mode=view edits as a normal draft (complete), never as an amendment
         actions.Children.Add(Btn("Edit Consultation", () =>
@@ -221,18 +231,6 @@ public partial class ConsultationPage
         }, "PrimaryButton"));
         //JJQR - END
         SectionHost.Children.Add(Row(head, actions));
-        //JJQR - AI (Nov 24, 2026) - owner: "Include PTR in print" (off by default) also for a completed visit: one tick covers the prescription, the lab request and the certificate
-        {
-            var ptrChoice = _gapServices?.GetService<ClinicNode.Core.Printing.IPtrPrintChoice>();
-            var bookingId = D.BookingId;
-            ClinicNode.Core.Printing.ClinicPrintKind[] kinds = [ClinicNode.Core.Printing.ClinicPrintKind.Prescription, ClinicNode.Core.Printing.ClinicPrintKind.LabRequest, ClinicNode.Core.Printing.ClinicPrintKind.MedicalCertificate];
-            var all = new CheckBox { IsChecked = ptrChoice is not null && kinds.All(k => ptrChoice.IsOn(bookingId, k)) };
-            all.CheckedChanged += (_, e) => { if (ptrChoice is not null) foreach (var k in kinds) ptrChoice.Set(bookingId, k, e.Value); };
-            SectionHost.Children.Add(ClinicPickers.CheckRow(all, "Include PTR in print", string.IsNullOrWhiteSpace(_doctor?.PtrNumber)
-                ? "Off by default. Your PTR No. is empty: enter it under Profile first."
-                : "Off by default. Tick it to print your PTR No. on the prescription, lab request and medical certificate."));
-        }
-        //JJQR - END
 
         string Or(string? v) => string.IsNullOrWhiteSpace(v) ? "Not recorded." : v.Trim();
         //JJQR - AI (21 Nov 2026) - UI pass vs web consultation2 - bold "Label:" lines; vitals as a label/value grid with "Out of range"
