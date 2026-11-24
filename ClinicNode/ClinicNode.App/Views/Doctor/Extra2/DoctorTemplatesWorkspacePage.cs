@@ -175,6 +175,10 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         };
         // nav: "SOAP (3)" ... (web VISIBLE_TEMPLATE_TABS; Diagnoses stays hidden)
         _list.Children.Add(DoctorExtraUi.Tabs(DoctorTemplateRules.Tabs.Select(t => (t.Id, $"{t.Label} ({counts[t.Id]})")).ToArray(), () => _tab, id => { _tab = id; RenderSoon(); }));
+        //JJQR - AI (Nov 24, 2026) - owner (Windows): "COMException: No installed components were detected" on the Templates page. The search box is reused on every draw but was still a child of the previous draw's toolbar;
+        // Windows refuses a view with two parents (the Mac allows it). Take it out of the old toolbar first (same fix as the walk-in search box).
+        if (_search.Parent is Layout oldToolbar) oldToolbar.Children.Remove(_search);
+        //JJQR - END
         // search row: input, "This tab" / "All tabs" chips
         _search.Placeholder = _allTabs ? "Search all tabs…" : "Search this tab…";
         //JJQR - AI (Nov 21, 2026) - one tidy toolbar row: wide search | scope toggle | view toggle (the old chips wrapped onto three lines)
