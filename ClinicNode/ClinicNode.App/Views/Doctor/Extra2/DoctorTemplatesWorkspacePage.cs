@@ -45,7 +45,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
 
     public DoctorTemplatesWorkspacePage(IServiceProvider sp) : base(sp, "Templates", live: false)
     {
-        _search.TextChanged += (_, _) => Render();
+        _search.TextChanged += (_, _) => UiTurn.Next(Render); //JJQR - AI (Nov 24, 2026) - was Render() inside the search box's own event, which takes that same box out of the screen (Windows crash pattern 2); Mac unchanged //JJQR - END
         // web page header (app/doctor/templates/page.tsx)
         _scroll = StaffUi.Scroll(new VerticalStackLayout
         {
@@ -155,14 +155,36 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
     private void RenderSoon()
     {
         if (!_loaded) { Render(); return; }
+        DetachSearch(); //JJQR - AI (Nov 24, 2026) - before Clear, while the old toolbar is still on screen (see DetachSearch) //JJQR - END
         _list.Children.Clear();
         _list.Children.Add(ClinicTheme.Text("Loading…", "MutedBody"));
         Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(30), Render);
     }
     //JJQR - END
 
+    //JJQR - AI (Nov 24, 2026) - owner (Windows): Templates still crashed (0xC000027B) when switching tab / "All tabs" / "Cards". Errors trace: COMException "No installed components were detected"
+    // at _list.Children.Add(toolbar), from the 30 ms delayed redraw. RenderSoon cleared the list first; by the time Render ran, Windows had already let go of the old toolbar
+    // (its handler gone), so taking the search box out of it no longer removed it on the Windows side and the box still had a Windows parent. Take it out BEFORE clearing,
+    // and on Windows also from any Windows parent it still has.
+    private void DetachSearch()
+    {
+        if (_search.Parent is Layout oldToolbar) oldToolbar.Children.Remove(_search);
+#if WINDOWS
+        try
+        {
+            var handler = _search.Handler as IViewHandler;
+            var native = (handler?.ContainerView ?? handler?.PlatformView) as Microsoft.UI.Xaml.FrameworkElement;
+            if (native is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(native) is Microsoft.UI.Xaml.Controls.Panel panel)
+                panel.Children.Remove(native);
+        }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Templates.DetachSearch", ex); }
+#endif
+    }
+    //JJQR - END
+
     private void Render()
     {
+        DetachSearch(); //JJQR - AI (Nov 24, 2026) - before Clear (see DetachSearch) //JJQR - END
         _list.Children.Clear();
         _scrollTarget = null; _cardHost = null; //JJQR - AI (21 Nov 2026) // JJQR - END
         if (!_loaded) { _list.Children.Add(ClinicTheme.Text("Loading your templates…", "MutedBody")); return; }
@@ -177,7 +199,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         _list.Children.Add(DoctorExtraUi.Tabs(DoctorTemplateRules.Tabs.Select(t => (t.Id, $"{t.Label} ({counts[t.Id]})")).ToArray(), () => _tab, id => { _tab = id; RenderSoon(); }));
         //JJQR - AI (Nov 24, 2026) - owner (Windows): "COMException: No installed components were detected" on the Templates page. The search box is reused on every draw but was still a child of the previous draw's toolbar;
         // Windows refuses a view with two parents (the Mac allows it). Take it out of the old toolbar first (same fix as the walk-in search box).
-        if (_search.Parent is Layout oldToolbar) oldToolbar.Children.Remove(_search);
+        DetachSearch(); //JJQR - AI (Nov 24, 2026) - was: remove from the old toolbar here, after Clear (too late on Windows) //JJQR - END
         //JJQR - END
         // search row: input, "This tab" / "All tabs" chips
         _search.Placeholder = _allTabs ? "Search all tabs…" : "Search this tab…";
