@@ -137,7 +137,7 @@ public static class MacPrintRenderer
             if (!controller.PrintToPrinter(printer, (c, ok, err) => Done(c, ok, err)))
                 tcs.TrySetException(new InvalidOperationException($"Could not print to {printerUrl}."));
         }
-        else if (!controller.Present(true, (c, ok, err) => Done(c, ok, err)))
+        else if (Log($"Present: asking for paper {want.Width:0}x{want.Height:0} pt (PDF page {size.Width:0}x{size.Height:0})") && !controller.Present(true, (c, ok, err) => Done(c, ok, err)))
         {
             tcs.TrySetException(new InvalidOperationException("The print dialog could not be shown."));
         }
@@ -147,6 +147,20 @@ public static class MacPrintRenderer
 
     static PaperPicker? _activeDelegate;
 
+    //JJQR - AI (Nov 24, 2026) - one line per event in print-errors.log (next to the database); never throws. Returns true so it can sit inside a condition.
+    static bool Log(string line)
+    {
+        try
+        {
+            var dir = Path.Combine(FileSystem.AppDataDirectory, "ClinicNode");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "print-errors.log"), $"{DateTimeOffset.Now:O} [paper] {line}\n");
+        }
+        catch { /* logging must never break printing */ }
+        return true;
+    }
+    //JJQR - END
+
     sealed class PaperPicker(CGSize size) : UIPrintInteractionControllerDelegate
     {
         // Closest paper the printer has to the form size (A5 pad, 4.3x6.4 in lab pad, 80/58 mm roll).
@@ -154,6 +168,9 @@ public static class MacPrintRenderer
         {
             var candidates = paperList.Select(p => (p, w: (double)p.PaperSize.Width, h: (double)p.PaperSize.Height)).ToList();
             var idx = PrintPaper.ChoosePaperIndex(candidates.Select(c => (c.w, c.h)).ToList(), size.Width, size.Height);
+            //JJQR - AI (Nov 24, 2026) - owner: the print window shows US Letter although the printer lists A5. Keep a line in print-errors.log of what the Mac asked and what we answered, to see whether the Mac uses our answer.
+            Log($"ChoosePaper called: wanted {size.Width:0}x{size.Height:0} pt; the printer offers [{string.Join(", ", candidates.Select(c => $"{c.w:0}x{c.h:0}"))}]; answered {(idx >= 0 ? $"{candidates[idx].w:0}x{candidates[idx].h:0}" : "first")}");
+            //JJQR - END
             return idx >= 0 ? paperList[idx] : paperList[0];
         }
     }

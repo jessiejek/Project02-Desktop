@@ -430,7 +430,7 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
         {
             _printing.Documents.TryGetValue(row.Kind, out var d);
             row.PrinterName = d?.PrinterName;
-            row.Paper = d?.Paper ?? PrinterPaper.Auto;
+            row.Paper = d?.Paper ?? DocumentPrintSettingsExtensions.DefaultPaper(row.Kind); //JJQR - AI (Nov 24, 2026) - A5 is the default paper of the three forms //JJQR - END
             row.DialogChoice = d?.ShowDialog is null ? 0 : d.ShowDialog.Value ? 1 : 2;
         }
     }
@@ -460,7 +460,7 @@ public sealed class NodeSettingsViewModel : INotifyPropertyChanged
         _printing.Documents.Clear();
         foreach (var row in Documents)
         {
-            if (Blank(row.PrinterName) is null && row.Paper == PrinterPaper.Auto && row.DialogChoice == 0) continue;
+            if (Blank(row.PrinterName) is null && row.Paper == DocumentPrintSettingsExtensions.DefaultPaper(row.Kind) && row.DialogChoice == 0) continue;
             _printing.Documents[row.Kind] = new DocumentPrintSettings
             {
                 PrinterName = Blank(row.PrinterName),

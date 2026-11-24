@@ -12,8 +12,9 @@ public class DocumentPrintSettingsTests
         var rx = o.Resolve(ClinicPrintKind.Prescription);
         Assert.Equal("HP-Laser", rx.PrinterName);
         Assert.False(rx.ShowDialog);
-        Assert.Equal(PrinterPaper.Auto, rx.Paper);
-        Assert.Null(rx.PaperPoints);
+        Assert.Equal(PrinterPaper.A5, rx.Paper);              //JJQR - AI (Nov 24, 2026) - A5 is now the default paper of the prescription, lab request and medical certificate //JJQR - END
+        Assert.NotNull(rx.PaperPoints);
+        Assert.Equal(PrinterPaper.Auto, o.Resolve(ClinicPrintKind.QueueSlip).Paper);
         Assert.Equal("ipp://slip", o.Resolve(ClinicPrintKind.QueueSlip).PrinterName);
     }
 

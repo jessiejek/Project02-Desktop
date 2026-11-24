@@ -69,6 +69,24 @@ public class ClinicPrintFormsTests
     }
 
     [Fact]
+    public void A5_is_the_default_paper_of_the_three_forms_and_a_saved_choice_still_wins()
+    {
+        var o = new PrintingOptions();
+        foreach (var kind in new[] { ClinicPrintKind.Prescription, ClinicPrintKind.LabRequest, ClinicPrintKind.MedicalCertificate })
+        {
+            Assert.Equal(PrinterPaper.A5, o.Resolve(kind).Paper);                                  // nothing saved: A5
+            var (w, h) = o.Resolve(kind).PaperPoints!.Value;                                        // 148 x 210 mm in points
+            Assert.Equal(148 / 25.4 * 72, w, 3); Assert.Equal(210 / 25.4 * 72, h, 3);
+        }
+        Assert.Equal(PrinterPaper.Auto, o.Resolve(ClinicPrintKind.QueueSlip).Paper);               // the slip and the receipt are not A5 forms
+        Assert.Equal(PrinterPaper.Auto, o.Resolve(ClinicPrintKind.Receipt).Paper);
+        o.For(ClinicPrintKind.Prescription).Paper = PrinterPaper.A4;                               // a choice saved on this computer wins
+        o.For(ClinicPrintKind.LabRequest).Paper = PrinterPaper.Auto;
+        Assert.Equal(PrinterPaper.A4, o.Resolve(ClinicPrintKind.Prescription).Paper);
+        Assert.Equal(PrinterPaper.Auto, o.Resolve(ClinicPrintKind.LabRequest).Paper);
+    }
+
+    [Fact]
     public void An_old_Lab_pad_paper_choice_no_longer_shrinks_the_A5_lab_request()
     {
         var o = new PrintingOptions();

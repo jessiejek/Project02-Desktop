@@ -35,6 +35,11 @@ public static class DocumentPrintSettingsExtensions
         (ClinicPrintKind.Receipt, "Official receipt"),
     ];
 
+    //JJQR - AI (Nov 24, 2026) - owner: A5 is the DEFAULT paper of the prescription, the lab request and the medical certificate (a saved choice, including "Auto", still wins)
+    public static PrinterPaper DefaultPaper(ClinicPrintKind kind) =>
+        kind is ClinicPrintKind.Prescription or ClinicPrintKind.LabRequest or ClinicPrintKind.MedicalCertificate ? PrinterPaper.A5 : PrinterPaper.Auto;
+    //JJQR - END
+
     public static (double Width, double Height)? PaperPoints(PrinterPaper paper) => paper switch
     {
         PrinterPaper.A5 => (148 / 25.4 * 72, 210 / 25.4 * 72),
@@ -61,7 +66,7 @@ public static class DocumentPrintSettingsExtensions
         var printer = string.IsNullOrWhiteSpace(s?.PrinterName) ? fallback : s!.PrinterName!.Trim();
         var dialog = (s?.ShowDialog ?? o.ShowDialog) || string.IsNullOrWhiteSpace(printer);
         //JJQR - AI (Nov 24, 2026) - the lab request is now the same A5 sheet as the other forms: an old "Lab pad" paper choice saved on a computer must not shrink it back to 4.3 x 6.4 in
-        var paper = s?.Paper ?? PrinterPaper.Auto;
+        var paper = s?.Paper ?? DefaultPaper(kind);
         if (kind == ClinicPrintKind.LabRequest && paper == PrinterPaper.LabPad) paper = PrinterPaper.Auto;
         //JJQR - END
         return new ResolvedPrintSettings(string.IsNullOrWhiteSpace(printer) ? null : printer, dialog, paper);
