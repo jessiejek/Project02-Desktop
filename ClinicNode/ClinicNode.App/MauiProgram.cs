@@ -162,6 +162,12 @@ public static class MauiProgram
         services.AddSingleton<ClinicNode.Core.Print.IPrintDocumentFactory, ClinicNode.Core.Printing.ClinicFormsPrintDocumentFactory>();
         if (host.UsePlatformStores)
         {
+            //JJQR - AI (Nov 24, 2026) - clinic-wide print settings (mode + backgrounds): this computer's copy lives in {dataDir}/print-policy, so printing works offline
+            services.AddSingleton<ClinicNode.Api.Services.ApiClinicPrintPolicy>(sp =>
+                new ClinicNode.Api.Services.ApiClinicPrintPolicy(sp.GetRequiredService<ClinicNode.Api.Http.IApiClient>(), dataDir));
+            services.AddSingleton<ClinicNode.Core.Printing.IClinicPrintPolicy>(sp => sp.GetRequiredService<ClinicNode.Api.Services.ApiClinicPrintPolicy>());
+            services.AddSingleton<ClinicNode.Core.Printing.IPrintConfigAdmin>(sp => sp.GetRequiredService<ClinicNode.Api.Services.ApiClinicPrintPolicy>());
+            //JJQR - END
             services.AddSingleton<MauiPrinter>();
             services.AddSingleton<IPrinter>(sp => sp.GetRequiredService<MauiPrinter>());
             services.AddSingleton<ClinicNode.Core.Printing.IReceiptPrinter>(sp => sp.GetRequiredService<MauiPrinter>());

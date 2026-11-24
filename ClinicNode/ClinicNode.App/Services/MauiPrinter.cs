@@ -9,12 +9,24 @@ namespace ClinicNode.App.Services;
 public sealed class MauiPrinter : IPrinter, IReceiptPrinter
 {
     readonly PrintingOptions _options;
+    readonly IClinicPrintPolicy _policy; //JJQR - AI (Nov 24, 2026) - clinic-wide print mode and backgrounds chosen by the Admin //JJQR - END
 
-    public MauiPrinter(PrintingOptions? options = null) => _options = options ?? new PrintingOptions();
+    public MauiPrinter(PrintingOptions? options = null, IClinicPrintPolicy? policy = null)
+    {
+        _options = options ?? new PrintingOptions();
+        _policy = policy ?? new NoPrintPolicy();
+    }
 
     public async Task PrintAsync(PrintDocument document, CancellationToken ct = default)
     {
         var info = document.Info();
+        //JJQR - AI (Nov 24, 2026) - the Admin's clinic-wide choice: Off stops the job with a plain message; a background picture goes behind the document.
+        var mode = _policy.Mode;
+        if (mode == ClinicPrintMode.Off)
+            throw new InvalidOperationException("Printing is turned off by the clinic admin. Ask the admin to turn it on in Settings.");
+        if (info.Kind != ClinicPrintKind.Other && _policy.BackgroundDataUri(info.Kind) is { } backgroundUri)
+            document = PrintBackground.Apply(document, backgroundUri);
+        //JJQR - END
         if (info.Kind == ClinicPrintKind.QueueSlip && info.QueueSlip is not null && await TryPrintRawSlipAsync(document, info.QueueSlip, ct))
             return;
 
@@ -28,8 +40,11 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         {
             var pdf = await Printing.MacPrintRenderer.RenderPdfAsync(document);
             KeepCopy(document, pdf.ToArray());
+            //JJQR - AI (Nov 24, 2026) - clinic mode PDF: always save the PDF and open it in the PDF viewer (Native ignores this computer's OpenAsPdf; "each computer decides" keeps it)
+            if (mode == ClinicPrintMode.Pdf) { OpenPdfInViewer(document, pdf.ToArray()); return; }
+            //JJQR - END
             //JJQR - AI (Nov 21, 2026) - save the PDF to Downloads and open it; the doctor prints from the viewer (the direct print hand-off is the fragile part)
-            if (_options.OpenAsPdf)
+            if (mode == ClinicPrintMode.Computer && _options.OpenAsPdf)
             {
                 if (_options.AutoPrintInBrowser) OpenHtmlAndAutoPrint(document);
                 else OpenPdfInViewer(document, pdf.ToArray());
@@ -57,6 +72,18 @@ public sealed class MauiPrinter : IPrinter, IReceiptPrinter
         {
             var pdfPath = await ClinicNode.App.WinUI.Printing.WindowsPrintRenderer.RenderPdfAsync(document, ct);
             KeepCopy(document, await File.ReadAllBytesAsync(pdfPath, ct));
+            //JJQR - AI (Nov 24, 2026) - clinic mode PDF: save the PDF into Downloads\Clinic Node and open it in the PDF viewer
+            if (mode == ClinicPrintMode.Pdf)
+            {
+                var pdfDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Clinic Node");
+                Directory.CreateDirectory(pdfDir);
+                var pdfName = string.Concat(document.Title.Select(c => char.IsLetterOrDigit(c) ? c : '-')).Trim('-');
+                var pdfDest = Path.Combine(pdfDir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{(pdfName.Length == 0 ? "document" : pdfName)}.pdf");
+                File.Copy(pdfPath, pdfDest, true);
+                await Launcher.Default.OpenAsync(new OpenFileRequest(document.Title, new ReadOnlyFile(pdfDest)));
+                return;
+            }
+            //JJQR - END
             if (!showDialog)
                 await ClinicNode.App.WinUI.Printing.WindowsPrintRenderer.PrintSilentlyAsync(document, printerName!, ct);
             else

@@ -166,6 +166,7 @@ public sealed class TopBarView : Grid
         if (_indicator is not null) _indicator.Changed += OnIndicator;
         if (_auth is ClinicNode.Api.Auth.IOnlineAuthSession online) online.SessionChanged += OnSessionChanged; // name saved on the profile page → bar updates
         try { sp.GetService<ClinicNode.App.Shared.LiveSyncCoordinator>()?.Start(); } catch { /* never break the bar */ }
+        try { _ = sp.GetService<ClinicNode.Core.Printing.IClinicPrintPolicy>()?.Mode; } catch { /* the clinic print settings refresh quietly in the background (every 10 min at most) */ } //JJQR - AI (Nov 24, 2026) //JJQR - END
         //JJQR - END
         SizeChanged += (_, _) => ApplyNarrowLayout();
         _ = RefreshAsync();

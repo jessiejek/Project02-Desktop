@@ -12,7 +12,7 @@ public partial class AdminSettingsPage : ContentPage
     static readonly (string Id, string Label)[] Tabs =
     [
         ("general", "General"), ("hours", "Hours"), ("fees", "Fees"),
-        ("payments", "Payments"), ("privacy", "Privacy & consent"), ("branding", "Branding"),
+        ("payments", "Payments"), ("privacy", "Privacy & consent"), ("branding", "Branding"), ("printing", "Printing"), //JJQR - AI (Nov 24, 2026) //JJQR - END
     ];
 
     readonly AdminSettingsViewModel _vm;
@@ -66,7 +66,7 @@ public partial class AdminSettingsPage : ContentPage
         {
             var b = new Button { Text = label, Style = ClinicTheme.Style(_tab == id ? "SegmentedButtonSelected" : "SegmentedButton") };
             var captured = id;
-            b.Clicked += (_, _) => { _tab = captured; _vm.SaveError = ""; Render(); };
+            b.Clicked += (_, _) => ClinicNode.App.Controls.UiTurn.Next(() => { _tab = captured; _vm.SaveError = ""; Render(); }); //JJQR - AI (Nov 24, 2026) - Windows: redraw on the next UI turn //JJQR - END
             tabs.Children.Add(b);
         }
         var body = new VerticalStackLayout { Spacing = 16 };
@@ -83,6 +83,7 @@ public partial class AdminSettingsPage : ContentPage
             case "payments": Payments(body); break;
             case "privacy": Privacy(body); break;
             case "branding": Branding(body); break;
+            case "printing": Printing(body); break; //JJQR - AI (Nov 24, 2026) //JJQR - END
         }
     }
 
