@@ -124,5 +124,20 @@ public sealed class ApiAdminSettingsService(IApiClient api) : IAdminSettingsServ
     public async Task<IReadOnlyList<MedicineListItem>> SearchMedicinesAsync(string? q, CancellationToken ct = default) =>
         (await api.GetAsync<List<Medicine>>("/api/medicines", ApiAdmin.Q(("q", q)), ct) ?? [])
             .OrderBy(m => m.GenericName).Take(200).Select(m => new MedicineListItem(m.MedicineId, m.GenericName)).ToList();
+
+    //JJQR - AI (Nov 24, 2026) - Admin > Settings > Payments switch, its own endpoint (the full settings PUT never changes it)
+    sealed record AutoPaidAnswer(bool AutoPaidOnComplete);
+
+    public async Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await api.SendAsync<AutoPaidAnswer>(HttpMethod.Put, "/api/settings/auto-paid-on-complete", new { Enabled = enabled }, null, ct);
+            return AdminResult<bool>.Ok(r?.AutoPaidOnComplete ?? enabled);
+        }
+        catch (ApiNotFoundException) { return AdminResult<bool>.Fail("The clinic server does not have this switch yet (it needs the newest server update)."); }
+        catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult<bool>.Fail(ex.Message); }
+    }
+    //JJQR - END
 }
 //JJQR - END

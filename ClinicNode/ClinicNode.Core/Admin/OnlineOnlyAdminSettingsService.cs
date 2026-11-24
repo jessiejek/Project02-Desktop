@@ -45,5 +45,10 @@ public sealed class OnlineOnlyAdminSettingsService : IAdminSettingsService
 
     public Task<AdminResult<ServiceListItem>> UpdateServiceAsync(Guid id, string name, ServiceCategory category, decimal price, string? description, bool isActive, CancellationToken ct = default) =>
         Task.FromResult(AdminResult<ServiceListItem>.Fail(NeedsInternet));
+
+    //JJQR - AI (Nov 24, 2026) - "Mark the visit paid when the doctor completes it": online only
+    public Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default) =>
+        Task.FromResult(AdminResult<bool>.Fail(NeedsInternet));
+    //JJQR - END
 }
 //JJQR - END

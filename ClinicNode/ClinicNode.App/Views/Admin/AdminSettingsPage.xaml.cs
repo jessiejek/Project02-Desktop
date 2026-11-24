@@ -267,6 +267,20 @@ public partial class AdminSettingsPage : ContentPage
             methods.Add(new HorizontalStackLayout { Spacing = 4, Children = { cb, label } }, col++, 0);
         }
         body.Children.Add(new VerticalStackLayout { Spacing = 4, Children = { ClinicTheme.Text("Accepted at the front desk", "FieldLabel"), methods } });
+        //JJQR - AI (Nov 24, 2026) - owner: Admin switch, under "Accepted at the front desk", above "Refund policy". Saves on its own right away (no Save button); a failure puts it back.
+        var autoPaid = new CheckBox { IsChecked = _vm.AutoPaidOnComplete, Color = ClinicTheme.Color("Primary") };
+        var reverting = false;
+        autoPaid.CheckedChanged += async (_, e) =>
+        {
+            if (reverting) return;
+            var error = await _vm.SetAutoPaidOnCompleteAsync(e.Value);
+            if (error is null) { ClinicToast.Show($"Settings saved at {DateTime.Now:h:mm:ss tt}.", ToastKind.Success); return; }
+            ClinicToast.Show(error, ToastKind.Error);
+            reverting = true; autoPaid.IsChecked = _vm.AutoPaidOnComplete; reverting = false;
+        };
+        body.Children.Add(ClinicPickers.CheckRow(autoPaid, "Mark the visit paid when the doctor completes it",
+            "Records cash for the exact fee, so the front desk does not press Record payment. Waived and ₱0 visits are skipped. No receipt number is given. Saves right away."));
+        //JJQR - END
         body.Children.Add(ClinicUi.Field("Refund policy", Area(_vm.RefundPolicy, v => _vm.RefundPolicy = v, 3)));
         body.Children.Add(SaveBar(() => _vm.SaveWebAsync("Payment settings could not be saved. Try again.")));
     }

@@ -68,6 +68,7 @@ public sealed class AdminSettingsViewModel : AdminViewModelBase
     public IReadOnlyList<string> PaymentModeOptions { get; } = ["Pay at clinic", "Online"];
     public string DefaultPaymentMode { get; set; } = "Pay at clinic";
     public string RefundPolicy { get; set; } = "";
+    public bool AutoPaidOnComplete { get; set; } //JJQR - AI (Nov 24, 2026) - Payments tab switch (saved on its own, right away) //JJQR - END
     public string FeeConsultation { get; set; } = "";
     public string FeeFollowUp { get; set; } = "";
     public string FeeSeniorPwd { get; set; } = "";
@@ -130,6 +131,7 @@ public sealed class AdminSettingsViewModel : AdminViewModelBase
             Description = s.Description ?? "";
             DefaultPaymentMode = s.DefaultPaymentMode == PaymentMode.Online ? "Online" : "Pay at clinic";
             RefundPolicy = s.RefundPolicy ?? "";
+            AutoPaidOnComplete = s.AutoPaidOnComplete; //JJQR - AI (Nov 24, 2026) //JJQR - END
             FeeConsultation = s.FeeConsultation.ToString("0.##");
             FeeFollowUp = s.FeeFollowUp.ToString("0.##");
             FeeSeniorPwd = s.FeeSeniorPwd.ToString("0.##");
@@ -404,6 +406,21 @@ public sealed class AdminSettingsViewModel : AdminViewModelBase
         catch { return failure; }
         return null;
     }
+
+    //JJQR - AI (Nov 24, 2026) - owner: "let admin have a flag". The Payments tab switch saves on its own, right away; on failure it is put back. Null when saved, else the error.
+    public async Task<string?> SetAutoPaidOnCompleteAsync(bool enabled)
+    {
+        var before = AutoPaidOnComplete;
+        try
+        {
+            var r = await _settings.SetAutoPaidOnCompleteAsync(enabled);
+            if (!r.Succeeded) { AutoPaidOnComplete = before; return string.IsNullOrWhiteSpace(r.Error) ? "The switch could not be saved. Try again." : r.Error; }
+            AutoPaidOnComplete = r.Value;
+            return null;
+        }
+        catch { AutoPaidOnComplete = before; return "The switch could not be saved. Try again."; }
+    }
+    //JJQR - END
 
     /// <summary>Web saveFees: only the four fee lines + the discount; nothing else on the row, no payment methods.</summary>
     public async Task<string?> SaveFeesWebAsync()

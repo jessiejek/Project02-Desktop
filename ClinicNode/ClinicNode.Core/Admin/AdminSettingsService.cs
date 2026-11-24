@@ -50,6 +50,10 @@ public interface IAdminSettingsService
     Task<AdminResult<ServiceListItem>> CreateServiceAsync(string name, ServiceCategory category, decimal price, string? description, bool isActive, CancellationToken ct = default);
     Task<AdminResult<ServiceListItem>> UpdateServiceAsync(Guid id, string name, ServiceCategory category, decimal price, string? description, bool isActive, CancellationToken ct = default);
     Task<IReadOnlyList<MedicineListItem>> SearchMedicinesAsync(string? q, CancellationToken ct = default);
+    //JJQR - AI (Nov 24, 2026) - owner: Admin > Settings > Payments switch "Mark the visit paid when the doctor completes it". Online only (PUT api/settings/auto-paid-on-complete);
+    // the server does the marking when the visit is completed. Returns the saved value.
+    Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default);
+    //JJQR - END
 }
 
 public sealed class AdminSettingsService : IAdminSettingsService
@@ -278,5 +282,10 @@ public sealed class AdminSettingsService : IAdminSettingsService
             .Take(200)
             .ToListAsync(ct);
     }
+
+    //JJQR - AI (Nov 24, 2026) - the switch lives on the server (it marks the payment there); this computer never changes it
+    public Task<AdminResult<bool>> SetAutoPaidOnCompleteAsync(bool enabled, CancellationToken ct = default) =>
+        Task.FromResult(AdminResult<bool>.Fail(OnlineOnlyAdminSettingsService.NeedsInternet));
+    //JJQR - END
 }
 // JJQR - END
