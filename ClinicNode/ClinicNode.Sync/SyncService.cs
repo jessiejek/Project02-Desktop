@@ -574,7 +574,7 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         {
             var today = ClinicApp.Domain.ClinicClock.Today;
             await QueueBlocks.PruneAsync(db, today, ct);
-            var blocks = await QueueBlocks.TopUpAsync(db, _cloud, today, ct);
+            var blocks = 0; //JJQR - AI (Nov 24, 2026) - owner: no more reserved blocks, numbers carry on from the last one (see QueueBlocks.TryTakeAsync) //JJQR - END
             blocksReserved = blocks; //JJQR - AI (Nov 22, 2026) - step 3.1 //JJQR - END
             if (blocks > 0) _logger.LogInformation("Reserved {Blocks} queue-number block(s).", blocks);
         }

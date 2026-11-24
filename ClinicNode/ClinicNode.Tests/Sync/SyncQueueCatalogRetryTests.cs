@@ -53,7 +53,7 @@ public class SyncQueueCatalogRetryTests
         Assert.True((await host.Get<ISyncService>().RunOnceAsync()).Succeeded);
 
         await using (var db = await host.DbAsync())
-            Assert.Equal("Q-777", (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber);
+            Assert.Equal("R-001", (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber); //JJQR - AI (Nov 24, 2026) - printed number stays //JJQR - END
         Assert.Empty(await status.GetReprintFlagsAsync());
         Assert.Equal(0, status.ReprintCount);
         // the clash is still explained to the admin as a review item
@@ -74,7 +74,9 @@ public class SyncQueueCatalogRetryTests
 
         Assert.Empty(await host.Get<ISyncStatus>().GetReprintFlagsAsync());
         await using var db = await host.DbAsync();
-        Assert.Equal("Q-555", (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber);
+        //JJQR - AI (Nov 24, 2026) - the booking now always has its own printed number (R-001, carried on from the last one), and a printed number is never replaced: the cloud's other number only becomes a review item
+        Assert.Equal("R-001", (await db.Bookings.AsNoTracking().SingleAsync(b => b.BookingId == bookingId)).QueueNumber);
+        //JJQR - END
     }
     //JJQR - END
 

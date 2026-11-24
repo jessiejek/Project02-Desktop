@@ -103,38 +103,33 @@ public static class QueueBlocks
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    //JJQR - AI (Nov 24, 2026) - owner: the day starts at 1 (R-001) and an offline computer simply carries on from the last number it knows of (35 -> 36).
+    // No more reserved blocks: the next number is one more than the highest number already on this computer for that day and lane (cancelled ones count, their slip was printed).
+    // The server raises its own counter to the number we push, so online numbers never repeat it.
     /// <summary>
-    /// Takes the next unused number for the day/lane from a reserved block ("R-041"), or null when this computer has none left.
-    /// Runs on the caller's connection and transaction (so a rolled-back booking also gives the number back). Atomic per call:
-    /// the UPDATE only succeeds while next_seq still has the value we read.
+    /// Next number for the day/lane on this computer: highest known + 1 ("R-036"). Runs on the caller's connection and transaction.
+    /// Never null (kept nullable for the callers that still show <see cref="NoNumbersMessage"/>).
     /// </summary>
     public static async Task<string?> TryTakeAsync(ClinicAppDbContext db, DateOnly date, string lane, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(db, ct);
-        for (var attempt = 0; attempt < 10; attempt++)
+        var highest = 0;
+        await using (var sel = await CommandAsync(db,
+            "SELECT queue_number FROM bookings WHERE appointment_date = $d AND queue_number LIKE $p;", ct))
         {
-            string? id = null;
-            long seq = 0;
-            await using (var sel = await CommandAsync(db, """
-                SELECT id, next_seq FROM node_sync_queue_blocks
-                WHERE queue_date = $d AND lane = $l AND next_seq <= to_seq
-                ORDER BY from_seq LIMIT 1;
-                """, ct))
+            Add(sel, "$d", Day(date));
+            Add(sel, "$p", lane + "-%");
+            await using var r = await sel.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
             {
-                Add(sel, "$d", Day(date));
-                Add(sel, "$l", lane);
-                await using var r = await sel.ExecuteReaderAsync(ct);
-                if (await r.ReadAsync(ct)) { id = r.GetString(0); seq = r.GetInt64(1); }
+                if (r.IsDBNull(0)) continue;
+                var text = r.GetString(0);
+                var dash = text.IndexOf('-');
+                if (dash > 0 && int.TryParse(text.AsSpan(dash + 1), out var n) && n > highest) highest = n;
             }
-            if (id is null) return null;
-            await using var upd = await CommandAsync(db,
-                "UPDATE node_sync_queue_blocks SET next_seq = next_seq + 1 WHERE id = $id AND next_seq = $s AND next_seq <= to_seq;", ct);
-            Add(upd, "$id", id);
-            Add(upd, "$s", seq);
-            if (await upd.ExecuteNonQueryAsync(ct) == 1) return QueueLane.Format(lane, (int)seq);
         }
-        return null;
+        return QueueLane.Format(lane, highest + 1);
     }
+    //JJQR - END
 
     /// <summary>Lane by the same rule as the server (<see cref="QueueLane.For"/>), then <see cref="TryTakeAsync"/>.</summary>
     public static async Task<string?> TryTakeForPatientAsync(ClinicAppDbContext db, DateOnly date, Guid patientId, string? discountCategory, CancellationToken ct = default)
