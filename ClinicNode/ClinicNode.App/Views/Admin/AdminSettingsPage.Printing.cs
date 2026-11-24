@@ -111,6 +111,62 @@ public partial class AdminSettingsPage
             layouts.Children.Add(line);
         }
         body.Children.Add(Section(layouts));
+
+        // 3. the tests listed on the lab request (default = what is printed on the paper pad)
+        var isCustom = _print.LabTests is { Count: > 0 };
+        IReadOnlyList<string> labList = isCustom ? _print.LabTests! : ClinicNode.Core.Printing.ClinicFormsHtml.LabDefaultItems;
+        var lab = new VerticalStackLayout { Spacing = 8 };
+        lab.Children.Add(ClinicTheme.Text("Lab request tests", "HeadlineSm"));
+        lab.Children.Add(ClinicTheme.Text($"The tests printed on the lab request (up to {ClinicNode.Core.Printing.ClinicFormsHtml.LabMaxItems}). The default is the list on your paper pad. Remove a test or add your own; “Back to default” returns to the paper's list. A test the doctor orders that is not on the list prints under “Others”.", "MutedBody"));
+        lab.Children.Add(ClinicTheme.Text(isCustom ? "Your own list" : "Default list (as on the paper)", "LabelMd"));
+        foreach (var name in labList)
+        {
+            var n = name;
+            var remove = ClinicUi.Button("Remove", async () => await RemoveLabTestAsync(labList, n), ButtonKind.Ghost);
+            var row = new Grid { ColumnSpacing = 10, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+            row.Add(new Label { Text = name, VerticalOptions = LayoutOptions.Center, FontSize = 14, TextColor = ClinicTheme.Color("OnSurface") }, 0, 0);
+            row.Add(remove, 1, 0);
+            lab.Children.Add(row);
+        }
+        var entry = new Entry { Placeholder = "New test, e.g. Vitamin D", MaxLength = ClinicNode.Core.Printing.ClinicFormsHtml.LabMaxItemName };
+        var add = ClinicUi.Button("Add test", async () => await AddLabTestAsync(labList, entry.Text), ButtonKind.Secondary);
+        var addRow = new Grid { ColumnSpacing = 10, Margin = new Thickness(0, 8, 0, 0), ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        addRow.Add(entry, 0, 0);
+        addRow.Add(add, 1, 0);
+        lab.Children.Add(addRow);
+        var reset = ClinicUi.Button("Back to default (the paper's list)", async () => await SetLabTestsAsync(null), ButtonKind.Ghost);
+        reset.IsEnabled = isCustom;
+        lab.Children.Add(reset);
+        body.Children.Add(Section(lab));
+    }
+
+    async Task SetLabTestsAsync(IReadOnlyList<string>? tests)
+    {
+        if (PrintAdmin is not { } admin) return;
+        var err = await admin.SetLabTestsAsync(tests);
+        _printMessageOk = err is null;
+        _printMessage = err ?? (tests is null ? "Back to the list on the paper pad." : "Saved. The lab request now lists these tests.");
+        _print = await admin.GetAsync() ?? _print;
+        Render();
+    }
+
+    async Task RemoveLabTestAsync(IReadOnlyList<string> current, string name)
+    {
+        var next = current.Where(t => !string.Equals(t, name, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (next.Count == 0) { _printMessageOk = false; _printMessage = "Keep at least one test, or use “Back to default”."; Render(); return; }
+        await SetLabTestsAsync(next);
+    }
+
+    async Task AddLabTestAsync(IReadOnlyList<string> current, string? typed)
+    {
+        var t = System.Text.RegularExpressions.Regex.Replace(typed ?? "", @"\s+", " ").Trim();
+        string? problem = null;
+        if (t.Length == 0) problem = "Type the name of the test first.";
+        else if (t.Length > ClinicNode.Core.Printing.ClinicFormsHtml.LabMaxItemName) problem = $"A test name can have at most {ClinicNode.Core.Printing.ClinicFormsHtml.LabMaxItemName} characters.";
+        else if (current.Any(x => string.Equals(x, t, StringComparison.OrdinalIgnoreCase))) problem = "That test is already on the list.";
+        else if (current.Count >= ClinicNode.Core.Printing.ClinicFormsHtml.LabMaxItems) problem = $"The lab request can list at most {ClinicNode.Core.Printing.ClinicFormsHtml.LabMaxItems} tests.";
+        if (problem is not null) { _printMessageOk = false; _printMessage = problem; Render(); return; }
+        await SetLabTestsAsync([.. current, t]);
     }
 
     async Task SetPrintModeAsync(ClinicPrintMode mode)

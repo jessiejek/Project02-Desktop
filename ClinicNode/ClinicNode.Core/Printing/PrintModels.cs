@@ -61,7 +61,9 @@ public sealed record LabHtmlOptions(
     string Date,
     IReadOnlyList<string> Tests,
     IReadOnlyList<string>? Diagnoses = null,
-    string? ClinicalNotes = null);
+    string? ClinicalNotes = null,
+    //JJQR - AI (Nov 24, 2026) - the tests the Admin chose for the lab request; null or empty = the clinic's printed pad list
+    IReadOnlyList<string>? Items = null);
 
 /// <summary>Raw medical certificate values (web <c>MedCertData</c>); ISO date strings.</summary>
 public sealed record MedCertData

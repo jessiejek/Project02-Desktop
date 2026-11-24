@@ -66,7 +66,8 @@ public class GoldenParityTests
                 Str(i, "diagnosis"), Str(i, "recommendations"), Str(i, "purposeException"), Str(i, "comeBackOn"))),
             "lab" => ClinicFormsHtml.BuildLabRequestHtml(new LabHtmlOptions(Str(i, "origin"), Str(i, "pageSize"), Doctor(i.GetProperty("doctor")),
                 Patient(i.GetProperty("patient")), Str(i, "age"), Str(i, "date"), Strings(i, "tests"),
-                i.TryGetProperty("diagnoses", out _) ? Strings(i, "diagnoses") : null, S(i, "clinicalNotes"))),
+                i.TryGetProperty("diagnoses", out _) ? Strings(i, "diagnoses") : null, S(i, "clinicalNotes"),
+                i.TryGetProperty("items", out _) ? Strings(i, "items") : null)),
             _ => throw new InvalidOperationException(kind),
         };
         if (expected != actual)

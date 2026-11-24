@@ -14,10 +14,12 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
     readonly PrintingOptions _options;
     readonly TimeProvider _clock;
     readonly ClinicNode.Core.Staff.IStaffPaymentsService? _payments;
+    readonly IClinicPrintPolicy? _policy; //JJQR - AI (Nov 24, 2026) - the Admin's list of lab tests //JJQR - END
 
     public ClinicFormsPrintDocumentFactory(IDbContextFactory<ClinicAppDbContext> factory, PrintingOptions? options = null, TimeProvider? clock = null,
-        ClinicNode.Core.Staff.IStaffPaymentsService? payments = null)
+        ClinicNode.Core.Staff.IStaffPaymentsService? payments = null, IClinicPrintPolicy? policy = null)
     {
+        _policy = policy;
         _factory = factory;
         _payments = payments;
         _options = options ?? new PrintingOptions();
@@ -79,7 +81,7 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
             notes = (consult.Assessment ?? "").Trim();
         }
         var doc = ClinicPrintForms.LabRequest(await ClinicAsync(db, ct), Doctor(b, includeS2: true), Patient(b), tests,
-            date: ClinicPrintForms.Iso(b.AppointmentDate), diagnoses: diagnoses, clinicalNotes: notes, clock: _clock);
+            date: ClinicPrintForms.Iso(b.AppointmentDate), diagnoses: diagnoses, clinicalNotes: notes, clock: _clock, items: _policy?.LabTests);
         return doc.WithInfo(new PrintJobInfo(ClinicPrintKind.LabRequest));
     }
 

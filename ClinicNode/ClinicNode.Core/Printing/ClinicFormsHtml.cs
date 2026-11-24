@@ -25,23 +25,31 @@ public static class ClinicFormsHtml
         public const string SaturdayHours = "10:00pm- 5:00pm";
     }
 
-    //JJQR - AI (Nov 24, 2026) - owner: the clinic's lab only does these tests (the pad's printed list plus the hand-written TSH, FT3, FT4, HbA1c). C = column, R = row on the A5 sheet (same list as the web).
-    public static readonly IReadOnlyList<(string Name, int C, int R)> LabItems =
+    //JJQR - AI (Nov 24, 2026) - owner: the clinic's lab does these tests (the pad's printed list plus the hand-written TSH, FT3, FT4, HbA1c). This is the DEFAULT; the Admin can add and remove tests (same list as the web).
+    public static readonly IReadOnlyList<string> LabDefaultItems =
     [
-        ("CBC", 0, 0),
-        ("URINALYSIS", 0, 1),
-        ("LIPID PROFILE", 0, 2),
-        ("SGPT", 0, 3),
-        ("CREA", 0, 4),
-        ("FBS", 0, 5),
-        ("BUA", 0, 6),
-        ("TSH", 1, 0),
-        ("FT3", 1, 1),
-        ("FT4", 1, 2),
-        ("HbA1c", 1, 3),
-        ("DENGUE NS1, IgG, IgM", 1, 4),
-        ("ECG 12L", 1, 5),
+        "CBC", "URINALYSIS", "LIPID PROFILE", "SGPT", "CREA", "FBS", "BUA",
+        "TSH", "FT3", "FT4", "HbA1c", "DENGUE NS1, IgG, IgM", "ECG 12L",
     ];
+    public const int LabMaxItems = 26;
+    public const int LabMaxItemName = 40;
+
+    /// <summary>The tests to print: the Admin's list (trimmed, no blanks or repeats, at most <see cref="LabMaxItems"/>) or the default.</summary>
+    public static IReadOnlyList<string> NormalizeLabItems(IReadOnlyList<string>? items)
+    {
+        var outList = new List<string>();
+        var seen = new HashSet<string>();
+        foreach (var raw in items ?? [])
+        {
+            var t = Regex.Replace(raw ?? "", @"\s+", " ").Trim();
+            if (t.Length == 0 || !seen.Add(t.ToLowerInvariant())) continue;
+            outList.Add(t);
+            if (outList.Count >= LabMaxItems) break;
+        }
+        return outList.Count > 0 ? outList : LabDefaultItems;
+    }
+
+    static string LabTop(int hundredths) => (hundredths / 100) + "." + (hundredths % 100).ToString("00", CultureInfo.InvariantCulture) + "in";
     //JJQR - END
 
     const RegexOptions Js = RegexOptions.ECMAScript | RegexOptions.CultureInvariant;
@@ -365,6 +373,7 @@ public static class ClinicFormsHtml
         if (i.Contains("dengue") && o.Contains("dengue")) return true;
         if (i.Contains("ecg") && o.Contains("ecg")) return true;
         if (item == "CREA" && (n == "crea" || o.Contains("creatinine"))) return true;
+        if (i.Length > 0 && (" " + n + " ").Contains(" " + i + " ")) return true; //JJQR - AI (Nov 24, 2026) - the whole test name appears in what was ordered //JJQR - END
         if (item == "LIPID PROFILE" && o.Contains("lipid")) return true;
         //JJQR - AI (Nov 24, 2026) - thyroid and HbA1c names as a doctor might type them
         if (item == "TSH" && (Regex.IsMatch(" " + n + " ", "(^| )tsh( |$)", Js) || o.Contains("thyroid stimulating"))) return true;
@@ -377,14 +386,14 @@ public static class ClinicFormsHtml
     }
 
     /// <summary>Which pre-printed checklist rows get a tick, and which tests are hand-written in the margin.</summary>
-    public static (IReadOnlySet<string> Checked, IReadOnlyList<string> Extras) LabMatch(IEnumerable<string> tests)
+    public static (IReadOnlySet<string> Checked, IReadOnlyList<string> Extras) LabMatch(IEnumerable<string> tests, IReadOnlyList<string> items)
     {
         var chk = new HashSet<string>();
         var extras = new List<string>();
         foreach (var test in tests)
         {
             var hit = "";
-            foreach (var (name, _, _) in LabItems)
+            foreach (var name in items)
                 if (MatchLabItem(test, name)) { hit = name; break; }
             if (hit.Length > 0) chk.Add(hit);
             else extras.Add(test);
@@ -392,17 +401,26 @@ public static class ClinicFormsHtml
         return (chk, extras);
     }
 
-    static string LabItemHtml(string name, bool on, int c, int r)
+    static string LabItemHtml(string name, bool on, int c, string top)
     {
         var tick = on ? "<span class=\"tick\">✓</span>" : "";
-        return "<div class=\"lab-item lab-c" + c + " lab-r" + r + "\"><span class=\"lab-blank\">" + tick + "___</span><span class=\"lab-name\">" + name + "</span></div>";
+        return "<div class=\"lab-item lab-c" + c + "\" style=\"top:" + top + "\"><span class=\"lab-blank\">" + tick + "___</span><span class=\"lab-name\">" + E(name) + "</span></div>";
     }
 
     //JJQR - AI (Nov 24, 2026) - owner: the lab request is re-laid out on the SAME A5 sheet as the prescription and the medical certificate (same letterhead, same patient lines, same signature block). Mirrors the web builder.
     public static string BuildLabRequestHtml(LabHtmlOptions opts)
     {
-        var (chk, extrasList) = LabMatch(opts.Tests);
-        var list = string.Concat(LabItems.Select(r => LabItemHtml(r.Name, chk.Contains(r.Name), r.C, r.R)));
+        var items = NormalizeLabItems(opts.Items);
+        var (chk, extrasList) = LabMatch(opts.Tests, items);
+        // two columns, filled top to bottom; with more than 14 tests the rows move closer so everything still fits above "Others:"
+        var perCol = (items.Count + 1) / 2;
+        var step = perCol <= 7 ? 40 : 240 / (perCol - 1);
+        var list = string.Concat(items.Select((name, i) =>
+        {
+            var col = i < perCol ? 0 : 1;
+            var row = col == 0 ? i : i - perCol;
+            return LabItemHtml(name, chk.Contains(name), col, LabTop(295 + row * step));
+        }));
 
         var extras = extrasList.Count > 0
             ? "<div class=\"lab-others\"><div class=\"lab-others-lbl\">Others:</div>" + string.Concat(extrasList.Select(x => "<div class=\"lab-extra\">" + E(x) + "</div>")) + "</div>"

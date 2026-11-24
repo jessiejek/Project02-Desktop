@@ -198,5 +198,46 @@ public class ClinicPrintPolicyTests : IDisposable
         await policy.RefreshAsync();
         Assert.NotNull(policy.BackgroundDataUri(ClinicPrintKind.Receipt));           // the old picture is still used
     }
+    [Fact]
+    public async Task The_lab_request_tests_follow_the_Admin_and_fall_back_to_the_paper_list()
+    {
+        var api = new FakeApi { ConfigJson = """{"mode":"computer","backgrounds":[],"disabled":[],"labTests":["CBC","Vitamin D"]}""" };
+        var policy = new ApiClinicPrintPolicy(api, _dir);
+        Assert.Null(new NoPrintPolicy().LabTests);                                   // nothing set = the default
+        await policy.RefreshAsync();
+        Assert.Equal(["CBC", "Vitamin D"], policy.LabTests);
+
+        api.Offline = true;                                                           // no internet: this computer keeps its copy, also after a restart
+        await policy.RefreshAsync();
+        Assert.Equal(["CBC", "Vitamin D"], new ApiClinicPrintPolicy(api, _dir).LabTests);
+
+        api.Offline = false;
+        api.ConfigJson = """{"mode":"computer","backgrounds":[],"disabled":[],"labTests":null}""";   // the Admin chose "Back to default"
+        await policy.RefreshAsync();
+        Assert.Null(policy.LabTests);
+
+        Assert.Null(await policy.SetLabTestsAsync(["CBC", "Ferritin"]));
+        Assert.Contains("PUT /api/print-config/lab-tests", api.Sent);
+        Assert.Null(await policy.SetLabTestsAsync(null));
+        Assert.Contains("DELETE /api/print-config/lab-tests", api.Sent);
+    }
+
+    [Fact]
+    public void The_lab_request_prints_the_Admins_list_or_the_default_and_matches_orders()
+    {
+        var clinic = PrintingTestData.Clinic; var doctor = PrintingTestData.Doctor; var patient = PrintingTestData.Patient;
+        var custom = ClinicPrintForms.LabRequest(clinic, doctor, patient, ["Vitamin D 25-OH", "cbc with platelets", "TSH"], "2026-11-24", null, null, null, ["CBC", "Vitamin D", "Ferritin"]);
+        Assert.Contains("<span class=\"tick\">✓</span>___</span><span class=\"lab-name\">CBC</span>", custom.Html);
+        Assert.Contains("<span class=\"tick\">✓</span>___</span><span class=\"lab-name\">Vitamin D</span>", custom.Html);
+        Assert.Contains("<span class=\"lab-blank\">___</span><span class=\"lab-name\">Ferritin</span>", custom.Html);
+        Assert.DoesNotContain("<span class=\"lab-name\">TSH</span>", custom.Html);             // removed from the list
+        Assert.Contains("<div class=\"lab-others-lbl\">Others:</div><div class=\"lab-extra\">TSH</div>", custom.Html);
+        var standard = ClinicPrintForms.LabRequest(clinic, doctor, patient, ["CBC"], "2026-11-24");
+        Assert.Equal(standard.Html, ClinicPrintForms.LabRequest(clinic, doctor, patient, ["CBC"], "2026-11-24", null, null, null, []).Html);   // empty = default
+        Assert.Equal(ClinicFormsHtml.LabDefaultItems, ClinicFormsHtml.NormalizeLabItems(null));
+        Assert.Equal(["Urea", "<b>Mg</b>"], ClinicFormsHtml.NormalizeLabItems(["  Urea ", "urea", "", "<b>Mg</b>"]));
+        Assert.Equal(ClinicFormsHtml.LabMaxItems, ClinicFormsHtml.NormalizeLabItems(Enumerable.Range(1, 40).Select(i => "T" + i).ToList()).Count);
+        Assert.DoesNotContain("<b>Mg</b>", ClinicPrintForms.LabRequest(clinic, doctor, patient, [], "2026-11-24", null, null, null, ["<b>Mg</b>"]).Html);   // names are escaped
+    }
 }
 //JJQR - END

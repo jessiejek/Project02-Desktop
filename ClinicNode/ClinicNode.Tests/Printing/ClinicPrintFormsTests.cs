@@ -65,7 +65,7 @@ public class ClinicPrintFormsTests
         Assert.Contains("J06.9 — Acute URTI — r/o dengue", doc.Html);
         // the clinic's lab does these tests and no others
         Assert.Equal(["CBC", "URINALYSIS", "LIPID PROFILE", "SGPT", "CREA", "FBS", "BUA", "TSH", "FT3", "FT4", "HbA1c", "DENGUE NS1, IgG, IgM", "ECG 12L"],
-            ClinicFormsHtml.LabItems.Select(i => i.Name).ToArray());
+            ClinicFormsHtml.LabDefaultItems.ToArray());
     }
 
     [Fact]

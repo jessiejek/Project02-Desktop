@@ -18,7 +18,8 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
     sealed record ConfigDto(
         [property: JsonPropertyName("mode")] string? Mode,
         [property: JsonPropertyName("backgrounds")] List<BackgroundDto>? Backgrounds,
-        [property: JsonPropertyName("disabled")] List<string>? Disabled);
+        [property: JsonPropertyName("disabled")] List<string>? Disabled,
+        [property: JsonPropertyName("labTests")] List<string>? LabTests);
 
     static readonly TimeSpan Stale = TimeSpan.FromMinutes(2); // an Admin change reaches a computer within about two minutes of it being used
     readonly IApiClient _api;
@@ -50,6 +51,8 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
         RefreshIfStale();
         return PrintPolicyKinds.KeyOf(kind) is not { } key || !_cache.IsDisabled(key);
     }
+
+    public IReadOnlyList<string>? LabTests { get { RefreshIfStale(); return _cache.LabTests; } }
 
     public byte[]? BackgroundBytes(ClinicPrintKind kind) =>
         PrintPolicyKinds.KeyOf(kind) is { } key ? _cache.Bytes(key) : null;
@@ -88,7 +91,7 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
                 else if (_cache.Bytes(b.Kind) is not null) versions[b.Kind] = _cache.Version(b.Kind); // a bad download never wipes the picture we already have
                 else versions.Remove(b.Kind);
             }
-            _cache.Save(PrintPolicyKinds.ParseMode(cfg.Mode), versions, images, cfg.Disabled?.Where(k => PrintPolicyKinds.KindOf(k) is not null));
+            _cache.Save(PrintPolicyKinds.ParseMode(cfg.Mode), versions, images, cfg.Disabled?.Where(k => PrintPolicyKinds.KindOf(k) is not null), cfg.LabTests);
         }
         catch (Exception)
         {
@@ -107,7 +110,7 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
             var versions = new Dictionary<ClinicPrintKind, int>();
             foreach (var b in cfg.Backgrounds ?? []) if (PrintPolicyKinds.KindOf(b.Kind) is { } k) versions[k] = b.Version;
             var off = (cfg.Disabled ?? []).Select(PrintPolicyKinds.KindOf).Where(k => k is not null).Select(k => k!.Value).ToHashSet();
-            return new PrintConfigView(PrintPolicyKinds.ParseMode(cfg.Mode), versions, off);
+            return new PrintConfigView(PrintPolicyKinds.ParseMode(cfg.Mode), versions, off, cfg.LabTests is { Count: > 0 } ? cfg.LabTests : null);
         }
         catch (Exception) { return null; }
     }
@@ -152,6 +155,19 @@ public sealed class ApiClinicPrintPolicy : IClinicPrintPolicy, IPrintConfigAdmin
         }
         catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return ex.Message; }
         catch (Exception) { return "The setting could not be saved. Check the connection and try again."; }
+    }
+
+    public async Task<string?> SetLabTestsAsync(IReadOnlyList<string>? tests, CancellationToken ct = default)
+    {
+        try
+        {
+            if (tests is null) await _api.SendAsync(HttpMethod.Delete, "/api/print-config/lab-tests", null, null, ct);
+            else await _api.SendAsync(HttpMethod.Put, "/api/print-config/lab-tests", new Dictionary<string, object?> { ["tests"] = tests.ToList() }, null, ct);
+            await RefreshAsync(ct);
+            return null;
+        }
+        catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return ex.Message; }
+        catch (Exception) { return "The list could not be saved. Check the connection and try again."; }
     }
 
     public async Task<string?> ClearBackgroundAsync(ClinicPrintKind kind, CancellationToken ct = default)

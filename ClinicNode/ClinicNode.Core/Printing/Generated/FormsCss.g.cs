@@ -627,13 +627,6 @@ img { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exa
 }
 .lab-c0 { left: 1.0in; }
 .lab-c1 { left: 3.0in; }
-.lab-r0 { top: 2.95in; }
-.lab-r1 { top: 3.35in; }
-.lab-r2 { top: 3.75in; }
-.lab-r3 { top: 4.15in; }
-.lab-r4 { top: 4.55in; }
-.lab-r5 { top: 4.95in; }
-.lab-r6 { top: 5.35in; }
 .lab-blank {
   position: relative;
   display: inline-block;

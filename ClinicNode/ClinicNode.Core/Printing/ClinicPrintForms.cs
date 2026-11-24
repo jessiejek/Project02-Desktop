@@ -122,7 +122,7 @@ public static class ClinicPrintForms
 
     /// <summary>printLabRequest(): A5 (148 x 210 mm), the same sheet as the prescription and the medical certificate.</summary>
     public static PrintDocument LabRequest(PrintClinic clinic, PrintDoctor doctor, PrintPatient patient, IReadOnlyList<string> tests,
-        string? date = null, IReadOnlyList<string>? diagnoses = null, string? clinicalNotes = null, TimeProvider? clock = null)
+        string? date = null, IReadOnlyList<string>? diagnoses = null, string? clinicalNotes = null, TimeProvider? clock = null, IReadOnlyList<string>? items = null)
     {
         var today = TodayManila(clock);
         var body = ClinicFormsHtml.BuildLabRequestHtml(new LabHtmlOptions(
@@ -134,7 +134,8 @@ public static class ClinicPrintForms
             Date: FormatDate(date ?? Iso(today)),
             Tests: tests,
             Diagnoses: diagnoses,
-            ClinicalNotes: clinicalNotes));
+            ClinicalNotes: clinicalNotes,
+            Items: items));
         return Form("Laboratory Request", PrintPaper.A5, body);
     }
 

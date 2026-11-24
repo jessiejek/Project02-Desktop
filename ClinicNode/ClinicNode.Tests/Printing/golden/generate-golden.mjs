@@ -34,9 +34,14 @@ rx({ origin: "", pageSize: "148mm 210mm", doctor: doctorNoS2, patient: patientF,
 rx({ origin: "", pageSize: "148mm 210mm", doctor: doctorNone, patient, age: "7", date: "March 3, 2026", items: meds });
 mc({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, issueDate: "November 21, 2026", address: "Buaya, Lapu Lapu City", examinedAt: "Grace Medical Clinic", examFrom: "November 20, 2026", examTo: "November 21, 2026", diagnosis: "Acute   upper respiratory\ninfection", recommendations: "Rest for 3 days", purposeException: "", comeBackOn: "November 28, 2026" });
 mc({ origin: "", pageSize: "148mm 210mm", doctor: doctorNoS2, patient: patientF, issueDate: "June 1, 2026", address: "Pusok, Lapu-Lapu", examinedAt: "", examFrom: "", examTo: "", diagnosis: "", recommendations: "", purposeException: "  legal proceedings  ", comeBackOn: "" });
-lab({ origin: ORIGIN, pageSize: "4.3in 6.4in", doctor, patient, age: "34", date: "November 21, 2026", tests: ["CBC", "Urine test", "Lipid panel", "Serum creatinine", "Dengue NS1", "ECG", "HbA1c", "Chest X-ray PA"], diagnoses: ["J06.9 — Acute URTI", "E11"], clinicalNotes: "  r/o dengue  " });
-lab({ origin: "", pageSize: "4.3in 6.4in", doctor: doctorLong, patient: patientF, age: "", date: "", tests: ["FBS", "sgpt", "BUA"] });
-lab({ origin: "", pageSize: "4.3in 6.4in", doctor: doctorNone, patient, age: "1", date: "May 5, 2026", tests: ["Thyroid <panel>"], diagnoses: [], clinicalNotes: "" });
+lab({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 21, 2026", tests: ["CBC", "Urine test", "Lipid panel", "Serum creatinine", "Dengue NS1", "ECG", "HbA1c", "Chest X-ray PA"], diagnoses: ["J06.9 — Acute URTI", "E11"], clinicalNotes: "  r/o dengue  " });
+lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorLong, patient: patientF, age: "", date: "", tests: ["FBS", "sgpt", "BUA"] });
+lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorNone, patient, age: "1", date: "May 5, 2026", tests: ["Thyroid <panel>"], diagnoses: [], clinicalNotes: "" });
+// JJQR - AI (Nov 24, 2026) - the Admin's own list of tests (a short one, a repeat/blank/trim case, and a 20-test list that squeezes the rows)
+lab({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "40", date: "November 24, 2026", tests: ["Vitamin D 25-OH", "cbc with platelets", "TSH"], items: ["CBC", "Vitamin D", "Ferritin"], diagnoses: ["Fatigue"], clinicalNotes: "" });
+lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorNoS2, patient: patientF, age: "7", date: "May 5, 2026", tests: ["x"], items: ["  Urea ", "urea", "", "<b>Mg</b>"] });
+lab({ origin: "", pageSize: "148mm 210mm", doctor, patient, age: "9", date: "June 6, 2026", tests: ["Test 3", "Test 12"], items: Array.from({ length: 20 }, (_, i) => "Test " + (i + 1)) });
+// JJQR - END
 writeFileSync(new URL("forms.json", import.meta.url), JSON.stringify(cases, null, 1));
 
 const sigs = ["after meals", "before meals", "once daily", "BID", "TID with meals", "1 tab q8h", "every 6 hours", "at bedtime", "once daily at night",
