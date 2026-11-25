@@ -672,6 +672,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     {
         if (_chart is not { } c) return;
         var page = new DoctorPrescriptionFormPage(Sp, _patientId, c.Patient.FullName, bookingId, editGroupId, copyFromGroupId);
+        page.VisitAlreadyHasPrescription = editGroupId is null && c.Prescriptions.Any(g => g.BookingId == bookingId && g.Lines.Count > 0); //JJQR - AI (2026-11-25) - ask before replacing it //JJQR - END
         // web: router.push(/doctor/patients/{id}?bookingId={booking}&tab=prescriptions); the chart reloads itself when it appears again
         page.Saved += () => Select("prescriptions");
         await Navigation.PushAsync(page);

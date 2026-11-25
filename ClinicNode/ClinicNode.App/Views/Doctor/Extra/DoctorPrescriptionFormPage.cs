@@ -59,6 +59,9 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
 
     /// <summary>Raised after Confirm &amp; Save succeeded (the chart switches to its Prescriptions tab).</summary>
     public event Action? Saved;
+    //JJQR - AI (2026-11-25) - owner: saving here REPLACES the visit's prescription on the server (one per visit). The chart sets this when the visit already has one, and Save asks first.
+    public bool VisitAlreadyHasPrescription { get; set; }
+    //JJQR - END
 
     public DoctorPrescriptionFormPage(IServiceProvider sp, Guid patientId, string patientName, Guid bookingId, Guid? editGroupId, Guid? copyFromGroupId)
     {
@@ -509,6 +512,11 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
         if (_addToTemplate && _templateTitle.Trim().Length == 0) { Toast("error", DoctorRxRules.TemplateTitleRequired); return; }
         if (_doctorId is not { } doctorId) return;
         Toast("success", null);
+        //JJQR - AI (2026-11-25) - owner: same question as the web ("This visit already has a prescription. Replace it?"); Cancel = nothing saved. Not when editing that prescription.
+        if (VisitAlreadyHasPrescription && _editGroupId is null
+            && !await StaffDialog.ShowAsync(this, "Replace prescription?", "This visit already has a prescription. Replace it?", null, null, "Cancel", "Replace", _ => Task.FromResult<string?>(null), danger: true))
+            return;
+        //JJQR - END
         var lines = _items.Select(i => i.ToLine()).ToList();
         var summary = string.Join("\n\n", lines.Select((l, i) =>
         {
