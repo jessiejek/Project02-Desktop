@@ -189,6 +189,22 @@ public class DoctorDashboardOnlineFirstTests
         var refused = await dash.MarkReceivedAsync(rig.DoctorId, taken, 450m);
         Assert.False(refused.Succeeded);
         Assert.Equal("This visit is no longer unpaid (it was already recorded).", refused.Error);
+        //JJQR - AI (Nov 25, 2026) - code review: old server (no endpoint, empty 404/405), not your visit (empty 403), visit gone (404 WITH a message)
+        var oldServer = Guid.NewGuid(); var oldServer405 = Guid.NewGuid(); var notMine = Guid.NewGuid(); var gone = Guid.NewGuid();
+        rig.Http.Route = r =>
+        {
+            var p = r.RequestUri!.AbsolutePath;
+            if (p.Contains(oldServer.ToString("D"))) return FakeHandler.Status(HttpStatusCode.NotFound);
+            if (p.Contains(oldServer405.ToString("D"))) return FakeHandler.Status(HttpStatusCode.MethodNotAllowed);
+            if (p.Contains(notMine.ToString("D"))) return FakeHandler.Status(HttpStatusCode.Forbidden);
+            if (p.Contains(gone.ToString("D"))) return FakeHandler.Json(new { message = "This visit was not found." }, HttpStatusCode.NotFound);
+            return healthy(r);
+        };
+        Assert.Equal(ClinicNode.Api.Services.ApiDoctorDashboardService.MarkReceivedOldServer, (await dash.MarkReceivedAsync(rig.DoctorId, oldServer, 450m)).Error);
+        Assert.Equal(ClinicNode.Api.Services.ApiDoctorDashboardService.MarkReceivedOldServer, (await dash.MarkReceivedAsync(rig.DoctorId, oldServer405, 450m)).Error);
+        Assert.Equal("Only the visit's own doctor can mark it received.", (await dash.MarkReceivedAsync(rig.DoctorId, notMine, 450m)).Error);
+        Assert.Equal("This visit was not found.", (await dash.MarkReceivedAsync(rig.DoctorId, gone, 450m)).Error);
+        //JJQR - END
     }
     //JJQR - END
 }

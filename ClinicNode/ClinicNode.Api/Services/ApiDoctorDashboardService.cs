@@ -189,6 +189,7 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
     //JJQR - AI (Nov 25, 2026) - doctor "Mark received": POST /api/payments/booking/{bookingId}/doctor-received { amount } (own booking only, server checks).
     // A real server answer (403 / 404 / 409 amount changed, waived, already recorded) comes back as a Fail with the server's words; no connection is left to
     // the online-first router (Online mode: "Could not save…"; Offline mode: the Local service).
+    public const string MarkReceivedOldServer = "Mark received needs the updated clinic server. Record the payment at the front desk for now."; //JJQR - AI (Nov 25, 2026) - code review (same words as web) //JJQR - END
     public async Task<StaffResult> MarkReceivedAsync(Guid doctorId, Guid bookingId, decimal amount, CancellationToken ct = default)
     {
         try
@@ -196,6 +197,13 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
             await api.SendAsync(HttpMethod.Post, $"/api/payments/booking/{bookingId:D}/doctor-received", new { amount }, null, ct);
             return StaffResult.Ok(bookingId);
         }
+        //JJQR - AI (Nov 25, 2026) - code review: the new server always sends a message with its 404 ("This visit was not found."); a 404/405 with NO body means
+        // the clinic server is older and has no Mark received yet, which used to read "That could not be found." Say what to do instead.
+        catch (ApiException ex) when (ex.Status is 404 or 405 && string.IsNullOrWhiteSpace(ex.Body))
+        {
+            return StaffResult.Fail(MarkReceivedOldServer);
+        }
+        //JJQR - END
         catch (Exception ex) when (ex is ApiValidationException or ApiForbiddenException or ApiNotFoundException or ApiConflictException)
         {
             return StaffResult.Fail(ex is ApiForbiddenException ? "Only the visit's own doctor can mark it received." : ex.Message);
