@@ -47,6 +47,13 @@ public static class AttentionGroups
             .ToList();
     }
 
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received" (same words as web attention-groups.ts)
+    public static string Peso(decimal amount) =>
+        "₱" + amount.ToString(decimal.Truncate(amount) == amount ? "#,##0" : "#,##0.00", CultureInfo.InvariantCulture);
+    public static string MarkReceivedQuestion(decimal amount) => $"Mark {Peso(amount)} received in cash?";
+    public const string MarkReceivedDetail = "Recorded as paid in cash for the exact amount, with no OR number, under your name.";
+    //JJQR - END
+
     /// <summary>Today is open unless the doctor closed it; older dates are closed unless she opened them.</summary>
     public static bool IsOpen(AttentionGroup g, IReadOnlyDictionary<DateOnly, bool> toggled) =>
         toggled.TryGetValue(g.Date, out var open) ? open : g.IsToday;

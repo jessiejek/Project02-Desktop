@@ -79,14 +79,14 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
             .ToList();
         var waiting = bookings.Where(b => b.Status == BookingStatus.CheckedIn).ToList();
 
-        var unpaid = (perf?.Unpaid.Items ?? []).Select(u => new AttentionItem(AttentionKind.UnpaidCompleted, u.BookingId, u.PatientName, $"{Peso(u.AmountDue)} still to collect", "Open", u.AppointmentDate.ToString("MMM d", CultureInfo.InvariantCulture), u.AppointmentDate)).ToList();
+        var unpaid = (perf?.Unpaid.Items ?? []).Select(u => new AttentionItem(AttentionKind.UnpaidCompleted, u.BookingId, u.PatientName, $"{Peso(u.AmountDue)} still to collect", "Open", u.AppointmentDate.ToString("MMM d", CultureInfo.InvariantCulture), u.AppointmentDate, u.AmountDue)).ToList();
         //JJQR - AI (Nov 25, 2026) - GAV-2: unpaid completed visits from earlier days stay listed under their date
         List<BookingDto> recentBookings = [];
         try
         {
             foreach (var r in await tUnpaidReport ?? [])
                 if (r.BookingId is { } rid && r.DoctorId == doctorId && r.AppointmentDate is { } rd && rd >= attentionFrom && rd < today && (r.AmountDue ?? 0) > 0)
-                    unpaid.Add(new AttentionItem(AttentionKind.UnpaidCompleted, rid, r.PatientName ?? "", $"{Peso(r.AmountDue ?? 0)} still to collect", "Open", rd.ToString("MMM d", CultureInfo.InvariantCulture), rd));
+                    unpaid.Add(new AttentionItem(AttentionKind.UnpaidCompleted, rid, r.PatientName ?? "", $"{Peso(r.AmountDue ?? 0)} still to collect", "Open", rd.ToString("MMM d", CultureInfo.InvariantCulture), rd, r.AmountDue));
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not ApiOfflineException and not ApiUnauthorizedException) { }
         try { recentBookings = await tRecentBookings ?? []; }
@@ -185,6 +185,23 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
         int? delta = p is not null && p.Collected > 0 ? (int)Math.Round((double)((totals.Collected - p.Collected) / p.Collected * 100)) : null;
         return new PracticeAnalytics(totals, trend, delta);
     }
+
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received": POST /api/payments/booking/{bookingId}/doctor-received { amount } (own booking only, server checks).
+    // A real server answer (403 / 404 / 409 amount changed, waived, already recorded) comes back as a Fail with the server's words; no connection is left to
+    // the online-first router (Online mode: "Could not save…"; Offline mode: the Local service).
+    public async Task<StaffResult> MarkReceivedAsync(Guid doctorId, Guid bookingId, decimal amount, CancellationToken ct = default)
+    {
+        try
+        {
+            await api.SendAsync(HttpMethod.Post, $"/api/payments/booking/{bookingId:D}/doctor-received", new { amount }, null, ct);
+            return StaffResult.Ok(bookingId);
+        }
+        catch (Exception ex) when (ex is ApiValidationException or ApiForbiddenException or ApiNotFoundException or ApiConflictException)
+        {
+            return StaffResult.Fail(ex is ApiForbiddenException ? "Only the visit's own doctor can mark it received." : ex.Message);
+        }
+    }
+    //JJQR - END
 
     public Task<StaffResult> CallNextAsync(Guid doctorId, CancellationToken ct = default) => throw new ApiNotSupportedException("The queue is served from the local copy until it is converted.");
     public Task<StaffResult> StartConsultAsync(Guid doctorId, Guid bookingId, CancellationToken ct = default) => throw new ApiNotSupportedException("The queue is served from the local copy until it is converted.");

@@ -164,5 +164,32 @@ public class DoctorDashboardOnlineFirstTests
         await using var db = await rig.Get<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>().CreateDbContextAsync();
         return (await rig.Get<ClinicNode.Data.ISyncOutbox>().ListPendingAsync(db, 500)).Count;
     }
+
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received": online it posts to the narrow server endpoint with the amount seen; a server refusal is a Fail
+    // with the server's words (never an exception for the screen); a network failure in Online mode is NOT kept on this computer.
+    [Fact]
+    public async Task Mark_received_online_posts_the_amount_and_returns_server_refusals_as_messages()
+    {
+        await using var rig = await Rig();
+        var healthy = rig.Http.Route;
+        var ok = Guid.NewGuid();
+        var taken = Guid.NewGuid();
+        rig.Http.Route = r =>
+        {
+            var p = r.RequestUri!.AbsolutePath;
+            if (p == $"/api/payments/booking/{ok:D}/doctor-received" && r.Method == HttpMethod.Post) return FakeHandler.Json(new { status = "Paid" });
+            if (p == $"/api/payments/booking/{taken:D}/doctor-received") return FakeHandler.Json(new { error = "not_unpaid", message = "This visit is no longer unpaid (it was already recorded)." }, HttpStatusCode.Conflict);
+            return healthy(r);
+        };
+        var dash = rig.Get<IDoctorDashboardService>();
+        var res = await dash.MarkReceivedAsync(rig.DoctorId, ok, 450m);
+        Assert.True(res.Succeeded, res.Error);
+        var sent = rig.Http.Requests.Single(x => x.PathAndQuery.EndsWith("/doctor-received", StringComparison.Ordinal) && x.PathAndQuery.Contains(ok.ToString("D")));
+        Assert.Contains("\"amount\":450", sent.Body);
+        var refused = await dash.MarkReceivedAsync(rig.DoctorId, taken, 450m);
+        Assert.False(refused.Succeeded);
+        Assert.Equal("This visit is no longer unpaid (it was already recorded).", refused.Error);
+    }
+    //JJQR - END
 }
 //JJQR - END

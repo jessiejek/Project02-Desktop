@@ -13,7 +13,8 @@ namespace ClinicNode.Core.Practice;
 public enum AttentionKind { UnpaidCompleted, FinishChart, FollowUpDue }
 
 //JJQR - AI (Nov 25, 2026) - GAV-2: Date = the visit date the item belongs to (null = today), so Needs attention can group by date (AttentionGroups)
-public sealed record AttentionItem(AttentionKind Kind, Guid BookingId, string PatientName, string Text, string ActionLabel, string Aside, DateOnly? Date = null);
+public sealed record AttentionItem(AttentionKind Kind, Guid BookingId, string PatientName, string Text, string ActionLabel, string Aside, DateOnly? Date = null,
+    decimal? Amount = null); //JJQR - AI (Nov 25, 2026) - unpaid rows: the amount due, for the doctor's "Mark received" //JJQR - END
 //JJQR - END
 public sealed record UpNextItem(Guid BookingId, string PatientName, string QueueNumber, bool IsPriority, VisitType VisitType, bool InProgress, int WaitMinutes, bool HasPrescription = false, bool HasLabOrders = false)
 {
@@ -51,6 +52,10 @@ public interface IDoctorDashboardService
     Task<StaffResult> CallNextAsync(Guid doctorId, CancellationToken ct = default);
     Task<StaffResult> StartConsultAsync(Guid doctorId, Guid bookingId, CancellationToken ct = default);
     // JJQR - END
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received" on a completed, unpaid Needs attention row: Paid, Cash, exactly `amount` (what the doctor saw), no OR,
+    // confirmed by the doctor. Only the doctor's own Completed visit with an Unpaid payment of that amount; anything else is a Fail with a plain message.
+    Task<StaffResult> MarkReceivedAsync(Guid doctorId, Guid bookingId, decimal amount, CancellationToken ct = default);
+    //JJQR - END
 }
 
 public sealed class DoctorDashboardService : IDoctorDashboardService
@@ -144,6 +149,39 @@ public sealed class DoctorDashboardService : IDoctorDashboardService
         catch (Exception ex) { Log("IDoctorDashboardService.GetAsync", ex); throw; }
     }
 
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received" (Local / Offline copy): same checks as the server's POST payments/booking/{id}/doctor-received, then the
+    // existing front-desk confirm (IPaymentService.ConfirmAsync: exact amount, outbox "confirm" for sync, PaymentUpdated event). Never throws for a refusal.
+    public const string MarkReceivedNote = "Cash received by the doctor (marked on the doctor dashboard).";
+
+    public async Task<StaffResult> MarkReceivedAsync(Guid doctorId, Guid bookingId, decimal amount, CancellationToken ct = default)
+    {
+        try
+        {
+            await using (var db = await _factory.CreateDbContextAsync(ct))
+            {
+                var b = await db.Bookings.AsNoTracking().Include(x => x.Payment).SingleOrDefaultAsync(x => x.BookingId == bookingId, ct);
+                if (b is null) return StaffResult.Fail("This visit was not found.");
+                if (b.DoctorId != doctorId) return StaffResult.Fail("This is not your visit.");
+                if (b.Status != BookingStatus.Completed) return StaffResult.Fail("Only a completed visit can be marked received.");
+                if (b.Payment is not { } p) return StaffResult.Fail("This visit has no fee to collect.");
+                if (p.Status == PaymentStatus.Waived) return StaffResult.Fail("This professional fee was waived, so there is nothing to collect.");
+                if (p.Status != PaymentStatus.Unpaid) return StaffResult.Fail("This visit is no longer unpaid (it was already recorded).");
+                if (p.Amount <= 0) return StaffResult.Fail("There is no amount due on this visit.");
+                if (p.Amount != amount) return StaffResult.Fail($"The amount due is now ₱{p.Amount:0.##}, not ₱{amount:0.##}. Check the visit and try again.");
+                var payments = _sp.GetService(typeof(ClinicNode.Core.Payments.IPaymentService)) as ClinicNode.Core.Payments.IPaymentService
+                    ?? Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<ClinicNode.Core.Payments.PaymentService>(_sp);
+                var res = await payments.ConfirmAsync(p.PaymentId, new ClinicNode.Core.Payments.ConfirmPaymentRequest(PaymentMethod.Cash, null, null, amount, MarkReceivedNote), ct);
+                return res.Succeeded ? StaffResult.Ok(bookingId) : StaffResult.Fail(res.Error ?? "Couldn't mark it received.");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log("IDoctorDashboardService.MarkReceivedAsync", ex);
+            return StaffResult.Fail("Couldn't mark it received on this computer. Try again.");
+        }
+    }
+    //JJQR - END
+
     async Task<DoctorDashboard> GetCoreAsync(Guid doctorId, CancellationToken ct)
     {
         var today = ClinicClock.Today;
@@ -166,7 +204,7 @@ public sealed class DoctorDashboardService : IDoctorDashboardService
             .ToList();
 
         var unpaid = entries.Where(e => e.Status == BookingStatus.Completed && e.AmountDue > 0)
-            .Select(e => new AttentionItem(AttentionKind.UnpaidCompleted, e.BookingId, e.PatientName, $"{e.PatientName} — completed, unpaid", "View appointment", $"₱{e.AmountDue:0.##} due", today))
+            .Select(e => new AttentionItem(AttentionKind.UnpaidCompleted, e.BookingId, e.PatientName, $"{e.PatientName} — completed, unpaid", "View appointment", $"₱{e.AmountDue:0.##} due", today, e.AmountDue))
             .ToList();
         //JJQR - AI (Nov 25, 2026) - GAV-2: an unpaid completed visit from an earlier day (last AttentionGroups.DaysBack days) stays listed under its date
         var attentionFrom = AttentionGroups.From(today);
@@ -176,7 +214,7 @@ public sealed class DoctorDashboardService : IDoctorDashboardService
                 && (b.Payment == null || b.Payment.Status == PaymentStatus.Unpaid))
             .ToListAsync(ct);
         unpaid.AddRange(olderUnpaid.Where(b => b.AmountDue > 0).OrderByDescending(b => b.AppointmentDate)
-            .Select(b => new AttentionItem(AttentionKind.UnpaidCompleted, b.BookingId, Name(b), $"{Name(b)} — completed, unpaid", "View appointment", $"₱{b.AmountDue:0.##} due", b.AppointmentDate)));
+            .Select(b => new AttentionItem(AttentionKind.UnpaidCompleted, b.BookingId, Name(b), $"{Name(b)} — completed, unpaid", "View appointment", $"₱{b.AmountDue:0.##} due", b.AppointmentDate, b.AmountDue)));
         //JJQR - END
 
         var todayConsults = await db.Consultations.AsNoTracking()

@@ -52,6 +52,10 @@ public sealed class TodayPage : ContentPage
     private string? _dayStatusError;
     private DoctorDayStatusEnum? _savingStatus;
     private readonly Dictionary<DateOnly, bool> _attentionToggled = new(); //JJQR - AI (Nov 25, 2026) - GAV-2: date headers the doctor opened / closed in Needs attention //JJQR - END
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received": rows already marked (hidden at once, before the reload lands) and a guard so only one confirm runs
+    private readonly HashSet<Guid> _receivedIds = new();
+    private bool _markingReceived;
+    //JJQR - END
     private bool _reportsOpen;
 
     private enum Range { Month, Year, Custom }
@@ -527,7 +531,8 @@ public sealed class TodayPage : ContentPage
 
         //JJQR - AI (Nov 25, 2026) - owner (GAV-2, approved mockup): Needs attention grouped by visit date. "Today · Nov 25" first and open; older dates are
         // headers that open / close; an item not cleared on its day stays under that date. A count sits next to the title; every row has its action.
-        var attentionGroups = AttentionGroups.Group(d.Unpaid.Concat(d.Charts).Concat(d.FollowUps.Where(a => !IsPrnAttention(a))), ClinicClock.Today);
+        var attentionGroups = AttentionGroups.Group(d.Unpaid.Where(a => !_receivedIds.Contains(a.BookingId)) /*JJQR - AI (Nov 25, 2026) - marked received: gone at once //JJQR - END*/
+            .Concat(d.Charts).Concat(d.FollowUps.Where(a => !IsPrnAttention(a))), ClinicClock.Today);
         var attentionCount = attentionGroups.Sum(g => g.Items.Count);
         if (attentionCount > 0)
         {
@@ -594,14 +599,71 @@ public sealed class TodayPage : ContentPage
         };
     }
 
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received" (Windows crash-safety): one confirm at a time; the save runs INSIDE the dialog (StaffDialog keeps it open,
+    // greys Cancel and shows a refusal in plain words); the dialog CLOSES FIRST, then the row is hidden and the screen redrawn on the next UI turn (the tapped
+    // button is replaced by that redraw). Every error is caught and shown; nothing escapes to the button's async handler.
+    async Task MarkReceivedAsync(AttentionItem a)
+    {
+        if (_markingReceived || DoctorId is not { } doctorId || a.Amount is not { } amount || amount <= 0 || a.BookingId == Guid.Empty) return;
+        _markingReceived = true;
+        try
+        {
+            var bookingId = a.BookingId;
+            var name = string.IsNullOrWhiteSpace(a.PatientName) ? "A patient" : a.PatientName;
+            var done = await StaffDialog.ShowAsync(this, AttentionGroups.MarkReceivedQuestion(amount), $"{name}\n{AttentionGroups.MarkReceivedDetail}", null, null,
+                "Cancel", "Mark received", async _ =>
+                {
+                    try
+                    {
+                        var res = await _dash.MarkReceivedAsync(doctorId, bookingId, amount);
+                        return res.Succeeded ? null : (string.IsNullOrWhiteSpace(res.Error) ? "Couldn't mark it received. Try again." : res.Error);
+                    }
+                    catch (Exception ex)
+                    {
+                        ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TodayPage.MarkReceived", ex);
+                        return ex is ClinicNode.Api.Http.ApiException or ClinicNode.Core.Sync.OnlineWriteFailedException or ClinicNode.Core.Sync.LocalWriteBlockedException
+                            && !string.IsNullOrWhiteSpace(ex.Message)
+                            ? ex.Message
+                            : "Couldn't mark it received. Check the connection and try again.";
+                    }
+                });
+            if (!done) return;
+            _receivedIds.Add(bookingId);
+            ClinicNode.App.Views.Shared.Controls.ClinicToast.Show($"{AttentionGroups.Peso(amount)} from {name} marked received.", ClinicNode.App.Views.Shared.Controls.ToastKind.Success);
+            UiTurn.Next(() =>
+            {
+                Render();
+                _ = SafeReloadAsync();
+            });
+        }
+        catch (Exception ex)
+        {
+            ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TodayPage.MarkReceived", ex);
+            ClinicNode.App.Views.Shared.Controls.ClinicToast.Show("Couldn't mark it received. Try again.", ClinicNode.App.Views.Shared.Controls.ToastKind.Error);
+        }
+        finally { _markingReceived = false; }
+    }
+
+    async Task SafeReloadAsync()
+    {
+        try { await ReloadAsync(); }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TodayPage.ReloadAfterMarkReceived", ex); }
+    }
+    //JJQR - END
+
     View AttentionRow(AttentionItem a)
     {
         var id = a.BookingId;
         var kind = a.Kind;
         var name = string.IsNullOrWhiteSpace(a.PatientName) ? "A patient" : a.PatientName;
         //JJQR - AI (21 Nov 2026) - web: unpaid → /doctor/appointments/{id} ("₱x due"); charts → consult ?mode=amend; follow-ups → ?mode=view
+        //JJQR - AI (Nov 25, 2026) - doctor "Mark received": an unpaid row with a known amount shows "₱450 due" and a Mark received button (no navigation);
+        // without an amount (older server) it keeps the old View appointment
+        var canMark = kind == AttentionKind.UnpaidCompleted && id != Guid.Empty && a.Amount is > 0;
+        //JJQR - END
         var (what, note, action, style) = kind switch
         {
+            AttentionKind.UnpaidCompleted when canMark => ($"{AttentionGroups.Peso(a.Amount!.Value)} due", "Completed, unpaid", "Mark received", "PrimaryButton"), //JJQR - AI (Nov 25, 2026) //JJQR - END
             AttentionKind.UnpaidCompleted => ($"Record payment {UnpaidLine(a).Aside.Replace(" due", "", StringComparison.Ordinal)}", "Completed, unpaid", "View appointment", "PrimaryButton"),
             AttentionKind.FinishChart => ("Finish chart: Assessment and Plan are blank", "Completed visit", "Finish chart", "SecondaryButton"),
             _ => ("Follow-up due today", "", "View chart", "SecondaryButton"),
@@ -616,6 +678,7 @@ public sealed class TodayPage : ContentPage
         if (note.Length > 0) left.Children.Add(ClinicTheme.Text(note, "MutedSm"));
         var btn = StaffUi.Btn(action, async () =>
         {
+            if (canMark) { await MarkReceivedAsync(a); return; } //JJQR - AI (Nov 25, 2026) - doctor "Mark received" //JJQR - END
             if (kind == AttentionKind.UnpaidCompleted || id == Guid.Empty) await OpenAppointmentAsync(id);
             else await GoAsync($"consult?bookingId={id}&mode={mode}");
         }, style);

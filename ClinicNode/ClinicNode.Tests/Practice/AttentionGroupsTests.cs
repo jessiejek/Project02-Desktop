@@ -55,6 +55,16 @@ public class AttentionGroupsTests
         Assert.Equal("1 item", AttentionGroups.ItemsLabel(1));
         Assert.Equal("3 items", AttentionGroups.ItemsLabel(3));
     }
+
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received" wording (same as web)
+    [Fact]
+    public void Mark_received_question_names_the_exact_peso_amount()
+    {
+        Assert.Equal("Mark ₱450 received in cash?", AttentionGroups.MarkReceivedQuestion(450m));
+        Assert.Equal("₱1,500", AttentionGroups.Peso(1500m));
+        Assert.Equal("₱450.50", AttentionGroups.Peso(450.5m));
+    }
+    //JJQR - END
 }
 //JJQR - END
 
@@ -95,5 +105,57 @@ public class DoctorDashboardOlderDaysTests
         var groups = AttentionGroups.Group(d.Unpaid.Concat(d.Charts).Concat(d.FollowUps), today);
         Assert.Contains(groups, g => g.Date == today.AddDays(-1) && !g.IsToday && g.Items.Any(i => i.BookingId == yesterday));
     }
+
+    //JJQR - AI (Nov 25, 2026) - doctor "Mark received" (Local / Offline copy)
+    [Fact]
+    public async Task Mark_received_records_cash_for_the_exact_amount_only_for_the_own_unpaid_visit()
+    {
+        await using var host = await TestHost.StartAsync();
+        var session = await host.LoginDoctorAsync();
+        var doctorId = session.DoctorId!.Value;
+        var patients = host.Get<ClinicNode.Core.Patients.IPatientService>();
+        var queue = host.Get<ClinicNode.Core.Queue.IQueueService>();
+        var dash = host.Get<IDoctorDashboardService>();
+        var factory = host.Get<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>();
+        var today = ClinicApp.Domain.ClinicClock.Today;
+
+        var p = await patients.CreateAsync(new ClinicNode.Core.Patients.NewPatientRequest("Cash", "Visit", new DateOnly(1990, 1, 1), ClinicApp.Domain.Enums.SexType.Female));
+        var w = await queue.CheckInWalkInAsync(new ClinicNode.Core.Queue.WalkInRequest(p.PatientId, doctorId));
+        Assert.True(w.Succeeded, w.Error);
+        var bookingId = w.BookingId!.Value;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var b = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(
+                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(db.Bookings, x => x.Payment), x => x.BookingId == bookingId);
+            b.AppointmentDate = today.AddDays(-1);
+            b.Status = ClinicApp.Domain.Enums.BookingStatus.Completed;
+            b.AmountDue = 450m;
+            if (b.Payment is null)
+                db.Payments.Add(new ClinicApp.Domain.Entities.Payment { PaymentId = Guid.NewGuid(), BookingId = bookingId, Amount = 450m, Status = ClinicApp.Domain.Enums.PaymentStatus.Unpaid, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+            else { b.Payment.Amount = 450m; b.Payment.Status = ClinicApp.Domain.Enums.PaymentStatus.Unpaid; }
+            await db.SaveChangesAsync();
+        }
+
+        Assert.False((await dash.MarkReceivedAsync(Guid.NewGuid(), bookingId, 450m)).Succeeded);   // another doctor
+        var wrong = await dash.MarkReceivedAsync(doctorId, bookingId, 500m);                         // amount changed
+        Assert.False(wrong.Succeeded);
+        Assert.Contains("₱450", wrong.Error);
+        Assert.Contains((await dash.GetAsync(doctorId)).Unpaid, a => a.BookingId == bookingId && a.Amount == 450m);
+
+        var ok = await dash.MarkReceivedAsync(doctorId, bookingId, 450m);
+        Assert.True(ok.Succeeded, ok.Error);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var pay = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(db.Payments, x => x.BookingId == bookingId);
+            Assert.Equal(ClinicApp.Domain.Enums.PaymentStatus.Paid, pay.Status);
+            Assert.Equal(ClinicApp.Domain.Enums.PaymentMethod.Cash, pay.PaymentMethod);
+            Assert.Equal(450m, pay.AmountReceived);
+            Assert.Null(pay.OrNumber);
+            Assert.Equal(session.UserId, pay.ConfirmedByUserId);
+        }
+        Assert.DoesNotContain((await dash.GetAsync(doctorId)).Unpaid, a => a.BookingId == bookingId);
+        Assert.False((await dash.MarkReceivedAsync(doctorId, bookingId, 450m)).Succeeded);           // second tap: refused, nothing changes
+    }
+    //JJQR - END
 }
 //JJQR - END
