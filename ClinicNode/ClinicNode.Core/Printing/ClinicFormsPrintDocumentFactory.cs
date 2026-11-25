@@ -32,13 +32,19 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
     PrintDoctor PtrFor(Guid bookingId, ClinicPrintKind kind, PrintDoctor doctor) =>
         _ptr?.IsOn(bookingId, kind) == true ? doctor : doctor with { PtrNumber = null };
 
-    public async Task<PrintDocument> PrescriptionAsync(Guid bookingId, CancellationToken ct = default)
+    //JJQR - AI (Nov 25, 2026) - code review: print one chosen prescription group of the visit (the chart's per-group "Print prescription" and Reprint)
+    public Task<PrintDocument> PrescriptionGroupAsync(Guid bookingId, Guid groupId, CancellationToken ct = default) => PrescriptionCoreAsync(bookingId, groupId, ct);
+
+    public Task<PrintDocument> PrescriptionAsync(Guid bookingId, CancellationToken ct = default) => PrescriptionCoreAsync(bookingId, null, ct);
+
+    private async Task<PrintDocument> PrescriptionCoreAsync(Guid bookingId, Guid? groupId, CancellationToken ct)
+    //JJQR - END
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
         var b = await LoadBookingAsync(db, bookingId, ct);
         // SQLite cannot ORDER BY DateTimeOffset server-side, so newest-first is applied in memory.
         var group = (await db.PrescriptionGroups.AsNoTracking().Include(g => g.LineItems)
-                .Where(g => g.BookingId == bookingId).ToListAsync(ct))
+                .Where(g => g.BookingId == bookingId && (groupId == null || g.GroupId == groupId)).ToListAsync(ct)) //JJQR - AI (Nov 25, 2026) - + chosen group //JJQR - END
             .OrderByDescending(g => g.CreatedAt)
             .FirstOrDefault();
         var items = group?.LineItems.OrderBy(i => i.CreatedAt).Select(i => new RxLine

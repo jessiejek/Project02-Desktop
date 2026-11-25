@@ -12,6 +12,9 @@ namespace ClinicNode.Core.Print;
 public interface IPrintDocumentFactory
 {
     Task<PrintDocument> PrescriptionAsync(Guid bookingId, CancellationToken ct = default);
+    //JJQR - AI (Nov 25, 2026) - code review: a visit can have several prescription groups; print the one asked for (default: the newest, as before)
+    Task<PrintDocument> PrescriptionGroupAsync(Guid bookingId, Guid groupId, CancellationToken ct = default) => PrescriptionAsync(bookingId, ct);
+    //JJQR - END
     Task<PrintDocument> LabRequestAsync(Guid bookingId, CancellationToken ct = default);
     Task<PrintDocument> MedicalCertificateAsync(Guid bookingId, CancellationToken ct = default);
     Task<PrintDocument> QueueSlipAsync(Guid bookingId, CancellationToken ct = default);
