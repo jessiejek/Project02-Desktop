@@ -18,7 +18,7 @@ Clinic system for **Grace Medical Clinic** (one doctor + front desk). Four repos
 
 **Full detail: `HANDOFF.md` at the repo root (same file in all three repos). Where this page and HANDOFF.md disagree, HANDOFF.md wins.**
 
-**Committed on branch `handoff/claude-to-grok-2026-11-25` (desktop + web), NOT merged, NOT released — next release = desktop v0.2.46 + web update; backend unchanged:**
+**Committed on branch `handoff/claude-to-grok-2026-11-25` (desktop + web), NOT merged, NOT released — next release = desktop v0.2.46 + web update + backend update (Mark received endpoint, payment double-save guard, sync audit; no migration — see HANDOFF.md):**
 - **Templates (desktop):** the editor opens in the app frame and closes however it was opened (`LeaveAsync`); never stays stuck; a double-tap opens one editor. Opt-in live QA `ClinicNode.Api.Tests/TemplatesLiveServerQaTests.cs` (localhost only), 6/6.
 - **Uploads tagged to ONE consultation (desktop + web):** every file belongs to exactly one visit (booking) — never "the latest visit".
   - Consultation step **4. Lab Orders**: **"Upload results" in the step title bar (right)**; layout **75% tests / 25% "Uploaded results"** for this consultation (Open). 1–10 PDF/JPG/PNG, 10 MB each, one title (prefilled with the ordered tests), "(1 of 3)" added per file. Desktop: `ConsultationPage.LabUploads.cs`, `Extra/PatientFileUpload.cs`; web: `components/doctor/VisitUploadModal.tsx`, `VisitFilesPanel.tsx`, `lib/visit-upload.ts`.
