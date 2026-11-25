@@ -288,6 +288,18 @@ public partial class ConsultationPage
         {
             var bar = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
             bar.Add(title, 0, 0);
+            //JJQR - AI (Nov 25, 2026) - owner: "Upload results" sits in the Lab Orders title bar (right), before "Include PTR in print"
+            if (i == 4)
+            {
+                bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+                var upload = Btn("Upload results", () => _ = UploadLabResultsAsync(), "PrimaryButton");
+                upload.Margin = new Thickness(0);
+                upload.VerticalOptions = LayoutOptions.Center;
+                bar.Add(upload, 1, 0);
+                bar.Add(PtrIncludeInline(i), 2, 0);
+            }
+            else
+            //JJQR - END
             bar.Add(PtrIncludeInline(i), 1, 0);
             head = bar;
         }

@@ -73,8 +73,8 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
     sealed record PatientDto(Guid PatientId, string? FirstName, string? LastName, string? PatientCode, SexType Sex, DateOnly DateOfBirth, string? ContactNumber);
     sealed record VitalTemplateDto(Guid TemplateId, string? Description, string? Unit, bool IsDefault, DateTimeOffset? CreatedAt);
     sealed record VitalReadingDto(Guid BookingId, Guid TemplateId, string? Value, DateOnly RecordedAt, DateTimeOffset? UpdatedAt);
-    sealed record LabResultDto(Guid Id, string? ResultTitle, DateTimeOffset UploadedAt);
-    sealed record DocumentDto(Guid Id, string? Title, string? FileName, DateTimeOffset UploadedAt);
+    sealed record LabResultDto(Guid Id, string? ResultTitle, DateTimeOffset UploadedAt, Guid? BookingId = null); //JJQR - AI (Nov 25, 2026) - + visit //JJQR - END
+    sealed record DocumentDto(Guid Id, string? Title, string? FileName, DateTimeOffset UploadedAt, Guid? BookingId = null); //JJQR - AI (Nov 25, 2026) - + visit //JJQR - END
     sealed record LabOrderDto(Guid ConsultationId, string? TestName);
     sealed record FollowUpRowDto(Guid ConsultationId, DateOnly? FollowUpDate, string? Reason, string? Instructions);
     sealed record CertRowDto(Guid ConsultationId, string? DiagnosisText, DateOnly? IssueDate);
@@ -211,8 +211,8 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
             chartBookings, chartConsults,
             templates.Select(t => new ChartVitalTemplate(t.TemplateId, t.Description ?? "", t.Unit ?? "", t.IsDefault)).ToList(),
             visits, rx,
-            labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt, "lab")).ToList(),
-            docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName ?? "" : d.Title!, d.UploadedAt, "doc", d.FileName)).ToList(),
+            labs.OrderByDescending(l => l.UploadedAt).Select(l => new ChartFile(l.Id, string.IsNullOrWhiteSpace(l.ResultTitle) ? "Lab result" : l.ResultTitle!, l.UploadedAt, "lab", null, l.BookingId)).ToList(), //JJQR - AI (Nov 25, 2026) - + visit //JJQR - END
+            docs.OrderByDescending(d => d.UploadedAt).Select(d => new ChartFile(d.Id, string.IsNullOrWhiteSpace(d.Title) ? d.FileName ?? "" : d.Title!, d.UploadedAt, "doc", d.FileName, d.BookingId)).ToList(), //JJQR - AI (Nov 25, 2026) - + visit //JJQR - END
             vax.OrderByDescending(v => v.AdministeredDate ?? v.NextDoseDate).Select(v => new ChartVaccination(v.Id, v.VaccineName ?? "", v.DoseNumber, v.AdministeredDate ?? v.NextDoseDate, v.Status)).ToList(),
             extras);
     }

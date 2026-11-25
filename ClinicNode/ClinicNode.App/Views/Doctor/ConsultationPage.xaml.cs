@@ -112,7 +112,18 @@ public partial class ConsultationPage : ContentPage
     {
         base.OnAppearing();
         //JJQR - AI (21 Nov 2026) - gap close (ConsultationPage.Gaps.cs)
-        if (_workspace is not null) { await GapReturnAsync(); GapAppearing(); StartAutosave(); return; }
+        //JJQR - AI (Nov 25, 2026) - code review: back from another page (e.g. the patient chart, where files may have been uploaded): reload the Lab Orders "Uploaded results" panel
+        // (only after the chart: a closed pop-up also raises OnAppearing, and redrawing then would wipe what is being typed)
+        if (_workspace is not null)
+        {
+            var fromChart = _backFromChart;
+            _backFromChart = false;
+            if (fromChart) ForgetVisitFiles();
+            var redrawn = await GapReturnAsync();
+            if (fromChart && !redrawn && _section == 4) RenderSection();
+            GapAppearing(); StartAutosave(); return;
+        }
+        //JJQR - END
         //JJQR - END
         if (!Guid.TryParse(BookingIdText, out var bookingId)) { Error("Missing booking id."); return; }
         //JJQR - AI (Nov 22, 2026) - while the consultation loads (~1 s) the screen showed empty panels and every Print button; hide them and say what is happening //JJQR - END
@@ -1270,6 +1281,7 @@ public partial class ConsultationPage : ContentPage
     // Lab Orders: catalogue checkboxes (lab_test_id) + additional tests
     void RenderLabs()
     {
+        var labStart = SectionHost.Children.Count; //JJQR - AI (Nov 25, 2026) - owner: split the step 75% tests / 25% uploads (see SplitLabsWithUploads, end of this method) //JJQR - END
         //JJQR - AI (21 Nov 2026) - renal cue (ConsultationPage.Safety.cs)
         RenderRenalCue();
         //JJQR - END
@@ -1351,6 +1363,7 @@ public partial class ConsultationPage : ContentPage
         printRow.Children.Add(Btn("Save without printing", () => ConfirmLabOrders(print: false)));
         //JJQR - END
         SectionHost.Children.Add(printRow);
+        SplitLabsWithUploads(labStart); //JJQR - AI (Nov 25, 2026) - owner: 75% the selection, 25% the uploads //JJQR - END
     }
 
     void RenderVaccinations()
@@ -2057,6 +2070,7 @@ public partial class ConsultationPage : ContentPage
     //JJQR - AI (Nov 25, 2026) - owner: the patient chart during the consult (Lab Results / Documents upload, Reprint). Opened for THIS visit, so uploads are saved with it.
     // Saved first, like before printing, so nothing typed is lost while the chart is open.
     bool _openingChart;
+    bool _backFromChart; //JJQR - AI (Nov 25, 2026) - set when the chart opens; OnAppearing then reloads the Lab Orders "Uploaded results" panel //JJQR - END
     async void OnOpenChart(object? sender, EventArgs e)
     {
         if (_openingChart || _workspace is null) return;
@@ -2065,7 +2079,11 @@ public partial class ConsultationPage : ContentPage
         {
             if (_mode != "view" && Dirty && !await SaveAsync(goNext: false, silent: true)) return;
             await WriteThroughBeforePrintAsync(); // so a reprint of this visit from the chart matches what was just saved
-            await ClinicNode.App.Views.Doctor.Extra.DoctorPatientChartPage.OpenAsync(this, D.PatientId, D.BookingId);
+            //JJQR - AI (Nov 25, 2026) - code review: open WITHOUT this booking. With it the chart turns on prescription Edit/Delete and "Add Vitals" (a second consult page),
+            // and this consult's autosave would later write its older prescription back. Uploads in the chart are per visit, so nothing is lost.
+            _backFromChart = true;
+            await ClinicNode.App.Views.Doctor.Extra.DoctorPatientChartPage.OpenAsync(this, D.PatientId);
+            //JJQR - END
         }
         catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Consult.OpenChart", ex); }
         finally { _openingChart = false; }
