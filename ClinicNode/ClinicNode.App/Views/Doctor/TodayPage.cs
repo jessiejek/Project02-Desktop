@@ -52,6 +52,10 @@ public sealed class TodayPage : ContentPage
     private bool _loadError;
     private string? _dayStatusError;
     private DoctorDayStatusEnum? _savingStatus;
+    //JJQR - AI (2026-11-26) - why: owner (pt95u): today's Queue and Needs attention lists fold / unfold (open by default)
+    private bool _todayQueueClosed;
+    private bool _todayAttentionClosed;
+    //JJQR - END
     //JJQR - AI (2026-11-26) - why: the Needs attention date headers moved to the "Earlier days" card (LeftoverQueueSection keeps open / closed) //JJQR - END
     //JJQR - AI (Nov 25, 2026) - doctor "Mark received": rows already marked (hidden at once, before the reload lands) and a guard so only one confirm runs
     private readonly HashSet<Guid> _receivedIds = new();
@@ -465,7 +469,12 @@ public sealed class TodayPage : ContentPage
             col.Children.Add(ClinicTheme.Text(d.TotalToday == 0 ? "No one's checked in yet today." : $"Queue's clear — {d.CompletedToday} seen today.", "MutedSm"));
         // JJQR - AI (Nov 21, 2026) - start consult, compact print when Rx/labs exist.
         //JJQR - AI (Nov 21, 2026) - the queue as a compact TABLE: queue no. | patient | visit | status | action (one row per patient, easy to scan)
+        //JJQR - AI (2026-11-26) - why: owner (pt95u): today's Queue folds / unfolds; the tap redraws on the next UI turn (fresh controls)
         if (d.UpNext.Count > 0)
+            col.Children.Add(LeftoverQueueSection.ListToggle($"Queue · Today · {d.UpNext.Count} up next", !_todayQueueClosed,
+                () => { _todayQueueClosed = !_todayQueueClosed; SafeRender(); }, new Thickness(0, 4)));
+        if (d.UpNext.Count > 0 && !_todayQueueClosed)
+        //JJQR - END
         {
             var cols = new[] { new GridLength(92), GridLength.Star, new GridLength(110), new GridLength(150), new GridLength(170) }; //JJQR - AI (Nov 21, 2026) fixed action column so every row lines up //JJQR - END
             Grid RowGrid(Thickness pad)
@@ -558,7 +567,10 @@ public sealed class TodayPage : ContentPage
         if (todayAttention is not null && attentionCount > 0)
         {
             var title = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
-            title.Add(ClinicTheme.Text("Needs attention · Today", "LabelSm"), 0, 0);
+            //JJQR - AI (2026-11-26) - why: owner (pt95u): "Needs attention · Today" folds / unfolds (fresh control, redraw on the next UI turn)
+            title.Add(LeftoverQueueSection.ListToggle("Needs attention · Today", !_todayAttentionClosed,
+                () => { _todayAttentionClosed = !_todayAttentionClosed; SafeRender(); }, new Thickness(0)), 0, 0);
+            //JJQR - END
             var countLabel = ClinicTheme.Text(AttentionGroups.ItemsLabel(attentionCount), "LabelSm");
             countLabel.TextColor = ClinicTheme.Color("StatusWarning");
             countLabel.FontAttributes = FontAttributes.Bold;
@@ -569,6 +581,7 @@ public sealed class TodayPage : ContentPage
                 VerticalOptions = LayoutOptions.Center,
             }, 1, 0);
             col.Children.Add(title);
+            if (!_todayAttentionClosed) //JJQR - AI (2026-11-26) - why: folded = rows hidden //JJQR - END
             col.Children.Add(new Border
             {
                 StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },

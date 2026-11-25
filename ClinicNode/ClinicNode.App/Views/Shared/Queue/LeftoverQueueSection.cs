@@ -18,6 +18,7 @@ public sealed class LeftoverQueueSection(Page page, IServiceProvider services, F
 {
     private IReadOnlyList<LeftoverRow> _rows = [];
     private readonly Dictionary<DateOnly, bool> _toggled = new();
+    private readonly HashSet<string> _listClosed = new(); //JJQR - AI (2026-11-26) - why: folded sub-lists ("<date>:queue" / "<date>:attention"), open by default //JJQR - END
     private readonly HashSet<Guid> _gone = new();
     private string? _error;
     private bool _busy;
@@ -71,13 +72,29 @@ public sealed class LeftoverQueueSection(Page page, IServiceProvider services, F
         return new Border { Style = ClinicTheme.Style("Card"), Content = col };
     }
 
-    static Label SubHead(string text)
+    //JJQR - AI (2026-11-26) - why: owner (pt95u) "make queue and needs attention collapsible": each sub-heading folds / unfolds its list (open by default).
+    // A fresh control on every call; the tap redraws on the next UI turn (UiTurn.Next), so the tapped heading is replaced, never reused.
+    public static View ListToggle(string text, bool open, Action toggle, Thickness margin)
     {
+        var row = new Grid { ColumnSpacing = 8, Padding = margin, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
+        var caret = ClinicTheme.Text(open ? "▾" : "▸", "LabelSm");
+        caret.TextColor = ClinicTheme.Color("OnSurfaceVariant");
         var l = ClinicTheme.Text(text, "LabelSm");
         l.FontAttributes = FontAttributes.Bold;
-        l.Margin = new Thickness(14, 10, 14, 4);
-        return l;
+        row.Add(caret, 0, 0);
+        row.Add(l, 1, 0);
+        row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(toggle)) });
+        SemanticProperties.SetDescription(row, $"{text}, {(open ? "open" : "closed")}");
+        return row;
     }
+
+    View SubHead(string text, string key)
+    {
+        var open = !_listClosed.Contains(key);
+        return ListToggle(text, open, () => { if (!_listClosed.Remove(key)) _listClosed.Add(key); redraw(); }, new Thickness(14, 10, 14, 4));
+    }
+    bool ListOpen(string key) => !_listClosed.Contains(key);
+    //JJQR - END
 
     View DayView(IReadOnlyList<EarlierDay> all, EarlierDay d, DateOnly today, ClinicNode.Core.Practice.AttentionGroup? attention, Func<ClinicNode.Core.Practice.AttentionGroup, View>? attentionRows)
     {
@@ -103,7 +120,9 @@ public sealed class LeftoverQueueSection(Page page, IServiceProvider services, F
         {
             if (d.Queue.Count > 0)
             {
-                box.Children.Add(SubHead($"Queue · {LeftoverGroups.PatientsLabel(d.Queue.Count)}"));
+                var qKey = $"{d.Date:yyyy-MM-dd}:queue"; //JJQR - AI (2026-11-26) - why: foldable (owner pt95u) //JJQR - END
+                box.Children.Add(SubHead($"Queue · {LeftoverGroups.PatientsLabel(d.Queue.Count)}", qKey));
+                if (ListOpen(qKey)) { //JJQR - AI (2026-11-26) //JJQR - END
                 var th = RowGrid(new Thickness(14, 6));
                 th.BackgroundColor = ClinicTheme.Color("SurfaceContainerLow");
                 string[] heads = ["QUEUE", "PATIENT", "VISIT", "STATUS", ""];
@@ -114,12 +133,14 @@ public sealed class LeftoverQueueSection(Page page, IServiceProvider services, F
                     box.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.6f) });
                     box.Children.Add(RowView(r, today));
                 }
+                } //JJQR - AI (2026-11-26) - end of the folded Queue list //JJQR - END
             }
             if (attention is not null && attentionRows is not null)
             {
                 if (d.Queue.Count > 0) box.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.6f) });
-                box.Children.Add(SubHead($"Needs attention · {ClinicNode.Core.Practice.AttentionGroups.ItemsLabel(attention.Items.Count)}"));
-                box.Children.Add(attentionRows(attention));
+                var aKey = $"{d.Date:yyyy-MM-dd}:attention"; //JJQR - AI (2026-11-26) - why: foldable (owner pt95u) //JJQR - END
+                box.Children.Add(SubHead($"Needs attention · {ClinicNode.Core.Practice.AttentionGroups.ItemsLabel(attention.Items.Count)}", aKey));
+                if (ListOpen(aKey)) box.Children.Add(attentionRows(attention)); //JJQR - AI (2026-11-26) //JJQR - END
             }
         }
         return new Border
