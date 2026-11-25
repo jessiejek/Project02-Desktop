@@ -160,6 +160,9 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
 
         // ── list section ─────────────────────────────────────────────────
         _body.Children.Add(ListSection());
+        //JJQR - AI (2026-11-26) - why: owner (t78u) "yesterday's queue should not cross over TODAY's": Today tab only, its own card under today's list
+        if (_vm.Scope == AppointmentScope.Today && Leftovers.Build() is { } earlierView) _body.Children.Add(earlierView);
+        //JJQR - END
     }
 
     //JJQR - AI (21 Nov 2026) - web AppointmentFocus
@@ -271,7 +274,7 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
         }
 
         //JJQR - AI (2026-11-25) - why: GAV-4 (approved pro mockup): Today tab only, under today's list. Built fresh on every Render.
-        if (today && Leftovers.Build() is { } leftoverView) col.Children.Add(leftoverView);
+        //JJQR - AI (2026-11-26) - why: owner (t78u): moved OUT of today's list card into its own "Earlier days" card below it (see Render) //JJQR - END
         //JJQR - END
 
         // footer (once loaded): updated time + paging

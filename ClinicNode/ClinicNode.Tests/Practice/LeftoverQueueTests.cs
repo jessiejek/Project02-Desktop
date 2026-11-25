@@ -12,6 +12,26 @@ namespace ClinicNode.Tests.PracticeTests;
 
 public class LeftoverQueueTests
 {
+    //JJQR - AI (2026-11-26) - why: owner (t79u): earlier days are their own groups (Queue + Needs attention per date), never mixed into today
+    [Fact]
+    public void Earlier_days_merge_queue_and_attention_by_date_and_never_include_today_or_future()
+    {
+        var today = new DateOnly(2026, 11, 25);
+        var groups = LeftoverGroups.Group(new[]
+        {
+            Row(today.AddDays(-1), BookingStatus.CheckedIn), Row(today.AddDays(-1), BookingStatus.OnHold), Row(today.AddDays(-3), BookingStatus.CheckedIn),
+        }, today);
+        var days = EarlierDays.Build(groups, new[] { (today.AddDays(-1), 1), (today.AddDays(-2), 2), (today, 5), (today.AddDays(1), 1) }, today);
+        Assert.Equal(new[] { "Tue, Nov 24|2 in queue · 1 needs attention|2|1", "Mon, Nov 23|2 need attention|0|2", "Sun, Nov 22|1 in queue|1|0" },
+            days.Select(d => $"{d.Header}|{d.CountLabel}|{d.Queue.Count}|{d.AttentionCount}").ToArray());
+        var none = new Dictionary<DateOnly, bool>();
+        Assert.True(EarlierDays.IsOpen(days, today.AddDays(-1), none));
+        Assert.False(EarlierDays.IsOpen(days, today.AddDays(-2), none));
+        Assert.False(EarlierDays.IsOpen(days, today.AddDays(-1), new Dictionary<DateOnly, bool> { [today.AddDays(-1)] = false }));
+        Assert.Empty(EarlierDays.Build([], [], today));
+    }
+    //JJQR - END
+
     static LeftoverRow Row(DateOnly date, BookingStatus status, string q = "R-001", bool priority = false, int minute = 0, Guid? id = null) =>
         new(id ?? Guid.NewGuid(), date, q, priority, Guid.NewGuid(), "Test Patient", "P-0001", Guid.NewGuid(), status, VisitType.New,
             new DateTimeOffset(date.ToDateTime(new TimeOnly(9, minute)), TimeSpan.FromHours(8)), new DateTimeOffset(date.ToDateTime(new TimeOnly(16, 52)), TimeSpan.FromHours(8)));

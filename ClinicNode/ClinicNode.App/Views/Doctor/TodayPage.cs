@@ -52,7 +52,7 @@ public sealed class TodayPage : ContentPage
     private bool _loadError;
     private string? _dayStatusError;
     private DoctorDayStatusEnum? _savingStatus;
-    private readonly Dictionary<DateOnly, bool> _attentionToggled = new(); //JJQR - AI (Nov 25, 2026) - GAV-2: date headers the doctor opened / closed in Needs attention //JJQR - END
+    //JJQR - AI (2026-11-26) - why: the Needs attention date headers moved to the "Earlier days" card (LeftoverQueueSection keeps open / closed) //JJQR - END
     //JJQR - AI (Nov 25, 2026) - doctor "Mark received": rows already marked (hidden at once, before the reload lands) and a guard so only one confirm runs
     private readonly HashSet<Guid> _receivedIds = new();
     //JJQR - AI (2026-11-25) - why: GAV-4 "Not finished on an earlier day" (this doctor's own leftovers) inside the queue card
@@ -275,6 +275,9 @@ public sealed class TodayPage : ContentPage
         var left = new VerticalStackLayout { Spacing = 20 };
         var right = new VerticalStackLayout { Spacing = 20 };
         left.Children.Add(QueueCard());
+        //JJQR - AI (2026-11-26) - why: owner (t78u/t79u): earlier days in their OWN card right under today's (that day's Queue + Needs attention). Fresh each Render.
+        if (!_loadError && _data is not null && Leftovers.Build(AttentionGroupsNow(), AttentionRows) is { } earlierView) left.Children.Add(earlierView);
+        //JJQR - END
         if (_data?.Announcements is { Count: > 0 } ann) left.Children.Add(AnnouncementsCard(ann));
         left.Children.Add(ReportsCard());
         right.Children.Add(AvailabilityCard());
@@ -543,18 +546,19 @@ public sealed class TodayPage : ContentPage
         // JJQR - END
 
         //JJQR - AI (2026-11-25) - why: GAV-4 (approved pro mockup): below today's queue, above Needs attention. Built fresh on every Render.
-        if (Leftovers.Build() is { } leftoverView) col.Children.Add(leftoverView);
+        //JJQR - AI (2026-11-26) - why: owner (t78u) moved OUT of this card: the separate "Earlier days" card under it (see Render) //JJQR - END
         //JJQR - END
 
         //JJQR - AI (Nov 25, 2026) - owner (GAV-2, approved mockup): Needs attention grouped by visit date. "Today · Nov 25" first and open; older dates are
         // headers that open / close; an item not cleared on its day stays under that date. A count sits next to the title; every row has its action.
-        var attentionGroups = AttentionGroups.Group(d.Unpaid.Where(a => !_receivedIds.Contains(a.BookingId)) /*JJQR - AI (Nov 25, 2026) - marked received: gone at once //JJQR - END*/
-            .Concat(d.Charts).Concat(d.FollowUps.Where(a => !IsPrnAttention(a))), ClinicClock.Today);
-        var attentionCount = attentionGroups.Sum(g => g.Items.Count);
-        if (attentionCount > 0)
+        //JJQR - AI (2026-11-26) - why: owner (t78u/t79u) "yesterday's queue should not cross over TODAY's": this card shows TODAY's Needs attention only
+        // (a flat list). Each earlier date's Needs attention moved under that date in the "Earlier days" card (with that day's queue).
+        var todayAttention = AttentionGroupsNow().FirstOrDefault(g => g.IsToday);
+        var attentionCount = todayAttention?.Items.Count ?? 0;
+        if (todayAttention is not null && attentionCount > 0)
         {
             var title = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
-            title.Add(ClinicTheme.Text("Needs attention", "LabelSm"), 0, 0);
+            title.Add(ClinicTheme.Text("Needs attention · Today", "LabelSm"), 0, 0);
             var countLabel = ClinicTheme.Text(AttentionGroups.ItemsLabel(attentionCount), "LabelSm");
             countLabel.TextColor = ClinicTheme.Color("StatusWarning");
             countLabel.FontAttributes = FontAttributes.Bold;
@@ -565,8 +569,13 @@ public sealed class TodayPage : ContentPage
                 VerticalOptions = LayoutOptions.Center,
             }, 1, 0);
             col.Children.Add(title);
-            foreach (var g in attentionGroups) col.Children.Add(AttentionGroupView(g));
+            col.Children.Add(new Border
+            {
+                StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+                Padding = 0, Content = AttentionRows(todayAttention),
+            });
         }
+        //JJQR - END
         //JJQR - END
         //JJQR - AI (21 Nov 2026) - no Refresh button on the web card (live hub + 60 s poll refresh it)
         //JJQR - END
@@ -577,44 +586,28 @@ public sealed class TodayPage : ContentPage
     static bool IsPrnAttention(AttentionItem a) =>
         a.Kind == AttentionKind.FollowUpDue && (a.Text.Contains("PRN", StringComparison.OrdinalIgnoreCase) || a.Aside.Contains("PRN", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>One date of Needs attention: a header that opens / closes ("▾ Today · Nov 25 · 3 items"), then its rows when open. Built fresh on every Render
-    /// (no control is reused with an old parent); the header tap redraws on the next UI turn (Windows: the tapped header is replaced by the redraw).</summary>
-    View AttentionGroupView(AttentionGroup g)
+    //JJQR - AI (2026-11-26) - why: owner (t79u): Needs attention by date, used by today's card (today only) and the "Earlier days" card (each earlier date,
+    // under that day's queue). The date headers moved into LeftoverQueueSection; this draws just the rows (fresh controls on every call).
+    IReadOnlyList<AttentionGroup> AttentionGroupsNow()
     {
-        var open = AttentionGroups.IsOpen(g, _attentionToggled);
-        var box = new VerticalStackLayout { Spacing = 0 };
-        var head = new Grid
-        {
-            ColumnSpacing = 8, Padding = new Thickness(10, 8), BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
-        };
-        var caret = ClinicTheme.Text(open ? "▾" : "▸", "LabelMd");
-        caret.TextColor = ClinicTheme.Color("OnSurfaceVariant");
-        var header = ClinicTheme.Text(g.Header, "LabelMd");
-        header.FontAttributes = FontAttributes.Bold;
-        head.Add(caret, 0, 0);
-        head.Add(header, 1, 0);
-        head.Add(ClinicTheme.Text(g.CountLabel, "MutedSm"), 2, 0);
-        var date = g.Date;
-        head.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(() => { _attentionToggled[date] = !open; Render(); })) });
-        SemanticProperties.SetDescription(head, $"{g.Header}, {g.CountLabel}, {(open ? "open" : "closed")}");
-        box.Children.Add(head);
-        if (open)
-        {
-            foreach (var a in g.Items.Take(AttentionGroups.MaxRows)) box.Children.Add(AttentionRow(a));
-            if (g.Items.Count > AttentionGroups.MaxRows)
-            {
-                var more = StaffUi.Link($"+{g.Items.Count - AttentionGroups.MaxRows} more — view all", () => GoAsync("//appointments"));
-                more.Margin = new Thickness(10, 6);
-                box.Children.Add(more);
-            }
-        }
-        return new Border
-        {
-            StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
-            Padding = 0, Content = box,
-        };
+        if (_loadError || _data is not { } d) return [];
+        return AttentionGroups.Group(d.Unpaid.Where(a => !_receivedIds.Contains(a.BookingId)) /*marked received: gone at once*/
+            .Concat(d.Charts).Concat(d.FollowUps.Where(a => !IsPrnAttention(a))), ClinicClock.Today);
     }
+
+    View AttentionRows(AttentionGroup g)
+    {
+        var box = new VerticalStackLayout { Spacing = 0 };
+        foreach (var a in g.Items.Take(AttentionGroups.MaxRows)) box.Children.Add(AttentionRow(a));
+        if (g.Items.Count > AttentionGroups.MaxRows)
+        {
+            var more = StaffUi.Link($"+{g.Items.Count - AttentionGroups.MaxRows} more — view all", () => GoAsync("//appointments"));
+            more.Margin = new Thickness(10, 6);
+            box.Children.Add(more);
+        }
+        return box;
+    }
+    //JJQR - END
 
     //JJQR - AI (Nov 25, 2026) - doctor "Mark received" (Windows crash-safety): one confirm at a time; the save runs INSIDE the dialog (StaffDialog keeps it open,
     // greys Cancel and shows a refusal in plain words); the dialog CLOSES FIRST, then the row is hidden and the screen redrawn on the next UI turn (the tapped

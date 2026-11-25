@@ -67,6 +67,42 @@ public static class LeftoverGroups
     }
 }
 
+//JJQR - AI (2026-11-26) - why: owner (t78u/t79u) "yesterday's queue should not cross over TODAY's". Earlier days get their OWN card below today's: one
+// collapsible group per earlier date ("Wed, Nov 25") and under it that day's Queue (leftover rows) and that day's Needs attention. Build() merges the two
+// by date; today and future dates never appear. Most recent day open, older closed, a toggle wins. Same rules as web earlierDays() (leftover-queue.ts).
+public sealed record EarlierDay(DateOnly Date, string Header, string CountLabel, IReadOnlyList<LeftoverRow> Queue, int AttentionCount);
+
+public static class EarlierDays
+{
+    public static string CountLabel(int queue, int attention)
+    {
+        var parts = new List<string>();
+        if (queue > 0) parts.Add($"{queue} in queue");
+        if (attention > 0) parts.Add(attention == 1 ? "1 needs attention" : $"{attention} need attention");
+        return string.Join(" · ", parts);
+    }
+
+    public static IReadOnlyList<EarlierDay> Build(IReadOnlyList<LeftoverGroup> leftovers, IEnumerable<(DateOnly Date, int Count)> attention, DateOnly today)
+    {
+        var byDate = new Dictionary<DateOnly, (IReadOnlyList<LeftoverRow> Queue, int Attention)>();
+        foreach (var g in leftovers)
+            if (g.Date < today && g.Items.Count > 0) byDate[g.Date] = (g.Items, 0);
+        foreach (var (date, count) in attention)
+        {
+            if (date >= today || count <= 0) continue;
+            var cur = byDate.TryGetValue(date, out var c) ? c : ((IReadOnlyList<LeftoverRow>)Array.Empty<LeftoverRow>(), 0);
+            byDate[date] = (cur.Item1, cur.Item2 + count);
+        }
+        return byDate.OrderByDescending(kv => kv.Key)
+            .Select(kv => new EarlierDay(kv.Key, LeftoverGroups.Day(kv.Key, today), CountLabel(kv.Value.Queue.Count, kv.Value.Attention), kv.Value.Queue, kv.Value.Attention))
+            .ToList();
+    }
+
+    public static bool IsOpen(IReadOnlyList<EarlierDay> days, DateOnly date, IReadOnlyDictionary<DateOnly, bool> toggled) =>
+        toggled.TryGetValue(date, out var open) ? open : days.Count > 0 && days[0].Date == date;
+}
+//JJQR - END
+
 public interface ILeftoverQueueService
 {
     /// <summary>Earlier-day visits not finished. <paramref name="doctorId"/> = that doctor's own (doctor screens); null = the whole clinic (staff).</summary>
