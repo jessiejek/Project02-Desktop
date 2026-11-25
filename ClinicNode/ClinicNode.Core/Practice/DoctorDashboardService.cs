@@ -12,7 +12,9 @@ namespace ClinicNode.Core.Practice;
 
 public enum AttentionKind { UnpaidCompleted, FinishChart, FollowUpDue }
 
-public sealed record AttentionItem(AttentionKind Kind, Guid BookingId, string PatientName, string Text, string ActionLabel, string Aside);
+//JJQR - AI (Nov 25, 2026) - GAV-2: Date = the visit date the item belongs to (null = today), so Needs attention can group by date (AttentionGroups)
+public sealed record AttentionItem(AttentionKind Kind, Guid BookingId, string PatientName, string Text, string ActionLabel, string Aside, DateOnly? Date = null);
+//JJQR - END
 public sealed record UpNextItem(Guid BookingId, string PatientName, string QueueNumber, bool IsPriority, VisitType VisitType, bool InProgress, int WaitMinutes, bool HasPrescription = false, bool HasLabOrders = false)
 {
     public string ActionLabel => InProgress ? "Resume consultation" : "Start consultation";
@@ -164,16 +166,26 @@ public sealed class DoctorDashboardService : IDoctorDashboardService
             .ToList();
 
         var unpaid = entries.Where(e => e.Status == BookingStatus.Completed && e.AmountDue > 0)
-            .Select(e => new AttentionItem(AttentionKind.UnpaidCompleted, e.BookingId, e.PatientName, $"{e.PatientName} — completed, unpaid", "View appointment", $"₱{e.AmountDue:0.##} due"))
+            .Select(e => new AttentionItem(AttentionKind.UnpaidCompleted, e.BookingId, e.PatientName, $"{e.PatientName} — completed, unpaid", "View appointment", $"₱{e.AmountDue:0.##} due", today))
             .ToList();
+        //JJQR - AI (Nov 25, 2026) - GAV-2: an unpaid completed visit from an earlier day (last AttentionGroups.DaysBack days) stays listed under its date
+        var attentionFrom = AttentionGroups.From(today);
+        var olderUnpaid = await db.Bookings.AsNoTracking().Include(b => b.Patient).Include(b => b.Payment)
+            .Where(b => b.DoctorId == doctorId && b.Status == BookingStatus.Completed
+                && b.AppointmentDate >= attentionFrom && b.AppointmentDate < today
+                && (b.Payment == null || b.Payment.Status == PaymentStatus.Unpaid))
+            .ToListAsync(ct);
+        unpaid.AddRange(olderUnpaid.Where(b => b.AmountDue > 0).OrderByDescending(b => b.AppointmentDate)
+            .Select(b => new AttentionItem(AttentionKind.UnpaidCompleted, b.BookingId, Name(b), $"{Name(b)} — completed, unpaid", "View appointment", $"₱{b.AmountDue:0.##} due", b.AppointmentDate)));
+        //JJQR - END
 
         var todayConsults = await db.Consultations.AsNoTracking()
             .Where(c => c.DoctorId == doctorId && c.Status == ConsultationStatus.Completed)
-            .Join(db.Bookings.AsNoTracking().Include(b => b.Patient).Where(b => b.AppointmentDate == today), c => c.BookingId, b => b.BookingId, (c, b) => new { c, b })
+            .Join(db.Bookings.AsNoTracking().Include(b => b.Patient).Where(b => b.AppointmentDate >= attentionFrom && b.AppointmentDate <= today), c => c.BookingId, b => b.BookingId, (c, b) => new { c, b })
             .ToListAsync(ct);
         var charts = todayConsults
             .Where(x => string.IsNullOrWhiteSpace(x.c.Assessment) && string.IsNullOrWhiteSpace(x.c.Plan))
-            .Select(x => new AttentionItem(AttentionKind.FinishChart, x.c.BookingId, Name(x.b), $"{Name(x.b)} — Assessment and Plan are blank", "Finish chart", "Finish chart"))
+            .Select(x => new AttentionItem(AttentionKind.FinishChart, x.c.BookingId, Name(x.b), $"{Name(x.b)} — Assessment and Plan are blank", "Finish chart", "Finish chart", x.b.AppointmentDate))
             .ToList();
 
         var dueFollowUps = await db.FollowUps.AsNoTracking()
@@ -184,7 +196,7 @@ public sealed class DoctorDashboardService : IDoctorDashboardService
         var dueTodayBookings = await db.Consultations.AsNoTracking().Where(c => dueTodayConsultIds.Contains(c.ConsultationId))
             .Join(db.Bookings.AsNoTracking().Include(b => b.Patient), c => c.BookingId, b => b.BookingId, (c, b) => b).ToListAsync(ct);
         var followUps = dueTodayBookings
-            .Select(b => new AttentionItem(AttentionKind.FollowUpDue, b.BookingId, Name(b), $"{Name(b)} — follow-up due today", "View chart", "View chart"))
+            .Select(b => new AttentionItem(AttentionKind.FollowUpDue, b.BookingId, Name(b), $"{Name(b)} — follow-up due today", "View chart", "View chart", today))
             .ToList();
 
         var monthBookings = await db.Bookings.AsNoTracking().Include(b => b.Patient).Include(b => b.Payment)

@@ -6,6 +6,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes; //JJQR - AI (21 Nov 2026) //JJQR - END
 using ClinicApp.Domain;
+using ClinicApp.Domain.Entities; //JJQR - AI (Nov 25, 2026) - VUnpaidCompletedVisit (GAV-2) //JJQR - END
 using ClinicApp.Domain.Enums;
 using ClinicNode.Api.Http;
 using ClinicNode.Core.DoctorExtra;
@@ -54,6 +55,12 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
         var tPerf = new ApiDoctorPerformanceService(api).GetAsync(doctorId, PerformancePeriodName.Today, today, ct);
         var tAnnouncements = api.GetAsync<List<AnnouncementDto>>("/api/announcements", null, ct);
         var tConsults = api.GetAsync<List<JsonObject>>("/api/consultations", new Dictionary<string, string?> { ["doctorId"] = doctorId.ToString("D") }, ct);
+        //JJQR - AI (Nov 25, 2026) - GAV-2: earlier days' Needs attention (web loadClinicOverview): unpaid completed visits from the report, and this doctor's
+        // bookings of the last AttentionGroups.DaysBack days for the patient names on older charts. Both optional: a failed read only leaves older dates out.
+        var attentionFrom = AttentionGroups.From(today);
+        var tUnpaidReport = api.GetAsync<List<VUnpaidCompletedVisit>>("/api/reports/unpaid-completed-visits", null, ct);
+        var tRecentBookings = api.GetAsync<List<BookingDto>>("/api/bookings", new Dictionary<string, string?> { ["doctorId"] = doctorId.ToString("D"), ["from"] = attentionFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }, ct);
+        //JJQR - END
         var doctor = await tDoctor;
         var status = await tStatus;
         var bookings = await tBookings ?? [];
@@ -72,13 +79,25 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
             .ToList();
         var waiting = bookings.Where(b => b.Status == BookingStatus.CheckedIn).ToList();
 
-        var unpaid = (perf?.Unpaid.Items ?? []).Select(u => new AttentionItem(AttentionKind.UnpaidCompleted, u.BookingId, u.PatientName, $"{Peso(u.AmountDue)} still to collect", "Open", u.AppointmentDate.ToString("MMM d", CultureInfo.InvariantCulture))).ToList();
+        var unpaid = (perf?.Unpaid.Items ?? []).Select(u => new AttentionItem(AttentionKind.UnpaidCompleted, u.BookingId, u.PatientName, $"{Peso(u.AmountDue)} still to collect", "Open", u.AppointmentDate.ToString("MMM d", CultureInfo.InvariantCulture), u.AppointmentDate)).ToList();
+        //JJQR - AI (Nov 25, 2026) - GAV-2: unpaid completed visits from earlier days stay listed under their date
+        List<BookingDto> recentBookings = [];
+        try
+        {
+            foreach (var r in await tUnpaidReport ?? [])
+                if (r.BookingId is { } rid && r.DoctorId == doctorId && r.AppointmentDate is { } rd && rd >= attentionFrom && rd < today && (r.AmountDue ?? 0) > 0)
+                    unpaid.Add(new AttentionItem(AttentionKind.UnpaidCompleted, rid, r.PatientName ?? "", $"{Peso(r.AmountDue ?? 0)} still to collect", "Open", rd.ToString("MMM d", CultureInfo.InvariantCulture), rd));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not ApiOfflineException and not ApiUnauthorizedException) { }
+        try { recentBookings = await tRecentBookings ?? []; }
+        catch (Exception ex) when (ex is not OperationCanceledException and not ApiOfflineException and not ApiUnauthorizedException) { }
+        //JJQR - END
         //JJQR - AI (21 Nov 2026) - Finish chart + follow-ups due today exactly as web loadAttention (same texts as the Local service):
         //   chart  = today's Completed consultation with BOTH Assessment and Plan blank ("{name} — Assessment and Plan are blank" · "Finish chart")
         //   follow = consultation whose follow-up date is today and is NOT PRN ("{name} — follow-up due today" · "View chart")
         // Names come from today's bookings (the consultation list has none), else "A patient". A failed read leaves both lists empty (web catch).
         var todayIso = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        var nameByBooking = bookings.GroupBy(b => b.BookingId).ToDictionary(g => g.Key, g => Name(g.First().Patients));
+        var nameByBooking = bookings.Concat(recentBookings).GroupBy(b => b.BookingId).ToDictionary(g => g.Key, g => Name(g.First().Patients)); //JJQR - AI (Nov 25, 2026) - GAV-2: + the last 30 days //JJQR - END
         string Who(Guid id) => nameByBooking.TryGetValue(id, out var n) && n != "Patient" ? n : "A patient";
         var charts = new List<AttentionItem>();
         var followUps = new List<AttentionItem>();
@@ -88,13 +107,17 @@ public sealed class ApiDoctorDashboardService(IApiClient api) : IDoctorDashboard
             foreach (var c in consults)
             {
                 if (!Guid.TryParse(S(c, "booking_id"), out var bookingId)) continue;
-                var onToday = (S(Pick(c["bookings"]), "appointment_date") ?? "").StartsWith(todayIso, StringComparison.Ordinal);
-                if (onToday && string.Equals(S(c, "status"), nameof(ConsultationStatus.Completed), StringComparison.OrdinalIgnoreCase)
+                //JJQR - AI (Nov 25, 2026) - GAV-2: a blank chart from an earlier day (last AttentionGroups.DaysBack days) stays listed under its date
+                var visitIso = S(Pick(c["bookings"]), "appointment_date") ?? "";
+                var inWindow = DateOnly.TryParseExact(visitIso.Length >= 10 ? visitIso[..10] : visitIso, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var visitDate)
+                    && visitDate >= attentionFrom && visitDate <= today;
+                if (inWindow && string.Equals(S(c, "status"), nameof(ConsultationStatus.Completed), StringComparison.OrdinalIgnoreCase)
                     && string.IsNullOrWhiteSpace(S(c, "assessment")) && string.IsNullOrWhiteSpace(S(c, "plan")))
-                    charts.Add(new AttentionItem(AttentionKind.FinishChart, bookingId, Who(bookingId), $"{Who(bookingId)} — Assessment and Plan are blank", "Finish chart", "Finish chart"));
+                    charts.Add(new AttentionItem(AttentionKind.FinishChart, bookingId, Who(bookingId), $"{Who(bookingId)} — Assessment and Plan are blank", "Finish chart", "Finish chart", visitDate));
+                //JJQR - END
                 var f = Pick(c["follow_ups"]);
                 if ((S(f, "follow_up_date") ?? "").StartsWith(todayIso, StringComparison.Ordinal) && !IsPrn(S(f, "reason"), S(f, "instructions")))
-                    followUps.Add(new AttentionItem(AttentionKind.FollowUpDue, bookingId, Who(bookingId), $"{Who(bookingId)} — follow-up due today", "View chart", "View chart"));
+                    followUps.Add(new AttentionItem(AttentionKind.FollowUpDue, bookingId, Who(bookingId), $"{Who(bookingId)} — follow-up due today", "View chart", "View chart", today));
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not ApiOfflineException and not ApiUnauthorizedException)

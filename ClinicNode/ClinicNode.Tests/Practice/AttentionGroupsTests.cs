@@ -1,0 +1,99 @@
+//JJQR - AI (Nov 25, 2026) - GAV-2: "Needs attention" grouped by date (same cases as web attention-groups.test.mjs)
+using ClinicNode.Core.Practice;
+
+namespace ClinicNode.Tests.PracticeTests;
+
+public class AttentionGroupsTests
+{
+    static readonly DateOnly Today = new(2026, 11, 25);
+    static AttentionItem I(AttentionKind k, DateOnly? d, Guid? id = null) => new(k, id ?? Guid.NewGuid(), "P", "t", "a", "s", d);
+
+    [Fact]
+    public void Today_first_then_older_newest_first_with_headers_and_counts()
+    {
+        var g = AttentionGroups.Group([I(AttentionKind.FinishChart, new(2026, 11, 23)), I(AttentionKind.UnpaidCompleted, null),
+            I(AttentionKind.UnpaidCompleted, new(2026, 11, 24)), I(AttentionKind.FinishChart, new(2026, 11, 24)), I(AttentionKind.FollowUpDue, Today)], Today);
+        Assert.Equal(["Today · Nov 25", "Nov 24", "Nov 23"], g.Select(x => x.Header));
+        Assert.Equal(["2 items", "2 items", "1 item"], g.Select(x => x.CountLabel));
+        Assert.True(g[0].IsToday);
+    }
+
+    [Fact]
+    public void Inside_a_date_unpaid_then_charts_then_follow_ups()
+    {
+        var g = AttentionGroups.Group([I(AttentionKind.FollowUpDue, Today), I(AttentionKind.FinishChart, Today), I(AttentionKind.UnpaidCompleted, Today)], Today);
+        Assert.Equal([AttentionKind.UnpaidCompleted, AttentionKind.FinishChart, AttentionKind.FollowUpDue], g[0].Items.Select(i => i.Kind));
+    }
+
+    [Fact]
+    public void Earlier_day_stays_under_its_date_and_future_too_old_and_repeats_are_dropped()
+    {
+        Assert.Equal(new DateOnly(2026, 10, 26), AttentionGroups.From(Today));
+        var dup = Guid.NewGuid();
+        var g = AttentionGroups.Group([I(AttentionKind.UnpaidCompleted, new(2026, 10, 26)), I(AttentionKind.UnpaidCompleted, new(2026, 10, 25)),
+            I(AttentionKind.UnpaidCompleted, new(2026, 11, 26)), I(AttentionKind.FinishChart, Today, dup), I(AttentionKind.FinishChart, Today, dup),
+            I(AttentionKind.UnpaidCompleted, Today, dup)], Today);
+        Assert.Equal([(Today, 2), (new DateOnly(2026, 10, 26), 1)], g.Select(x => (x.Date, x.Items.Count)));
+    }
+
+    [Fact]
+    public void Today_open_older_closed_and_the_doctors_toggle_wins()
+    {
+        var g = AttentionGroups.Group([I(AttentionKind.UnpaidCompleted, Today), I(AttentionKind.UnpaidCompleted, new(2026, 11, 24))], Today);
+        var none = new Dictionary<DateOnly, bool>();
+        Assert.True(AttentionGroups.IsOpen(g[0], none));
+        Assert.False(AttentionGroups.IsOpen(g[1], none));
+        Assert.True(AttentionGroups.IsOpen(g[1], new Dictionary<DateOnly, bool> { [new(2026, 11, 24)] = true }));
+        Assert.False(AttentionGroups.IsOpen(g[0], new Dictionary<DateOnly, bool> { [Today] = false }));
+    }
+
+    [Fact]
+    public void Another_year_shows_the_year_and_item_counts()
+    {
+        Assert.Equal("Dec 31, 2025", AttentionGroups.ShortDate(new(2025, 12, 31), new(2026, 1, 2)));
+        Assert.Equal("Jan 2", AttentionGroups.ShortDate(new(2026, 1, 2), new(2026, 1, 2)));
+        Assert.Equal("1 item", AttentionGroups.ItemsLabel(1));
+        Assert.Equal("3 items", AttentionGroups.ItemsLabel(3));
+    }
+}
+//JJQR - END
+
+//JJQR - AI (Nov 25, 2026) - GAV-2: the Local dashboard keeps an earlier day's unpaid completed visit under its own date (inside the 30-day window only)
+public class DoctorDashboardOlderDaysTests
+{
+    [Fact]
+    public async Task Unpaid_completed_visit_from_an_earlier_day_stays_listed_under_its_date()
+    {
+        await using var host = await TestHost.StartAsync();
+        var session = await host.LoginDoctorAsync();
+        var doctorId = session.DoctorId!.Value;
+        var patients = host.Get<ClinicNode.Core.Patients.IPatientService>();
+        var queue = host.Get<ClinicNode.Core.Queue.IQueueService>();
+        var today = ClinicApp.Domain.ClinicClock.Today;
+
+        async Task<Guid> PastVisit(string first, int daysAgo)
+        {
+            var p = await patients.CreateAsync(new ClinicNode.Core.Patients.NewPatientRequest(first, "Older", new DateOnly(1990, 1, 1), ClinicApp.Domain.Enums.SexType.Female));
+            var w = await queue.CheckInWalkInAsync(new ClinicNode.Core.Queue.WalkInRequest(p.PatientId, doctorId));
+            Assert.True(w.Succeeded, w.Error);
+            var factory = host.Get<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var b = await db.Bookings.FindAsync(w.BookingId!.Value);
+            b!.AppointmentDate = today.AddDays(-daysAgo);
+            b.Status = ClinicApp.Domain.Enums.BookingStatus.Completed;
+            b.AmountDue = 450m;
+            await db.SaveChangesAsync();
+            return b.BookingId;
+        }
+        var yesterday = await PastVisit("Yesterday", 1);
+        var tooOld = await PastVisit("TooOld", AttentionGroups.DaysBack + 5);
+
+        var d = await host.Get<IDoctorDashboardService>().GetAsync(doctorId);
+        var item = Assert.Single(d.Unpaid, a => a.BookingId == yesterday);
+        Assert.Equal(today.AddDays(-1), item.Date);
+        Assert.DoesNotContain(d.Unpaid, a => a.BookingId == tooOld);
+        var groups = AttentionGroups.Group(d.Unpaid.Concat(d.Charts).Concat(d.FollowUps), today);
+        Assert.Contains(groups, g => g.Date == today.AddDays(-1) && !g.IsToday && g.Items.Any(i => i.BookingId == yesterday));
+    }
+}
+//JJQR - END

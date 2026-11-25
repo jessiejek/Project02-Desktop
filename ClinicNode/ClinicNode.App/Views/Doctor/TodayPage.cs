@@ -51,6 +51,7 @@ public sealed class TodayPage : ContentPage
     private bool _loadError;
     private string? _dayStatusError;
     private DoctorDayStatusEnum? _savingStatus;
+    private readonly Dictionary<DateOnly, bool> _attentionToggled = new(); //JJQR - AI (Nov 25, 2026) - GAV-2: date headers the doctor opened / closed in Needs attention //JJQR - END
     private bool _reportsOpen;
 
     private enum Range { Month, Year, Custom }
@@ -524,45 +525,107 @@ public sealed class TodayPage : ContentPage
         }
         // JJQR - END
 
-        if (d.Unpaid.Count + d.Charts.Count + d.FollowUps.Count > 0)
+        //JJQR - AI (Nov 25, 2026) - owner (GAV-2, approved mockup): Needs attention grouped by visit date. "Today · Nov 25" first and open; older dates are
+        // headers that open / close; an item not cleared on its day stays under that date. A count sits next to the title; every row has its action.
+        var attentionGroups = AttentionGroups.Group(d.Unpaid.Concat(d.Charts).Concat(d.FollowUps.Where(a => !IsPrnAttention(a))), ClinicClock.Today);
+        var attentionCount = attentionGroups.Sum(g => g.Items.Count);
+        if (attentionCount > 0)
         {
-            col.Children.Add(ClinicTheme.Text("Needs attention", "LabelSm"));
-            AttentionList(col, d.Unpaid, "more unpaid visits");
-            AttentionList(col, d.Charts, "more charts to finish");
-            AttentionList(col, d.FollowUps, "more follow-ups due");
+            var title = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+            title.Add(ClinicTheme.Text("Needs attention", "LabelSm"), 0, 0);
+            var countLabel = ClinicTheme.Text(AttentionGroups.ItemsLabel(attentionCount), "LabelSm");
+            countLabel.TextColor = ClinicTheme.Color("StatusWarning");
+            countLabel.FontAttributes = FontAttributes.Bold;
+            title.Add(new Border
+            {
+                StrokeThickness = 1, Stroke = ClinicTheme.Color("StatusWarningBorder"), BackgroundColor = ClinicTheme.Color("StatusWarningSurface"),
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 }, Padding = new Thickness(8, 1), Content = countLabel,
+                VerticalOptions = LayoutOptions.Center,
+            }, 1, 0);
+            col.Children.Add(title);
+            foreach (var g in attentionGroups) col.Children.Add(AttentionGroupView(g));
         }
+        //JJQR - END
         //JJQR - AI (21 Nov 2026) - no Refresh button on the web card (live hub + 60 s poll refresh it)
         //JJQR - END
         return Border(col);
     }
 
-    void AttentionList(VerticalStackLayout col, IReadOnlyList<AttentionItem> items, string moreLabel)
+    //JJQR - AI (Nov 25, 2026) - GAV-2: web: PRN follow-ups are saved with today's date but are not "due today" (was filtered in the old AttentionList)
+    static bool IsPrnAttention(AttentionItem a) =>
+        a.Kind == AttentionKind.FollowUpDue && (a.Text.Contains("PRN", StringComparison.OrdinalIgnoreCase) || a.Aside.Contains("PRN", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>One date of Needs attention: a header that opens / closes ("▾ Today · Nov 25 · 3 items"), then its rows when open. Built fresh on every Render
+    /// (no control is reused with an old parent); the header tap redraws on the next UI turn (Windows: the tapped header is replaced by the redraw).</summary>
+    View AttentionGroupView(AttentionGroup g)
     {
-        //JJQR - AI (21 Nov 2026) - web: PRN follow-ups are saved with today's date but are not "due today"; an item without a booking id
-        // (online follow-up feed) opens the appointments list instead of an empty consultation.
-        items = items.Where(a => !(a.Kind == AttentionKind.FollowUpDue && (a.Text.Contains("PRN", StringComparison.OrdinalIgnoreCase) || a.Aside.Contains("PRN", StringComparison.OrdinalIgnoreCase)))).ToList();
-        //JJQR - END
-        foreach (var a in items.Take(5))
+        var open = AttentionGroups.IsOpen(g, _attentionToggled);
+        var box = new VerticalStackLayout { Spacing = 0 };
+        var head = new Grid
         {
-            var id = a.BookingId;
-            var mode = a.Kind switch { AttentionKind.FinishChart => "amend", AttentionKind.FollowUpDue => "view", _ => "view" };
-            //JJQR - AI (21 Nov 2026) - web: unpaid → /doctor/appointments/{id} with "{name} — completed, unpaid" · "₱x due"; charts → consult ?mode=amend; follow-ups → ?mode=view
-            var (text, aside) = a.Kind == AttentionKind.UnpaidCompleted ? UnpaidLine(a) : (a.Text, a.Aside);
-            var row = StaffUi.Row(ClinicTheme.Text(text, "BodyMd"), ClinicTheme.Text(aside, "LabelSm"));
-            var tap = new TapGestureRecognizer();
-            var kind = a.Kind;
-            tap.Tapped += async (_, _) =>
+            ColumnSpacing = 8, Padding = new Thickness(10, 8), BackgroundColor = ClinicTheme.Color("SurfaceContainerLow"),
+            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+        };
+        var caret = ClinicTheme.Text(open ? "▾" : "▸", "LabelMd");
+        caret.TextColor = ClinicTheme.Color("OnSurfaceVariant");
+        var header = ClinicTheme.Text(g.Header, "LabelMd");
+        header.FontAttributes = FontAttributes.Bold;
+        head.Add(caret, 0, 0);
+        head.Add(header, 1, 0);
+        head.Add(ClinicTheme.Text(g.CountLabel, "MutedSm"), 2, 0);
+        var date = g.Date;
+        head.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(() => { _attentionToggled[date] = !open; Render(); })) });
+        SemanticProperties.SetDescription(head, $"{g.Header}, {g.CountLabel}, {(open ? "open" : "closed")}");
+        box.Children.Add(head);
+        if (open)
+        {
+            foreach (var a in g.Items.Take(AttentionGroups.MaxRows)) box.Children.Add(AttentionRow(a));
+            if (g.Items.Count > AttentionGroups.MaxRows)
             {
-                if (kind == AttentionKind.UnpaidCompleted || id == Guid.Empty) await OpenAppointmentAsync(id);
-                else await GoAsync($"consult?bookingId={id}&mode={mode}");
-            };
-            //JJQR - END
-            row.GestureRecognizers.Add(tap);
-            col.Children.Add(row);
+                var more = StaffUi.Link($"+{g.Items.Count - AttentionGroups.MaxRows} more — view all", () => GoAsync("//appointments"));
+                more.Margin = new Thickness(10, 6);
+                box.Children.Add(more);
+            }
         }
-        if (items.Count > 5)
-            col.Children.Add(StaffUi.Link($"+{items.Count - 5} {moreLabel} — view all", () => GoAsync("//appointments")));
+        return new Border
+        {
+            StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Padding = 0, Content = box,
+        };
     }
+
+    View AttentionRow(AttentionItem a)
+    {
+        var id = a.BookingId;
+        var kind = a.Kind;
+        var name = string.IsNullOrWhiteSpace(a.PatientName) ? "A patient" : a.PatientName;
+        //JJQR - AI (21 Nov 2026) - web: unpaid → /doctor/appointments/{id} ("₱x due"); charts → consult ?mode=amend; follow-ups → ?mode=view
+        var (what, note, action, style) = kind switch
+        {
+            AttentionKind.UnpaidCompleted => ($"Record payment {UnpaidLine(a).Aside.Replace(" due", "", StringComparison.Ordinal)}", "Completed, unpaid", "View appointment", "PrimaryButton"),
+            AttentionKind.FinishChart => ("Finish chart: Assessment and Plan are blank", "Completed visit", "Finish chart", "SecondaryButton"),
+            _ => ("Follow-up due today", "", "View chart", "SecondaryButton"),
+        };
+        var mode = kind == AttentionKind.FinishChart ? "amend" : "view";
+        //JJQR - END
+        var left = new VerticalStackLayout { Spacing = 1, VerticalOptions = LayoutOptions.Center };
+        var who = ClinicTheme.Text(name, "BodyMd");
+        who.FontAttributes = FontAttributes.Bold;
+        left.Children.Add(who);
+        left.Children.Add(ClinicTheme.Text(what, "BodySm"));
+        if (note.Length > 0) left.Children.Add(ClinicTheme.Text(note, "MutedSm"));
+        var btn = StaffUi.Btn(action, async () =>
+        {
+            if (kind == AttentionKind.UnpaidCompleted || id == Guid.Empty) await OpenAppointmentAsync(id);
+            else await GoAsync($"consult?bookingId={id}&mode={mode}");
+        }, style);
+        btn.VerticalOptions = LayoutOptions.Center;
+        var row = new Grid { ColumnSpacing = 12, Padding = new Thickness(10, 8), ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        row.Add(left, 0, 0);
+        row.Add(btn, 1, 0);
+        return new VerticalStackLayout { Spacing = 0, Children = { new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.6f) }, row } };
+    }
+    //JJQR - END
 
     View AvailabilityCard()
     {
