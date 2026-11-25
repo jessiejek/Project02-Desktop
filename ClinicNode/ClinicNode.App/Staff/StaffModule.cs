@@ -30,6 +30,9 @@ public static class StaffModule
         // ── online-first routers (one line per screen's service) ─────────────────────────────────────
         services.AddOnlineFirst<IStaffDashboardService, ApiStaffDashboardService, StaffDashboardService>();      // dashboard
         services.AddOnlineFirst<IStaffQueueBoardService, ApiStaffQueueBoardService, StaffQueueBoardService>();   // queue
+        //JJQR - AI (2026-11-25) - why: GAV-4 "Not finished on an earlier day" (doctor Today, doctor Appointments → Today, staff Queue). One registration for both roles.
+        services.AddOnlineFirst<ClinicNode.Core.Queue.ILeftoverQueueService, ClinicNode.Api.Services.ApiLeftoverQueueService, ClinicNode.Core.Queue.LocalLeftoverQueueService>();
+        //JJQR - END
         services.AddOnlineFirst<IStaffWalkInService, ApiStaffWalkInService, StaffWalkInService>();               // walk-in (R-/S- ticket)
         services.AddOnlineFirst<IStaffPaymentsService, ApiStaffPaymentsService, StaffPaymentsService>();         // payments (+ booking-detail record / waive / receipt)
         services.AddOnlineFirst<IStaffPatientsService, ApiStaffPatientsService, StaffPatientsService>();         // patients + detail, quick register

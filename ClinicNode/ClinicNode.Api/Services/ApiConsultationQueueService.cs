@@ -29,7 +29,15 @@ public sealed class ApiConsultationQueueService(IApiClient api) : IConsultationQ
     public async Task<StaffResult> StartConsultAsync(Guid doctorId, Guid bookingId, CancellationToken ct = default)
     {
         var row = (await TodayAsync(doctorId, ct)).FirstOrDefault(b => b.BookingId == bookingId);
-        if (row is null) return StaffResult.Fail("This booking is not on your list today.");
+        //JJQR - AI (2026-11-25) - why: GAV-4 "Continue" on a patient left over from an earlier day: it is not on today's list, so look in this doctor's
+        // leftovers (GET /api/queue/leftovers) before refusing. In progress → open it; Waiting / On hold → call it in (the server allows it).
+        if (row is null)
+        {
+            var left = (await new ApiLeftoverQueueService(api).ListAsync(doctorId, ct)).FirstOrDefault(l => l.BookingId == bookingId);
+            if (left is null) return StaffResult.Fail("This booking is not on your list today.");
+            return left.Status == BookingStatus.InProgress ? StaffResult.Ok(bookingId) : await CallAsync(bookingId, ct);
+        }
+        //JJQR - END
         if (row.Status == BookingStatus.InProgress) return StaffResult.Ok(bookingId);
         if (row.Status != BookingStatus.CheckedIn) return StaffResult.Fail("This patient is not ready to consult.");
         return await CallAsync(bookingId, ct);

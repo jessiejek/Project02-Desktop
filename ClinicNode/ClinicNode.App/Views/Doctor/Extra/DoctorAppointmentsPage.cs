@@ -13,6 +13,7 @@ using ClinicNode.App.Controls;
 using ClinicNode.App.ViewModels.Doctor.Extra;
 using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.App.Views.Staff;
+using ClinicNode.App.Views.Shared.Queue; //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
 using ClinicNode.Core.DoctorExtra;
 
 namespace ClinicNode.App.Views.Doctor.Extra;
@@ -23,6 +24,22 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
     private readonly VerticalStackLayout _body = StaffUi.Column(24);
     private readonly Entry _search = new() { Placeholder = "Search patient or queue number" };
     private bool _notLinked;
+    //JJQR - AI (2026-11-25) - why: GAV-4 "Not finished on an earlier day" on Appointments → Today (this doctor's own leftovers), right under today's list
+    private LeftoverQueueSection? _leftoverSection;
+    LeftoverQueueSection Leftovers => _leftoverSection ??= new LeftoverQueueSection(this, Sp, () => DoctorExtraUi.DoctorId(Sp), ContinueLeftoverAsync,
+        () => { try { Render(); } catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("DoctorAppointments.Render", ex); } }, ReloadAsync);
+
+    async Task ContinueLeftoverAsync(ClinicNode.Core.Queue.LeftoverRow r)
+    {
+        if (r.Status != BookingStatus.InProgress && DoctorExtraUi.DoctorId(Sp) is { } me
+            && Sp.GetService(typeof(ClinicNode.Core.Doctor.IConsultationQueueService)) is ClinicNode.Core.Doctor.IConsultationQueueService queue)
+        {
+            var res = await queue.StartConsultAsync(me, r.BookingId);
+            if (!res.Succeeded) { ClinicToast.Show(res.Error ?? "This patient is not ready to consult.", ToastKind.Error); return; }
+        }
+        await DoctorExtraUi.OpenConsultAsync(r.BookingId);
+    }
+    //JJQR - END
 
     public DoctorAppointmentsPage(IServiceProvider sp) : base(sp, "Appointments")
     {
@@ -51,7 +68,9 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
         if (_body.Children.Count > 0) Render();
         try
         {
+            var leftoverTask = scope == AppointmentScope.Today ? Leftovers.LoadAsync() : Task.CompletedTask; //JJQR - AI (2026-11-25) - GAV-4 (never throws) //JJQR - END
             var rows = await Svc<IDoctorAppointmentsService>().ListAsync(doctorId.Value, scope);
+            await leftoverTask; //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
             if (scope != _vm.Scope) return; // a newer scope won (web requestId)
             _vm.SetRows(rows);
             _vm.Error = null;
@@ -250,6 +269,10 @@ public sealed class DoctorAppointmentsPage : StaffLivePage
                 empty.Children.Add(Centered(StaffUi.Btn("Review appointment history  →", () => SwitchScope(AppointmentScope.All))));
             col.Children.Add(empty);
         }
+
+        //JJQR - AI (2026-11-25) - why: GAV-4 (approved pro mockup): Today tab only, under today's list. Built fresh on every Render.
+        if (today && Leftovers.Build() is { } leftoverView) col.Children.Add(leftoverView);
+        //JJQR - END
 
         // footer (once loaded): updated time + paging
         if (_vm.Loaded)

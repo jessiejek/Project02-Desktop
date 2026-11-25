@@ -21,6 +21,7 @@ using ClinicNode.Core.Doctor;
 //JJQR - END
 //JJQR - AI (21 Nov 2026) - 1:1 pass: Needs-attention "unpaid" + Recent Bookings open the appointment detail (web /doctor/appointments/{id})
 using ClinicNode.App.Views.Doctor.Extra;
+using ClinicNode.App.Views.Shared.Queue; //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
 //JJQR - END
 
 namespace ClinicNode.App.Views.Doctor;
@@ -54,6 +55,16 @@ public sealed class TodayPage : ContentPage
     private readonly Dictionary<DateOnly, bool> _attentionToggled = new(); //JJQR - AI (Nov 25, 2026) - GAV-2: date headers the doctor opened / closed in Needs attention //JJQR - END
     //JJQR - AI (Nov 25, 2026) - doctor "Mark received": rows already marked (hidden at once, before the reload lands) and a guard so only one confirm runs
     private readonly HashSet<Guid> _receivedIds = new();
+    //JJQR - AI (2026-11-25) - why: GAV-4 "Not finished on an earlier day" (this doctor's own leftovers) inside the queue card
+    private LeftoverQueueSection? _leftoverSection;
+    LeftoverQueueSection Leftovers => _leftoverSection ??= new LeftoverQueueSection(this, _services, () => DoctorId,
+        r => StartConsultAsync(r.BookingId, r.Status == BookingStatus.InProgress), SafeRender, ReloadAsync);
+    void SafeRender()
+    {
+        try { Render(); }
+        catch (Exception ex) { NodeErrorLog.Write(_options, "TodayPage.Render", ex); }
+    }
+    //JJQR - END
     private bool _markingReceived;
     //JJQR - END
     private bool _reportsOpen;
@@ -160,6 +171,7 @@ public sealed class TodayPage : ContentPage
             //JJQR - AI (Nov 22, 2026) - the two server reads do not depend on each other: ask for both at the same time (was one after the other)
             var analyticsTask = LoadAnalyticsAsync(id);
             //JJQR - END
+            var leftoverTask = Leftovers.LoadAsync(); //JJQR - AI (2026-11-25) - why: GAV-4 earlier-day patients, read alongside (never throws) //JJQR - END
             try { _data = await _dash.GetAsync(id); _loadError = false; }
             catch (Exception ex)
             {
@@ -169,6 +181,7 @@ public sealed class TodayPage : ContentPage
                 // JJQR - END
             }
             await analyticsTask;
+            await leftoverTask; //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
             try { Render(); }
             catch (Exception ex)
             {
@@ -528,6 +541,10 @@ public sealed class TodayPage : ContentPage
             });
         }
         // JJQR - END
+
+        //JJQR - AI (2026-11-25) - why: GAV-4 (approved pro mockup): below today's queue, above Needs attention. Built fresh on every Render.
+        if (Leftovers.Build() is { } leftoverView) col.Children.Add(leftoverView);
+        //JJQR - END
 
         //JJQR - AI (Nov 25, 2026) - owner (GAV-2, approved mockup): Needs attention grouped by visit date. "Today · Nov 25" first and open; older dates are
         // headers that open / close; an item not cleared on its day stays under that date. A count sits next to the title; every row has its action.

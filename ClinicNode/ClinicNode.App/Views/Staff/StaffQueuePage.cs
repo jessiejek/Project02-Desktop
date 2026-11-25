@@ -5,6 +5,7 @@ using ClinicNode.App.Views.Shared.Controls;
 using ClinicNode.App.Services;
 using ClinicNode.Core.Print;
 using ClinicNode.Core.Staff;
+using ClinicNode.App.Views.Shared.Queue; //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
 
 namespace ClinicNode.App.Views.Staff;
 
@@ -18,6 +19,22 @@ public sealed class StaffQueuePage : StaffLivePage
     private string _filter = "active";
     //JJQR - END
     private readonly Label _actionError = StaffUi.Error();
+    //JJQR - AI (2026-11-25) - why: GAV-4 "Not finished on an earlier day": staff see the clinic's earlier-day patients not finished (same scope as this
+    // page's today queue; owner default, can change). Continue opens the booking (staff do not consult). The host holds only fresh views.
+    private readonly VerticalStackLayout _leftoverHost = new() { Spacing = 0 };
+    private LeftoverQueueSection? _leftoverSection;
+    LeftoverQueueSection Leftovers => _leftoverSection ??= new LeftoverQueueSection(this, Sp, () => null,
+        r => StaffUi.PushAsync<StaffBookingDetailPage>(this, r.BookingId), RenderLeftovers, ReloadAsync);
+    void RenderLeftovers()
+    {
+        try
+        {
+            _leftoverHost.Children.Clear();
+            if (Leftovers.Build() is { } v) _leftoverHost.Children.Add(v);
+        }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffQueue.Leftovers", ex); }
+    }
+    //JJQR - END
     private readonly ReprintPanel _reprint; // JJQR - AI (Nov 21, 2026) - allen2 reprint flags badge + list
     //JJQR - AI (21 Nov 2026) - STAFF PARITY (web /staff/queue): ErrorState before the first load; warning + last queue kept afterwards
     private readonly VerticalStackLayout _body = new() { Spacing = 16 };
@@ -41,6 +58,7 @@ public sealed class StaffQueuePage : StaffLivePage
         _body.Children.Add(LoadError);
         _body.Children.Add(_actionError);
         _body.Children.Add(_list);
+        _body.Children.Add(_leftoverHost); //JJQR - AI (2026-11-25) - GAV-4: under today's queue //JJQR - END
         page.Children.Add(_body);
         //JJQR - END
         Content = StaffUi.Scroll(page);
@@ -53,7 +71,10 @@ public sealed class StaffQueuePage : StaffLivePage
     protected override async Task LoadAsync()
     {
         await _reprint.RefreshAsync();
+        var leftoverTask = Leftovers.LoadAsync(); //JJQR - AI (2026-11-25) - GAV-4 (never throws) //JJQR - END
         var (s, rows) = await Svc<IStaffQueueBoardService>().GetAsync();
+        await leftoverTask; //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
+        RenderLeftovers(); //JJQR - AI (2026-11-25) - GAV-4 //JJQR - END
         _stats.Children.Clear();
         foreach (var (label, value) in new[] { ("Waiting", s.Waiting), ("With doctor", s.WithDoctor), ("Booked, not arrived", s.BookedNotArrived), ("Completed", s.Completed), ("No-show", s.NoShow), ("Total today", s.Total) })
             _stats.Children.Add(StaffUi.Stat(label, value.ToString()));

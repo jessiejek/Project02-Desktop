@@ -100,7 +100,15 @@ public sealed class DoctorDashboardService : IDoctorDashboardService
     {
         var entries = await _queue.ListDoctorTodayAsync(doctorId, ct);
         var row = entries.FirstOrDefault(e => e.BookingId == bookingId);
-        if (row is null) return StaffResult.Fail("This booking is not on your list today.");
+        //JJQR - AI (2026-11-25) - why: GAV-4 "Continue" on a patient left over from an earlier day (offline / this computer's database): not on today's
+        // list, so look for this doctor's own leftover (LeftoverGroups rules) before refusing.
+        if (row is null)
+        {
+            var left = (await new LocalLeftoverQueueService(_factory, _queue).ListAsync(doctorId, ct)).FirstOrDefault(l => l.BookingId == bookingId);
+            if (left is null) return StaffResult.Fail("This booking is not on your list today.");
+            return left.Status == BookingStatus.InProgress ? StaffResult.Ok(bookingId) : await CallOwnedAsync(bookingId, ct);
+        }
+        //JJQR - END
         if (row.Status == BookingStatus.InProgress) return StaffResult.Ok(bookingId);
         if (row.Status != BookingStatus.CheckedIn) return StaffResult.Fail("This patient is not ready to consult.");
         return await CallOwnedAsync(bookingId, ct);
