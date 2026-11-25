@@ -66,18 +66,19 @@ public sealed class DoctorTemplateEditorPage : ContentPage
                 "You have edits that haven't been saved. Closing now will lose them.", "Discard", danger: true, backText: "Keep editing"))
             return;
         _closing = true;
-        await LeaveAsync();
+        if (!await LeaveAsync()) _closing = false; //JJQR - AI (Nov 25, 2026) - code review: if closing failed, keep the buttons working //JJQR - END
     }
 
     //JJQR - AI (Nov 24, 2026) - owner (Windows): after a delete, the editor opened as a full-window overlay (no sidebar) and Save failed with
     // "PopAsync is not supported, please use a NavigationPage" (errors.log). Close the editor whichever way it was opened: as an overlay (modal),
     // as a normal pushed page, or else go back to Templates. A failure here is logged, never a crash.
-    private async Task LeaveAsync()
+    //JJQR - AI (Nov 25, 2026) - code review: returns false when every way out failed, so the caller can un-stick the buttons //JJQR - END
+    private async Task<bool> LeaveAsync()
     {
         try
         {
-            if (Navigation.ModalStack.Contains(this)) { await Navigation.PopModalAsync(); return; }
-            if (Navigation.NavigationStack.Count > 1 && Navigation.NavigationStack[^1] == this) { await Navigation.PopAsync(); return; }
+            if (Navigation.ModalStack.Contains(this)) { await Navigation.PopModalAsync(); return true; }
+            if (Navigation.NavigationStack.Count > 1 && Navigation.NavigationStack[^1] == this) { await Navigation.PopAsync(); return true; }
             //JJQR - AI (Nov 25, 2026) - code review: neither a modal nor the top of the stack (the overlay case). Shell's ".." would do nothing here without an error,
             // leaving the editor stuck, so log it and use the explicit way back.
             ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave", new InvalidOperationException("Editor was neither a modal nor the top page; going back to Templates."));
@@ -86,11 +87,24 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave", ex); }
         try
         {
+            //JJQR - AI (Nov 25, 2026) - code review: close only this editor's overlay (not other dialogs), then try the screen she came from
+            // before falling back to the Templates tab.
             var nav = Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
-            while (nav is not null && nav.ModalStack.Count > 0) await nav.PopModalAsync(false);
-            await Shell.Current.GoToAsync("//templates");
+            if (nav is not null && nav.ModalStack.Contains(this))
+                while (nav.ModalStack.Count > 0 && nav.ModalStack.Contains(this)) await nav.PopModalAsync(false);
+            var shell = Shell.Current;
+            if (shell is null) return false;
+            var wentBack = false;
+            if (shell.Navigation.NavigationStack.Contains(this) && shell.Navigation.NavigationStack.Count > 1)
+            {
+                await shell.GoToAsync("..");
+                wentBack = !shell.Navigation.NavigationStack.Contains(this);
+            }
+            if (!wentBack) await shell.GoToAsync("//templates");
+            //JJQR - END
+            return true;
         }
-        catch (Exception ex2) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave (fallback)", ex2); }
+        catch (Exception ex2) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave (fallback)", ex2); return false; }
     }
     //JJQR - END
 
@@ -115,7 +129,9 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         }
         _closing = true;
         Saved?.Invoke(toast);
-        await LeaveAsync(); //JJQR - AI (Nov 24, 2026) - was Navigation.PopAsync() (failed when opened as an overlay) //JJQR - END
+        //JJQR - AI (Nov 24, 2026) - was Navigation.PopAsync() (failed when opened as an overlay); Nov 25: un-stick the buttons if closing failed
+        if (!await LeaveAsync()) _closing = false;
+        //JJQR - END
     }
 
     static string? Clean(string s) => s.Trim().Length > 0 ? s.Trim() : null;

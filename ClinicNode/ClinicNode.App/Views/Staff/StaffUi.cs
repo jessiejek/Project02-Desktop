@@ -193,19 +193,32 @@ public sealed class StaffDialog : ContentPage
             if (maxLength is { } max) input.MaxLength = max;
             col.Children.Add(StaffUi.Field(fieldLabel, input, hint));
         }
-        var back = StaffUi.Btn(backText, async () => { _done.TrySetResult(false); await Navigation.PopModalAsync(); }, "SecondaryButton");
+        var back = StaffUi.Btn(backText, () => FinishAsync(false), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         var ok = StaffUi.Btn(confirmText, async () =>
         {
             StaffUi.Show(error, null);
             var problem = await confirm(input?.Text ?? "");
             if (problem is not null) { StaffUi.Show(error, problem); return; }
-            _done.TrySetResult(true);
-            await Navigation.PopModalAsync();
+            await FinishAsync(true); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         }, danger ? "DangerButton" : "PrimaryButton");
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, ok } };
-        Content = ClinicNode.App.Controls.ClinicModal.Build(title, col, footer, async () => { _done.TrySetResult(false); await Navigation.PopModalAsync(); });
+        Content = ClinicNode.App.Controls.ClinicModal.Build(title, col, footer, () => FinishAsync(false)); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         //JJQR - END
     }
+
+    //JJQR - AI (Nov 25, 2026) - code review: the caller used to get its answer BEFORE the dialog closed, so it redrew or navigated while the
+    // dialog was still on screen (on Windows the template editor then opened as a full-window overlay). Close the dialog first, then answer.
+    // A second click while closing does nothing; if closing fails it is logged and the caller still gets its answer.
+    private bool _finishing;
+    private async Task FinishAsync(bool result)
+    {
+        if (_finishing) return;
+        _finishing = true;
+        try { if (Navigation.ModalStack.Contains(this)) await Navigation.PopModalAsync(); }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffDialog.Close", ex); }
+        _done.TrySetResult(result);
+    }
+    //JJQR - END
 
     public static async Task<bool> ShowAsync(Page from, string title, string message, string? fieldLabel, string? placeholder, string backText, string confirmText,
         Func<string, Task<string?>> confirm, bool danger = false, string? hint = null, bool multiline = true,
