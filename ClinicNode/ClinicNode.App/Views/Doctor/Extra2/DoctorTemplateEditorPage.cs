@@ -66,8 +66,33 @@ public sealed class DoctorTemplateEditorPage : ContentPage
                 "You have edits that haven't been saved. Closing now will lose them.", "Discard", danger: true, backText: "Keep editing"))
             return;
         _closing = true;
-        await Navigation.PopAsync();
+        await LeaveAsync();
     }
+
+    //JJQR - AI (Nov 24, 2026) - owner (Windows): after a delete, the editor opened as a full-window overlay (no sidebar) and Save failed with
+    // "PopAsync is not supported, please use a NavigationPage" (errors.log). Close the editor whichever way it was opened: as an overlay (modal),
+    // as a normal pushed page, or else go back to Templates. A failure here is logged, never a crash.
+    private async Task LeaveAsync()
+    {
+        try
+        {
+            if (Navigation.ModalStack.Contains(this)) { await Navigation.PopModalAsync(); return; }
+            if (Navigation.NavigationStack.Count > 1 && Navigation.NavigationStack[^1] == this) { await Navigation.PopAsync(); return; }
+            await Shell.Current.GoToAsync("..");
+        }
+        catch (Exception ex)
+        {
+            ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave", ex);
+            try
+            {
+                var nav = Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
+                while (nav is not null && nav.ModalStack.Count > 0) await nav.PopModalAsync();
+                await Shell.Current.GoToAsync("//templates");
+            }
+            catch (Exception ex2) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave (fallback)", ex2); }
+        }
+    }
+    //JJQR - END
 
     protected override bool OnBackButtonPressed()
     {
@@ -90,7 +115,7 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         }
         _closing = true;
         Saved?.Invoke(toast);
-        await Navigation.PopAsync();
+        await LeaveAsync(); //JJQR - AI (Nov 24, 2026) - was Navigation.PopAsync() (failed when opened as an overlay) //JJQR - END
     }
 
     static string? Clean(string s) => s.Trim().Length > 0 ? s.Trim() : null;
@@ -225,7 +250,7 @@ public sealed class DoctorTemplateEditorPage : ContentPage
                 if (isOpen) { body.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant").WithAlpha(0.5f) }); body.Children.Add(DoctorRxFields.TemplateLine(d, catalog)); }
                 var card = StaffUi.Row(body);
                 if (isOpen && card is Border b) { b.Stroke = ClinicTheme.Color("Primary"); b.StrokeThickness = 1.5; }
-                if (!isOpen) card.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { open = d.Key; Render(); }) });
+                if (!isOpen) card.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(() => { open = d.Key; Render(); })) }); //JJQR - AI (Nov 24, 2026) - Windows: the tapped card is rebuilt, so redraw on the next UI turn //JJQR - END
                 list.Children.Add(card);
             }
             p.Refresh();

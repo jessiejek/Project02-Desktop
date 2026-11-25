@@ -144,7 +144,10 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
     private async Task Open(DoctorTemplateEditorPage editor)
     {
         editor.Saved += t => { Say(t, true); _ = ReloadAsync(); };
-        await Navigation.PushAsync(editor);
+        //JJQR - AI (Nov 24, 2026) - owner (Windows): right after a Delete (its confirm dialog had just closed) the editor opened as a full-window overlay with no sidebar,
+        // and could not close. Always open it inside the app's own frame (the Shell), never on top of a leftover dialog.
+        await (Shell.Current?.Navigation ?? Navigation).PushAsync(editor);
+        //JJQR - END
     }
 
     private static string TabLabel(string id) => DoctorTemplateRules.Tabs.First(t => t.Id == id).Label;
@@ -543,7 +546,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
                 col.Children.Add(ClinicTheme.Text(hit.Title, "LabelLg"));
                 if (!string.IsNullOrWhiteSpace(hit.Snippet)) col.Children.Add(ClinicTheme.Text(hit.Snippet, "MutedSm"));
                 var row = StaffUi.Row(col);
-                row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => { _search.Text = ""; _allTabs = false; _tab = tab; Render(); }) });
+                row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(() => { _search.Text = ""; _allTabs = false; _tab = tab; Render(); })) }); //JJQR - AI (Nov 24, 2026) - Windows: the tapped row is removed by the redraw, so redraw on the next UI turn //JJQR - END
                 _list.Children.Add(row);
             }
         }
