@@ -146,12 +146,35 @@ public sealed class ApiStaffPaymentsService(IApiClient api, IDbContextFactory<Cl
             //JJQR - END
             return r;
         }
+        //JJQR - AI (Nov 25, 2026) - owner ("just trap the 2nd transaction"): 409 not_unpaid = the doctor's Mark received (or another desk) recorded it first;
+        // the server changed NOTHING. Show its sentence, and drop the OR this computer reserved for it (same as an OR clash) so it is not pushed later.
+        catch (ApiConflictException ex) when (IsNoLongerUnpaid(ex.Body))
+        {
+            if (typedOr is null) await ForgetClashingOrAsync(payment.PaymentId, orNumber, null, ct);
+            return StaffResult.Fail(string.IsNullOrWhiteSpace(ex.Message) ? NoLongerUnpaidMessage : ex.Message);
+        }
+        //JJQR - END
         catch (Exception ex) when (ApiStaff.IsServerAnswer(ex))
         {
             return StaffResult.Fail(string.IsNullOrWhiteSpace(ex.Message) ? "The payment was not recorded. Please try again." : ex.Message);
         }
         //JJQR - END
     }
+
+    //JJQR - AI (Nov 25, 2026) - owner: the server's "someone recorded it first" answer ({ error: "not_unpaid", message })
+    public const string NoLongerUnpaidMessage = "This visit is no longer unpaid (it was just recorded).";
+    internal static bool IsNoLongerUnpaid(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return false;
+        try
+        {
+            return System.Text.Json.Nodes.JsonNode.Parse(body) is System.Text.Json.Nodes.JsonObject o
+                && o["error"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var code)
+                && string.Equals(code, "not_unpaid", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException) { return false; }
+    }
+    //JJQR - END
 
     //JJQR - AI (21 Nov 2026) - TASK 12: clear an OR this computer reserved on its local payment row when the server answered 409 or_number_duplicate.
     // Only an unpaid local row whose OR equals the clashing number is touched (a settled local payment is never changed). No new OR is invented.

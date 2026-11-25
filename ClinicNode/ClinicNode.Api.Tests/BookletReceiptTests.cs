@@ -139,6 +139,39 @@ public class BookletReceiptTests
         Assert.DoesNotContain(rig.Http.Requests, x => x.PathAndQuery.Contains("or-number") || x.PathAndQuery.Contains("allocate"));
     }
 
+    //JJQR - AI (Nov 25, 2026) - owner ("just trap the 2nd transaction"): the doctor's Mark received got there first; the server answers 409 not_unpaid
+    [Fact]
+    public async Task Online_a_payment_someone_just_recorded_shows_the_servers_sentence_and_changes_nothing_here()
+    {
+        await using var rig = await StartAsync();
+        await rig.GoOfflineAsync();
+        var booking = await UnpaidVisitAsync(rig, "Second");
+        await rig.Get<ClinicNode.Core.Sync.IWorkModeService>().SetAsync(ClinicNode.Core.Sync.WorkMode.Online);
+        var paymentId = await WithDb(rig, db => db.Payments.Where(p => p.BookingId == booking).Select(p => p.PaymentId).SingleAsync());
+        var due = await WithDb(rig, db => db.Payments.Where(p => p.BookingId == booking).Select(p => p.Amount).SingleAsync());
+        rig.Http.Route = r =>
+        {
+            var path = r.RequestUri!.AbsolutePath;
+            if (path is "/health" or "/health/ready") return FakeHandler.Status(HttpStatusCode.OK);
+            if (path == $"/api/payments/booking/{booking}") return FakeHandler.Json(new { payment_id = paymentId, booking_id = booking, amount = due, status = "Unpaid" });
+            if (path == $"/api/payments/{paymentId}/confirm")
+                return FakeHandler.Text("""{"error":"not_unpaid","message":"This visit is no longer unpaid (it was just recorded)."}""", HttpStatusCode.Conflict);
+            return FakeHandler.Status(HttpStatusCode.NotFound);
+        };
+        var refused = await rig.Get<IStaffPaymentsService>().RecordAsync(await InputAsync(rig, booking, "BK-11"));
+        Assert.False(refused.Succeeded);
+        Assert.Equal(ApiStaffPaymentsService.NoLongerUnpaidMessage, refused.Error);
+        Assert.False(PaymentOutcome.TryGetOrClash(refused, out _)); // not an OR clash: no OR field appears
+        var local = await WithDb(rig, db => db.Payments.AsNoTracking().SingleAsync(p => p.BookingId == booking));
+        Assert.Equal(PaymentStatus.Unpaid, local.Status);
+        Assert.Single(rig.Http.Requests, x => x.PathAndQuery.EndsWith("/confirm") && x.Method == HttpMethod.Post); // no local fallback, no retry
+        Assert.True(ApiStaffPaymentsService.IsNoLongerUnpaid("""{"error":"not_unpaid"}"""));
+        Assert.False(ApiStaffPaymentsService.IsNoLongerUnpaid("""{"error":"or_number_duplicate"}"""));
+        Assert.False(ApiStaffPaymentsService.IsNoLongerUnpaid("not json"));
+        Assert.False(ApiStaffPaymentsService.IsNoLongerUnpaid(null));
+    }
+    //JJQR - END
+
     private static async Task<T> WithDb<T>(ApiRig rig, Func<ClinicAppDbContext, Task<T>> f)
     {
         await using var db = await rig.Get<IDbContextFactory<ClinicAppDbContext>>().CreateDbContextAsync();

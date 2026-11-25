@@ -155,6 +155,25 @@ public class DoctorDashboardOlderDaysTests
         }
         Assert.DoesNotContain((await dash.GetAsync(doctorId)).Unpaid, a => a.BookingId == bookingId);
         Assert.False((await dash.MarkReceivedAsync(doctorId, bookingId, 450m)).Succeeded);           // second tap: refused, nothing changes
+
+        //JJQR - AI (Nov 25, 2026) - owner (no local audit row is fine "as long as it is synced"): the Mark received is queued for sync as ONE payment "confirm",
+        // and the snapshot that is pushed (built by the backend's own SyncDocuments) carries what the cloud needs to write its audit row on sync:
+        // Paid, Cash, the doctor's user, and the Mark received note (the cloud's SyncPushEngine.DoctorMarkedReceivedNote has the same text).
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var pending = await host.Get<ClinicNode.Data.ISyncOutbox>().ListPendingAsync(db, 500);
+            var payId = (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(db.Payments, x => x.BookingId == bookingId)).PaymentId;
+            var op = Assert.Single(pending, e => e.Aggregate == "payment" && e.EntityId == payId && e.OperationType == "confirm");
+            var data = await ClinicNode.Sync.Local.AggregateDocuments.BuildSnapshotAsync(db, op);
+            Assert.NotNull(data);
+            Assert.Equal("Paid", data!["status"]?.GetValue<string>());
+            Assert.Equal("Cash", data["payment_method"]?.GetValue<string>());
+            Assert.Equal(450m, data["amount_received"]!.GetValue<decimal>());
+            Assert.Equal(session.UserId.ToString(), data["confirmed_by_user_id"]?.GetValue<string>(), ignoreCase: true);
+            Assert.Equal("Cash received by the doctor (marked on the doctor dashboard).", data["confirm_notes"]?.GetValue<string>());
+            Assert.Equal(DoctorDashboardService.MarkReceivedNote, data["confirm_notes"]?.GetValue<string>());
+        }
+        //JJQR - END
     }
     //JJQR - END
 }
