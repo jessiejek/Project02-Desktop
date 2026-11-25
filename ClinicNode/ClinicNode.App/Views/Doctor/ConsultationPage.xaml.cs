@@ -2054,6 +2054,24 @@ public partial class ConsultationPage : ContentPage
     }
     //JJQR - END
 
+    //JJQR - AI (Nov 25, 2026) - owner: the patient chart during the consult (Lab Results / Documents upload, Reprint). Opened for THIS visit, so uploads are saved with it.
+    // Saved first, like before printing, so nothing typed is lost while the chart is open.
+    bool _openingChart;
+    async void OnOpenChart(object? sender, EventArgs e)
+    {
+        if (_openingChart || _workspace is null) return;
+        _openingChart = true;
+        try
+        {
+            if (_mode != "view" && Dirty && !await SaveAsync(goNext: false, silent: true)) return;
+            await WriteThroughBeforePrintAsync(); // so a reprint of this visit from the chart matches what was just saved
+            await ClinicNode.App.Views.Doctor.Extra.DoctorPatientChartPage.OpenAsync(this, D.PatientId, D.BookingId);
+        }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Consult.OpenChart", ex); }
+        finally { _openingChart = false; }
+    }
+    //JJQR - END
+
     // Completion Checklist: each visible section with its indicator and what was entered
     void OnComplete(object? sender, EventArgs e)
     {

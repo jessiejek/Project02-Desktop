@@ -80,6 +80,22 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
     sealed record CertRowDto(Guid ConsultationId, string? DiagnosisText, DateOnly? IssueDate);
     sealed record VaccinationDto(Guid Id, string? VaccineName, short? DoseNumber, DateOnly? AdministeredDate, DateOnly? NextDoseDate, VaccinationStatus Status);
 
+    //JJQR - AI (Nov 25, 2026) - owner: the doctor uploads a result / document (POST /api/patient-lab-results | patient-documents, multipart; the server checks type, size and access)
+    public async Task<bool> UploadFileAsync(Guid patientId, Guid bookingId, Guid? consultationId, string kind, string title, string fileName, string contentType, byte[] bytes, CancellationToken ct = default)
+    {
+        var lab = kind == "lab";
+        var fields = new Dictionary<string, string?>
+        {
+            ["patientId"] = Id(patientId),
+            ["bookingId"] = Id(bookingId),
+            ["consultationId"] = consultationId is { } c ? Id(c) : null,
+            [lab ? "resultTitle" : "title"] = title,
+        };
+        await api.UploadAsync(lab ? "/api/patient-lab-results" : "/api/patient-documents", fields, fileName, contentType, bytes, ct);
+        return true;
+    }
+    //JJQR - END
+
     //JJQR - AI (Nov 23, 2026) - web parity: open an uploaded lab result / document. Fetches the bytes with the sign-in (GET /api/patient-lab-results|patient-documents/{id}/file) into a temporary file the caller opens.
     public async Task<string?> DownloadFileAsync(ChartFile file, CancellationToken ct = default)
     {

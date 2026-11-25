@@ -57,6 +57,10 @@ public interface IDoctorPatientsService
     //JJQR - AI (Nov 23, 2026) - web parity: open an uploaded lab result / document. Returns the path of a temporary copy, or null when this mode cannot fetch files (offline: the file lives on the clinic server).
     Task<string?> DownloadFileAsync(ChartFile file, CancellationToken ct = default) => Task.FromResult<string?>(null);
     //JJQR - END
+    //JJQR - AI (Nov 25, 2026) - owner: the doctor uploads a patient's earlier test / result (PDF, JPG, PNG) from the chart. Kind "lab" = Lab Results, "doc" = Documents.
+    // Returns false when this mode cannot upload (offline: files live on the clinic server). Server errors are thrown (ApiValidationException carries the reason).
+    Task<bool> UploadFileAsync(Guid patientId, Guid bookingId, Guid? consultationId, string kind, string title, string fileName, string contentType, byte[] bytes, CancellationToken ct = default) => Task.FromResult(false);
+    //JJQR - END
 }
 
 public sealed class DoctorPatientsService : IDoctorPatientsService

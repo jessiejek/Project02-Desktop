@@ -40,7 +40,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         var sp = from.Handler?.MauiContext?.Services ?? StaffUi.Services;
         var page = new DoctorPatientChartPage(sp, patientId) { ReferredBookingId = bookingId };
         if (tab is "appointments" or "consultations" or "vitals" or "prescriptions") tab = "timeline"; //JJQR - AI (Nov 21, 2026) - Appointments and Timeline were the same list: one "Visits" tab now //JJQR - END
-        if (tab is not null && ChartTabs.All.Any(t => t.Id == tab)) page.Select(tab);
+        if (tab is not null && (ChartTabs.All.Any(t => t.Id == tab) || tab == "reprint")) page.Select(tab); //JJQR - AI (Nov 25, 2026) - + Reprint tab //JJQR - END
         return from.Navigation.PushAsync(page);
     }
     //JJQR - END
@@ -79,7 +79,9 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         {
             "timeline" => c.Bookings.Count, "labs" => c.LabResults.Count, "documents" => c.Documents.Count, "vaccinations" => c.Vaccinations.Count, _ => 0,
         };
-        return ChartTabs.All.Select(t => (t.Id, N(t.Id) > 0 ? $"{t.Label}  {N(t.Id)}" : t.Label)).ToArray();
+        return ChartTabs.All.Select(t => (t.Id, N(t.Id) > 0 ? $"{t.Label}  {N(t.Id)}" : t.Label))
+            .Append(("reprint", "Reprint")) //JJQR - AI (Nov 25, 2026) - owner: one place in the chart to reprint everything the doctor can print (last tab) //JJQR - END
+            .ToArray();
     }
 
     private void RefreshTabs()
@@ -468,12 +470,17 @@ public sealed class DoctorPatientChartPage : StaffLivePage
             case "timeline":
                 RenderVisits(c);
                 break;
+            //JJQR - AI (Nov 25, 2026) - + "Upload result" / "Upload document" (kind passed through)
             case "labs":
-                Files(c.LabResults, "No lab results yet", "Results uploaded for this patient (from the lab or the front desk) will be listed here.");
+                Files(c.LabResults, "No lab results yet", "Results uploaded for this patient (from the lab, the front desk or you) will be listed here.", "lab");
                 break;
             case "documents":
-                Files(c.Documents, "No documents yet", "Referral letters, scans and other files added to this patient's record will be listed here.");
+                Files(c.Documents, "No documents yet", "Referral letters, scans and other files added to this patient's record will be listed here.", "doc");
                 break;
+            case "reprint":
+                RenderReprint(c);
+                break;
+            //JJQR - END
             //JJQR - AI (Nov 21, 2026) - Vaccinations as the shared aligned table (Vaccine | Dose | Date | Status)
             case "vaccinations":
                 if (c.Vaccinations.Count == 0) { EmptyCard("No vaccinations recorded yet", "Vaccines given or scheduled for this patient will be listed here with their dose and date."); break; }
@@ -495,8 +502,12 @@ public sealed class DoctorPatientChartPage : StaffLivePage
     private void EmptyCard(string title, string hint) =>
         _tab.Children.Add(StaffUi.Card(new VerticalStackLayout { Spacing = 4, Padding = new Thickness(0, 14), Children = { ClinicTheme.Text(title, "HeadlineSm"), ClinicTheme.Text(hint, "MutedBody") } }));
 
-    private void Files(IReadOnlyList<ChartFile> files, string emptyTitle, string emptyHint)
+    private void Files(IReadOnlyList<ChartFile> files, string emptyTitle, string emptyHint, string kind)
     {
+        //JJQR - AI (Nov 25, 2026) - owner: the doctor uploads a patient's earlier test / result. Button at the top right of the Lab Results and Documents tabs.
+        var upload = StaffUi.Btn(kind == "lab" ? "Upload result" : "Upload document", () => UploadAsync(kind));
+        _tab.Children.Add(new HorizontalStackLayout { HorizontalOptions = LayoutOptions.End, Children = { upload } });
+        //JJQR - END
         if (files.Count == 0) { EmptyCard(emptyTitle, emptyHint); return; }
         _tab.Children.Add(ClinicUi.Table(
             [
@@ -523,6 +534,126 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         catch (Exception) { await DisplayAlertAsync("Open file", "The file could not be opened. Please try again.", "OK"); }
     }
     //JJQR - END
+    //JJQR - END
+
+    //JJQR - AI (Nov 25, 2026) - owner: upload a lab result / document (PDF, JPG, PNG; up to 10 MB, the server's limit). It is saved with the visit being consulted
+    // (chart opened from the consultation) or else the patient's latest visit. Needs the clinic server (Online mode).
+    private const int MaxUploadBytes = 10 * 1024 * 1024;
+    private static readonly FilePickerFileType UploadTypes = new(new Dictionary<DevicePlatform, IEnumerable<string>>
+    {
+        [DevicePlatform.WinUI] = [".pdf", ".jpg", ".jpeg", ".png"],
+        [DevicePlatform.MacCatalyst] = ["com.adobe.pdf", "public.jpeg", "public.png"],
+    });
+
+    private async Task UploadAsync(string kind)
+    {
+        StaffUi.Show(_tabError, null);
+        if (_chart is not { } c) return;
+        var booking = (ReferredBookingId is { } rb ? c.Bookings.FirstOrDefault(b => b.BookingId == rb) : null)
+            ?? c.Bookings.OrderByDescending(b => b.AppointmentDate).ThenByDescending(b => Seq(b.QueueNumber)).FirstOrDefault();
+        if (booking is null) { StaffUi.Show(_tabError, "Files are saved with a visit, and this patient has no visit yet. Start the visit first, then upload."); return; }
+
+        FileResult? picked;
+        try { picked = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = "Choose a PDF, JPG or PNG file", FileTypes = UploadTypes }); }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Chart.Upload (pick)", ex); StaffUi.Show(_tabError, "The file picker could not be opened. Please try again."); return; }
+        if (picked is null) return;
+
+        var type = System.IO.Path.GetExtension(picked.FileName).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf", ".jpg" or ".jpeg" => "image/jpeg", ".png" => "image/png", _ => null,
+        };
+        if (type is null) { StaffUi.Show(_tabError, "Only PDF, JPG or PNG files can be uploaded."); return; }
+        byte[] bytes;
+        try
+        {
+            await using var s = await picked.OpenReadAsync();
+            using var ms = new MemoryStream();
+            await s.CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Chart.Upload (read)", ex); StaffUi.Show(_tabError, "The file could not be read. Please try again."); return; }
+        if (bytes.Length == 0) { StaffUi.Show(_tabError, "That file is empty."); return; }
+        if (bytes.Length > MaxUploadBytes) { StaffUi.Show(_tabError, "That file is larger than 10 MB. Scan or save it smaller, then try again."); return; }
+
+        var consultationId = c.Consultations.FirstOrDefault(x => x.BookingId == booking.BookingId)?.ConsultationId;
+        var bookingId = booking.BookingId;
+        var lab = kind == "lab";
+        var saved = await StaffDialog.ShowAsync(this, lab ? "Upload lab result" : "Upload document",
+            $"File: {picked.FileName}\nIt will be saved with the visit on {Iso(booking.AppointmentDate)}.",
+            "Title", lab ? "e.g. CBC, Urinalysis, Chest X-ray" : "e.g. Referral letter", "Cancel", "Upload",
+            async title =>
+            {
+                if (string.IsNullOrWhiteSpace(title)) return "Enter a title.";
+                try
+                {
+                    return await Svc<IDoctorPatientsService>().UploadFileAsync(_patientId, bookingId, consultationId, kind, title.Trim(), picked.FileName, type, bytes)
+                        ? null
+                        : "Files are stored on the clinic server. Connect to the internet (Online mode) to upload.";
+                }
+                catch (ApiValidationException ex) { return ex.Message; }
+                catch (ApiForbiddenException) { return "You do not have permission to add files to this patient."; }
+                catch (ApiOfflineException) { return "The clinic server could not be reached. Check the internet and try again."; }
+                catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Chart.Upload", ex); return "The file could not be uploaded. Please try again."; }
+            },
+            multiline: false, initialText: System.IO.Path.GetFileNameWithoutExtension(picked.FileName), maxLength: 200);
+        if (!saved) return;
+        _selected = lab ? "labs" : "documents";
+        await ReloadAsync();
+    }
+    //JJQR - END
+
+    //JJQR - AI (Nov 25, 2026) - owner: "a venue for the doctor to reprint all of whatever she can print". Reprint tab: the patient card, then every visit that has
+    // something printable, newest first, with one button per printout (prescription, lab request, medical certificate). Same print path as the consultation.
+    private void RenderReprint(PatientChart c)
+    {
+        var cardRow = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        cardRow.Add(new VerticalStackLayout { Spacing = 2, VerticalOptions = LayoutOptions.Center, Children =
+            { ClinicTheme.Text("Patient card", "LabelLg"), ClinicTheme.Text("Identity, blood type, allergies and emergency contact (no clinical notes).", "MutedSm") } }, 0, 0);
+        cardRow.Add(StaffUi.Btn("Print patient card", PrintCardAsync, "SecondaryButton"), 1, 0);
+        _tab.Children.Add(StaffUi.Card(cardRow));
+
+        var visits = c.Bookings.OrderByDescending(b => b.AppointmentDate).ThenByDescending(b => Seq(b.QueueNumber))
+            .Select(b => new ReprintRow(b,
+                c.Prescriptions.Any(g => g.BookingId == b.BookingId && g.Lines.Count > 0),
+                c.VisitExtras?.FirstOrDefault(e => e.BookingId == b.BookingId) is { } ex ? (ex.LabOrders.Count > 0, ex.HasCertificate) : (false, false),
+                c.Consultations.FirstOrDefault(x => x.BookingId == b.BookingId)))
+            .Where(r => r.HasRx || r.Extras.Labs || r.Extras.Cert)
+            .ToList();
+        if (visits.Count == 0) { EmptyCard("Nothing else to reprint yet", "Prescriptions, lab requests and medical certificates from this patient's visits will be listed here."); return; }
+
+        var print = Svc<IPrintDocumentFactory>();
+        _tab.Children.Add(ClinicUi.Table(
+            [
+                new TableColumn("Date", new GridLength(110), o => ClinicTheme.Text(Iso(((ReprintRow)o).Booking.AppointmentDate), "LabelMd")),
+                new TableColumn("Visit", GridLength.Star, o =>
+                {
+                    var r = (ReprintRow)o;
+                    var what = !string.IsNullOrWhiteSpace(r.Consult?.ChiefComplaint) ? r.Consult!.ChiefComplaint! : r.Booking.ServiceNames.Count == 0 ? "Consultation" : string.Join(", ", r.Booking.ServiceNames);
+                    var dx = ChartVisitCards.DiagnosisOrAssessment(r.Consult) is { Count: > 0 } d ? string.Join(" · ", d) : null;
+                    return new VerticalStackLayout { Spacing = 1, Children = { ClinicTheme.Text(what, "LabelLg"), new Label { Text = dx ?? "", Style = ClinicTheme.Style("MutedSm"), IsVisible = dx is not null } } };
+                }),
+                new TableColumn("Print", new GridLength(460), o =>
+                {
+                    var r = (ReprintRow)o;
+                    var id = r.Booking.BookingId;
+                    var row = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End };
+                    if (r.HasRx) row.Children.Add(StaffUi.Btn("Prescription", () => PrintActions.RunAsync(this, () => print.PrescriptionAsync(id)), "SecondaryButton"));
+                    if (r.Extras.Labs) row.Children.Add(StaffUi.Btn("Lab request", () => PrintActions.RunAsync(this, () => print.LabRequestAsync(id)), "SecondaryButton"));
+                    if (r.Extras.Cert) row.Children.Add(StaffUi.Btn("Medical certificate", () => PrintActions.RunAsync(this, () => print.MedicalCertificateAsync(id)), "SecondaryButton"));
+                    return row;
+                }),
+            ],
+            visits.Cast<object>()));
+    }
+
+    private sealed record ReprintRow(ChartBooking Booking, bool HasRx, (bool Labs, bool Cert) Extras, ChartConsultation? Consult);
+
+    private Task PrintCardAsync() => PrintActions.RunAsync(this, async () =>
+    {
+        var card = await Svc<IDoctorPrintDataService>().GetPatientCardAsync(_patientId)
+            ?? throw new InvalidOperationException("The patient card could not be loaded.");
+        return PatientCardDocument.Build(card);
+    });
     //JJQR - END
 
     //JJQR - AI (21 Nov 2026) - prescription actions

@@ -16,6 +16,10 @@ public interface IApiClient
     //JJQR - AI (Nov 23, 2026) - parity with the web: download a file (patient lab result / document) with the sign-in. Default throws so test doubles need no change.
     Task<ApiDownload> DownloadAsync(string path, CancellationToken ct = default) => throw new NotSupportedException("This client cannot download files.");
     //JJQR - END
+    //JJQR - AI (Nov 25, 2026) - owner: the doctor uploads a patient's result (PDF / JPG / PNG). multipart/form-data POST: text fields + one file. Default throws so test doubles need no change.
+    Task UploadAsync(string path, IReadOnlyDictionary<string, string?> fields, string fileName, string contentType, byte[] bytes, CancellationToken ct = default) =>
+        throw new NotSupportedException("This client cannot upload files.");
+    //JJQR - END
 }
 
 /// <summary>A file answered by the server: its bytes, media type and (when sent) its name.</summary>
@@ -65,6 +69,47 @@ public sealed class ApiClient : IApiClient, IDisposable
                 var cd = res.Content.Headers.ContentDisposition;
                 _connectivity?.ReportSuccess();
                 return new ApiDownload(bytes, res.Content.Headers.ContentType?.MediaType, (cd?.FileNameStar ?? cd?.FileName)?.Trim('"'));
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                _connectivity?.ReportNetworkFailure();
+                throw new ApiOfflineException("The clinic server took too long to answer.");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or System.Net.Sockets.SocketException)
+            {
+                _connectivity?.ReportNetworkFailure();
+                throw new ApiOfflineException("The clinic server could not be reached.", ex);
+            }
+        }
+        throw Map(HttpStatusCode.Unauthorized, "");
+    }
+    //JJQR - END
+
+    //JJQR - AI (Nov 25, 2026) - upload a file (multipart/form-data): same sign-in, one transparent refresh on 401, errors mapped like every other call
+    public async Task UploadAsync(string path, IReadOnlyDictionary<string, string?> fields, string fileName, string contentType, byte[] bytes, CancellationToken ct = default)
+    {
+        var baseUrl = _options.ResolveBaseUrl() ?? throw new ApiOfflineException("No clinic server address is configured.");
+        var uri = Build(baseUrl, path, null);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var form = new MultipartFormDataContent();
+            foreach (var (k, v) in fields) if (v is not null) form.Add(new StringContent(v, Encoding.UTF8), k);
+            var file = new ByteArrayContent(bytes);
+            file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            form.Add(file, "file", fileName);
+            using var req = new HttpRequestMessage(HttpMethod.Post, uri) { Content = form };
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            if (_tokens.AccessToken is { Length: > 0 } t) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(2)); // files can be large
+            try
+            {
+                using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseContentRead, timeout.Token);
+                if (res.StatusCode == HttpStatusCode.Unauthorized && attempt == 0 && _tokens.RefreshToken is not null && await _auth.TryRefreshAsync(ct)) continue;
+                var text = await res.Content.ReadAsStringAsync(timeout.Token);
+                if (!res.IsSuccessStatusCode) throw Map(res.StatusCode, text);
+                _connectivity?.ReportSuccess();
+                return;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {

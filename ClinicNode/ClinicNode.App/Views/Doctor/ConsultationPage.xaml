@@ -20,6 +20,8 @@
             <HorizontalStackLayout Grid.Column="1" Spacing="0" HorizontalOptions="End" VerticalOptions="Center">
                 <Button x:Name="HelpButton" Text="?" Style="{StaticResource SecondaryButton}" Clicked="OnHelp" Margin="8,0,0,0" ToolTipProperties.Text="Keyboard shortcuts" />
                 <Button x:Name="HistoryButton" Text="Patient history" Style="{StaticResource SecondaryButton}" Clicked="OnHistory" Margin="8,0,0,0" />
+                <!-- JJQR - AI (Nov 25, 2026) - owner: open the patient's chart during the consult (upload results, reprint). Opens on this visit. JJQR - END -->
+                <Button x:Name="ChartButton" Text="Patient chart" Style="{StaticResource SecondaryButton}" Clicked="OnOpenChart" Margin="8,0,0,0" />
                 <Button x:Name="PrintRxButton" Text="Print prescription" Style="{StaticResource SecondaryButton}" Clicked="OnPrintRx" Margin="8,0,0,0" />
                 <Button x:Name="PrintLabsButton" Text="Print lab orders" Style="{StaticResource SecondaryButton}" Clicked="OnPrintLabs" Margin="8,0,0,0" />
                 <Button x:Name="PrintCertButton" Text="Print certificate" Style="{StaticResource SecondaryButton}" Clicked="OnPrintCert" Margin="8,0,0,0" />
