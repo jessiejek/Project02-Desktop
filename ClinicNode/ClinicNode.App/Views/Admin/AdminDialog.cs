@@ -72,11 +72,16 @@ public sealed class AdminDialog : ContentPage
         _errorBox.IsVisible = true;
     }
 
+    private bool _closing; //JJQR - AI (Nov 25, 2026) - closing: a second click does nothing //JJQR - END
+
     async Task DoneAsync(bool value)
     {
-        if (_result.Task.IsCompleted) return;
+        //JJQR - AI (Nov 25, 2026) - owner: close first, then answer (the caller used to redraw / navigate while this pop-up was still on screen)
+        if (_result.Task.IsCompleted || _closing) return;
+        _closing = true;
+        try { if (Navigation.ModalStack.Contains(this)) await Navigation.PopModalAsync(false); } catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Dialog.Close", ex); }
         _result.TrySetResult(value);
-        try { await Navigation.PopModalAsync(false); } catch { }
+        //JJQR - END
     }
 
     /// <summary>Web-style modal: <paramref name="submit"/> runs on confirm and returns null on success (dialog closes, result true)

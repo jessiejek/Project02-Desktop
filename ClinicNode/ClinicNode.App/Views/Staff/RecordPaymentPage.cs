@@ -11,6 +11,7 @@ public sealed class RecordPaymentPage : ContentPage
         [(PaymentMethod.Cash, "Cash"), (PaymentMethod.GCash, "GCash"), (PaymentMethod.Maya, "Maya"), (PaymentMethod.BankTransfer, "Bank transfer")];
 
     private readonly TaskCompletionSource<decimal?> _done = new();
+    private bool _working; //JJQR - AI (Nov 25, 2026) - the payment is being recorded //JJQR - END
 
     RecordPaymentPage(IStaffPaymentsService svc, Guid bookingId, string patientName, string patientCode, decimal amountDue, bool receiptHint, bool bookletNumber = false)
     {
@@ -40,6 +41,11 @@ public sealed class RecordPaymentPage : ContentPage
         Button? recordButton = null; //JJQR - AI (21 Nov 2026) //JJQR - END
         var record = StaffUi.Btn("Record payment", async () =>
         {
+            //JJQR - AI (Nov 25, 2026) - while the payment is being recorded, Back / X / Esc do nothing (they used to say "backed out" for a payment that was then recorded: the desk could record it twice)
+            _working = true;
+            try
+            {
+            //JJQR - END
             StaffUi.Show(error, null);
             var check = StaffRules.CheckAmountReceived(amount.Text, amountDue);
             if (!check.Ok) { StaffUi.Show(error, check.Error); return; }
@@ -72,11 +78,12 @@ public sealed class RecordPaymentPage : ContentPage
             }
             //JJQR - END
             if (!r.Succeeded) { StaffUi.Show(error, r.Error ?? "The payment was not recorded. Please try again."); return; }
-            _done.TrySetResult(check.Value);
-            await Navigation.PopModalAsync();
+            await ModalClose.ThenAnswerAsync(this, _done, check.Value); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
+            }
+            finally { _working = false; } //JJQR - AI (Nov 25, 2026) //JJQR - END
         });
         recordButton = record as Button; //JJQR - AI (21 Nov 2026) //JJQR - END
-        var back = StaffUi.Btn("Back", async () => { _done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
+        var back = StaffUi.Btn("Back", () => _working ? Task.CompletedTask : ModalClose.ThenAnswerAsync(this, _done, (decimal?)null), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer; not while recording //JJQR - END
         var who = string.IsNullOrWhiteSpace(patientCode) ? patientName : $"{patientName} · {patientCode}";
 
         BackgroundColor = Colors.Transparent;
@@ -96,8 +103,17 @@ public sealed class RecordPaymentPage : ContentPage
                 }
             };
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, record } };
-        Content = ClinicNode.App.Controls.ClinicModal.Build("Record payment", body, footer, async () => { _done.TrySetResult(null); await Navigation.PopModalAsync(); }, 480);
+        Content = ClinicNode.App.Controls.ClinicModal.Build("Record payment", body, footer, () => _working ? Task.CompletedTask : ModalClose.ThenAnswerAsync(this, _done, (decimal?)null), 480); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
     }
+
+    //JJQR - AI (Nov 25, 2026) - Esc / system back: no answer while recording; otherwise "backed out"
+    protected override bool OnBackButtonPressed()
+    {
+        if (_working) return true;
+        _done.TrySetResult(null);
+        return base.OnBackButtonPressed();
+    }
+    //JJQR - END
 
     /// <summary>Returns the amount recorded, or null when the desk backed out.</summary>
     public static async Task<decimal?> ShowAsync(Page from, IStaffPaymentsService svc, Guid bookingId, string patientName, string patientCode, decimal amountDue, bool receiptHint = false, bool bookletNumber = false)

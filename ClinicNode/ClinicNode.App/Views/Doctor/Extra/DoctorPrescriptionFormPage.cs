@@ -584,13 +584,12 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
             var save = StaffUi.Btn("Save", async () =>
             {
                 d.GenericName = name.Text ?? "";
-                _done.TrySetResult(d);
-                await Navigation.PopModalAsync();
+                await ClinicNode.App.Views.Staff.ModalClose.ThenAnswerAsync(this, _done, (RxDraft?)d); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
             });
             void Sync() => save.IsEnabled = (name.Text ?? "").Trim().Length > 0 && d.Quantity.Trim().Length > 0;
             name.TextChanged += (_, _) => Sync();
             foreach (var e in Descendants<Entry>(fields)) e.TextChanged += (_, _) => Sync();
-            var close = StaffUi.Btn("Close", async () => { _done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
+            var close = StaffUi.Btn("Close", () => ClinicNode.App.Views.Staff.ModalClose.ThenAnswerAsync(this, _done, (RxDraft?)null), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
             col.Children.Add(StaffUi.Wrap(DoctorExtraUi.Spaced(close), DoctorExtraUi.Spaced(save)));
             Content = new ScrollView { Content = col };
             Sync();
@@ -608,6 +607,7 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
     private sealed class TemplateEditorDialog : ContentPage
     {
         private readonly TaskCompletionSource<bool> _done = new();
+        private bool _saving; //JJQR - AI (Nov 25, 2026) - the template is being saved //JJQR - END
         public Task<bool> Result => _done.Task;
 
         private readonly DoctorPrescriptionFormPage _owner;
@@ -635,14 +635,15 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
             {
                 StaffUi.Show(_saveError, null);
                 string? error;
+                _saving = true; //JJQR - AI (Nov 25, 2026) - Close / Back do nothing while the template is being saved //JJQR - END
                 try { error = await onSave(_title.Text ?? "", _lines.Select(l => l.ToLine()).ToList()); }
                 catch { error = TemplateNotSaved; }
+                finally { _saving = false; } //JJQR - AI (Nov 25, 2026) //JJQR - END
                 if (error is not null) { StaffUi.Show(_saveError, error); return; }
-                _done.TrySetResult(true);
-                await Navigation.PopModalAsync();
+                await ClinicNode.App.Views.Staff.ModalClose.ThenAnswerAsync(this, _done, true); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
             });
             _tabs = DoctorExtraUi.Tabs([("new", "New Prescription"), ("favorites", "Favorites")], () => _tab, id => { _tab = id; RenderTab(); });
-            var close = StaffUi.Btn("Close", async () => { _done.TrySetResult(false); await Navigation.PopModalAsync(); }, "SecondaryButton");
+            var close = StaffUi.Btn("Close", () => _saving ? Task.CompletedTask : ClinicNode.App.Views.Staff.ModalClose.ThenAnswerAsync(this, _done, false), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer; not while saving //JJQR - END
             Content = new ScrollView
             {
                 Content = new VerticalStackLayout
@@ -700,6 +701,7 @@ public sealed class DoctorPrescriptionFormPage : ContentPage
 
         protected override bool OnBackButtonPressed()
         {
+            if (_saving) return true; //JJQR - AI (Nov 25, 2026) - stay open while saving //JJQR - END
             _done.TrySetResult(false);
             return base.OnBackButtonPressed();
         }

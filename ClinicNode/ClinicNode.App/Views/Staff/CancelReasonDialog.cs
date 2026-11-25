@@ -11,6 +11,7 @@ public sealed class CancelReasonDialog : ContentPage
     public const string Others = "Others";
 
     private readonly TaskCompletionSource<bool> _done = new();
+    private bool _working; //JJQR - AI (Nov 25, 2026) - the cancel is being sent //JJQR - END
 
     CancelReasonDialog(string message, Func<string, Task<string?>> commit)
     {
@@ -46,20 +47,24 @@ public sealed class CancelReasonDialog : ContentPage
             Children = { error, ClinicTheme.Text(message, "BodyMd"), ClinicTheme.Text("Reason", "FieldLabel"), radios, other },
         };
 
-        var back = StaffUi.Btn("Keep booking", async () => { _done.TrySetResult(false); await Navigation.PopModalAsync(); }, "SecondaryButton");
+        var back = StaffUi.Btn("Keep booking", () => _working ? Task.CompletedTask : ModalClose.ThenAnswerAsync(this, _done, false), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer; not while cancelling //JJQR - END
         var ok = StaffUi.Btn("Cancel booking", async () =>
         {
             StaffUi.Show(error, null);
             if (picked is null) { StaffUi.Show(error, "Choose a reason."); return; }
             var reason = picked == Others ? (other.Text ?? "").Trim() : picked;
             if (picked == Others && reason.Length < 5) { StaffUi.Show(error, "Type the reason (at least 5 characters)."); return; }
-            var problem = await commit(reason);
+            //JJQR - AI (Nov 25, 2026) - while the cancel is being sent, "Keep booking" / X / Back do nothing (they would say "kept" for a booking that gets cancelled)
+            string? problem;
+            _working = true; back.IsEnabled = false;
+            try { problem = await commit(reason); }
+            finally { _working = false; back.IsEnabled = true; }
+            //JJQR - END
             if (problem is not null) { StaffUi.Show(error, problem); return; }
-            _done.TrySetResult(true);
-            await Navigation.PopModalAsync();
+            await ModalClose.ThenAnswerAsync(this, _done, true); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         }, "DangerButton");
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, ok } };
-        Content = ClinicModal.Build("Cancel booking?", body, footer, async () => { _done.TrySetResult(false); await Navigation.PopModalAsync(); });
+        Content = ClinicModal.Build("Cancel booking?", body, footer, () => _working ? Task.CompletedTask : ModalClose.ThenAnswerAsync(this, _done, false)); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
     }
 
     /// <summary>true when the booking was cancelled.</summary>
@@ -72,6 +77,7 @@ public sealed class CancelReasonDialog : ContentPage
 
     protected override bool OnBackButtonPressed()
     {
+        if (_working) return true; //JJQR - AI (Nov 25, 2026) //JJQR - END
         _done.TrySetResult(false);
         return base.OnBackButtonPressed();
     }

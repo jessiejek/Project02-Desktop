@@ -51,7 +51,7 @@ public sealed class QuickRegisterPage : ContentPage
             contact.Text, address.Text, registrationId, notice.IsChecked);
 
         Button? register = null;
-        var cancel = StaffUi.Btn("Cancel", async () => { if (_registering) return; _done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
+        var cancel = StaffUi.Btn("Cancel", () => _registering ? Task.CompletedTask : ModalClose.ThenAnswerAsync(this, _done, (StaffPatientRow?)null), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         //JJQR - AI (21 Nov 2026) - web quickRegisterProblem (same order) + canQuickRegister
         void Sync()
         {
@@ -76,8 +76,7 @@ public sealed class QuickRegisterPage : ContentPage
             {
                 var (result, row) = await svc.QuickRegisterAsync(Form());
                 if (!result.Succeeded || row is null) { Show(error, string.IsNullOrWhiteSpace(result.Error) ? "Could not register this patient. Try again." : result.Error); return; }
-                _done.TrySetResult(row);
-                await Navigation.PopModalAsync();
+                await ModalClose.ThenAnswerAsync(this, _done, (StaffPatientRow?)row); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
             }
             catch (Exception ex)
             {
@@ -142,7 +141,7 @@ public sealed class QuickRegisterPage : ContentPage
             },
         };
         var footer = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { cancel, register } };
-        Content = ClinicModal.Build("Register a new patient", body, footer, async () => { if (_registering) return; _done.TrySetResult(null); await Navigation.PopModalAsync(); }, maxWidth: 780, maxBodyHeight: 640);
+        Content = ClinicModal.Build("Register a new patient", body, footer, () => _registering ? Task.CompletedTask : ModalClose.ThenAnswerAsync(this, _done, (StaffPatientRow?)null), maxWidth: 780, maxBodyHeight: 640); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         //JJQR - END
         Sync();
     }

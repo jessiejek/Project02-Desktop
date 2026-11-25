@@ -197,7 +197,13 @@ public sealed class StaffDialog : ContentPage
         var ok = StaffUi.Btn(confirmText, async () =>
         {
             StaffUi.Show(error, null);
-            var problem = await confirm(input?.Text ?? "");
+            //JJQR - AI (Nov 25, 2026) - code review: while the confirm work runs (e.g. files uploading) Cancel / X / Back do nothing, so the caller never
+            // hears "cancelled" for work that still finishes (it caused duplicate uploads). Cancel is greyed out meanwhile.
+            string? problem;
+            _confirming = true; back.IsEnabled = false;
+            try { problem = await confirm(input?.Text ?? ""); }
+            finally { _confirming = false; back.IsEnabled = true; }
+            //JJQR - END
             if (problem is not null) { StaffUi.Show(error, problem); return; }
             await FinishAsync(true); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         }, danger ? "DangerButton" : "PrimaryButton");
@@ -210,9 +216,10 @@ public sealed class StaffDialog : ContentPage
     // dialog was still on screen (on Windows the template editor then opened as a full-window overlay). Close the dialog first, then answer.
     // A second click while closing does nothing; if closing fails it is logged and the caller still gets its answer.
     private bool _finishing;
+    private bool _confirming; //JJQR - AI (Nov 25, 2026) - the confirm work is running: closing without an answer is ignored //JJQR - END
     private async Task FinishAsync(bool result)
     {
-        if (_finishing) return;
+        if (_finishing || (_confirming && !result)) return; //JJQR - AI (Nov 25, 2026) - code review: no "cancelled" while the work still runs //JJQR - END
         _finishing = true;
         try { if (Navigation.ModalStack.Contains(this)) await Navigation.PopModalAsync(); }
         catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("StaffDialog.Close", ex); }
@@ -231,6 +238,7 @@ public sealed class StaffDialog : ContentPage
 
     protected override bool OnBackButtonPressed()
     {
+        if (_confirming) return true; //JJQR - AI (Nov 25, 2026) - code review: stay open while the confirm work runs //JJQR - END
         _done.TrySetResult(false);
         return base.OnBackButtonPressed();
     }

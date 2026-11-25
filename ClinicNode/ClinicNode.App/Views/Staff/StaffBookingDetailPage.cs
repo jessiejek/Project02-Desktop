@@ -195,16 +195,21 @@ public sealed class StaffBookingDetailPage : StaffLivePage
         var error = StaffUi.Error();
         var page = new ContentPage { Title = "Reschedule Booking", BackgroundColor = ClinicTheme.Color("Background") };
         var done = new TaskCompletionSource<Guid?>();
+        var working = false; //JJQR - AI (Nov 25, 2026) - the reschedule is being sent //JJQR - END
         var confirm = StaffUi.Btn("Confirm Reschedule", async () =>
         {
             StaffUi.Show(error, null);
             if (date.Date is not { } picked) { StaffUi.Show(error, "Choose a new appointment date."); return; }
-            var r = await Svc<IStaffBookingService>().RescheduleAsync(_id, DateOnly.FromDateTime(picked), reason.Text);
+            //JJQR - AI (Nov 25, 2026) - owner: close first, then answer; Back / X do nothing while the reschedule is being sent
+            working = true;
+            StaffResult r;
+            try { r = await Svc<IStaffBookingService>().RescheduleAsync(_id, DateOnly.FromDateTime(picked), reason.Text); }
+            finally { working = false; }
             if (!r.Succeeded) { StaffUi.Show(error, r.Error ?? "Could not reschedule."); return; }
-            done.TrySetResult(r.Id);
-            await Navigation.PopModalAsync();
+            await ModalClose.ThenAnswerAsync(page, done, (Guid?)r.Id);
+            //JJQR - END
         });
-        var back = StaffUi.Btn("Back", async () => { done.TrySetResult(null); await Navigation.PopModalAsync(); }, "SecondaryButton");
+        var back = StaffUi.Btn("Back", () => working ? Task.CompletedTask : ModalClose.ThenAnswerAsync(page, done, (Guid?)null), "SecondaryButton"); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         page.BackgroundColor = Colors.Transparent;
         page.ControlTemplate = null;
         var rbody = new VerticalStackLayout
@@ -219,7 +224,7 @@ public sealed class StaffBookingDetailPage : StaffLivePage
             }
         };
         var rfooter = new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { back, confirm } };
-        page.Content = ClinicNode.App.Controls.ClinicModal.Build("Reschedule booking", rbody, rfooter, async () => { done.TrySetResult(null); await Navigation.PopModalAsync(); }, 480);
+        page.Content = ClinicNode.App.Controls.ClinicModal.Build("Reschedule booking", rbody, rfooter, () => working ? Task.CompletedTask : ModalClose.ThenAnswerAsync(page, done, (Guid?)null), 480); //JJQR - AI (Nov 25, 2026) - close first, then answer //JJQR - END
         await Navigation.PushModalAsync(page);
         var newId = await done.Task;
         if (newId is { } id)
