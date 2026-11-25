@@ -389,7 +389,11 @@ public partial class ConsultationPage
                 Strong("Lab orders", labCount.ToString(CultureInfo.InvariantCulture)),
                 Strong("Follow-up", followUp)),
         };
-        var amount = D.PfDecision == "Charge" ? D.PfAmount ?? (w.ComputedFee > 0 ? w.ComputedFee : null) : null;
+        //JJQR - AI (2026-11-25) - owner: "Consultation saved" showed the fee computed when the visit opened (e.g. ₱500 New) after the doctor switched to
+        // Follow-up visit (₱400). No typed amount = the live total on the form (what Complete charged), then the opening fee. Same as the web (saved-fee.ts).
+        var liveFee = PreviewFee().Total;
+        var amount = D.PfDecision == "Charge" ? D.PfAmount ?? (liveFee > 0 ? (decimal?)liveFee : w.ComputedFee > 0 ? w.ComputedFee : null) : null;
+        //JJQR - END
         body.Add(Row(ClinicTheme.Text(ConsultClinicalAids.ProfessionalFeeLine(D.PfDecision, amount, D.PfWaiveReason, PreviewFee().Total), "BodyMd"),
             Btn("Edit", () => { HideOverlay(); OpenProfessionalFeeForEdit(); }, "GhostButton")));
         // web consultPrintButtons: overlay buttons cannot be disabled here, so only the ones with something to print are shown
