@@ -52,7 +52,12 @@ public static class PatientFileUpload
         var lab = kind == "lab";
         var names = string.Join("\n", ready.Select(r => "• " + r.Name));
         var saved = 0;
-        var title0 = ready.Count == 1 ? suggestedTitle ?? Path.GetFileNameWithoutExtension(ready[0].Name) : suggestedTitle ?? "";
+        //JJQR - AI (2026-11-25) - owner: several files with no suggested title opened with an empty Title; pre-fill "Lab results <visit date>" / "Documents <visit date>" (still editable; "(1 of 3)" is still added per file). Same as the web (visit-upload.ts defaultUploadTitle).
+        var suggested = string.IsNullOrWhiteSpace(suggestedTitle) ? null : suggestedTitle.Trim();
+        var title0 = ready.Count == 1
+            ? suggested ?? Path.GetFileNameWithoutExtension(ready[0].Name)
+            : suggested ?? $"{(lab ? "Lab results" : "Documents")} {visitDate:yyyy-MM-dd}";
+        //JJQR - END
         var ok = await StaffDialog.ShowAsync(from, ready.Count == 1 ? (lab ? "Upload lab result" : "Upload document") : $"Upload {ready.Count} files",
             $"{names}\n\nSaved with the consultation on {visitDate:yyyy-MM-dd}.",
             "Title", lab ? "e.g. CBC, Urinalysis, Chest X-ray" : "e.g. Referral letter", "Cancel", "Upload",
