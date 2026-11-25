@@ -146,7 +146,16 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
         editor.Saved += t => { Say(t, true); _ = ReloadAsync(); };
         //JJQR - AI (Nov 24, 2026) - owner (Windows): right after a Delete (its confirm dialog had just closed) the editor opened as a full-window overlay with no sidebar,
         // and could not close. Always open it inside the app's own frame (the Shell), never on top of a leftover dialog.
-        await (Shell.Current?.Navigation ?? Navigation).PushAsync(editor);
+        var nav = Shell.Current?.Navigation ?? Navigation;
+        //JJQR - AI (Nov 25, 2026) - code review: a dialog (e.g. the Delete confirm) still on the window's modal stack would host the push as an overlay. Close leftovers first.
+        try
+        {
+            var window = Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
+            while (window is not null && window.ModalStack.Count > 0) await window.PopModalAsync(false);
+        }
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("Templates.Open (close leftover dialog)", ex); }
+        //JJQR - END
+        await nav.PushAsync(editor);
         //JJQR - END
     }
 
@@ -546,7 +555,7 @@ public sealed class DoctorTemplatesWorkspacePage : StaffLivePage
                 col.Children.Add(ClinicTheme.Text(hit.Title, "LabelLg"));
                 if (!string.IsNullOrWhiteSpace(hit.Snippet)) col.Children.Add(ClinicTheme.Text(hit.Snippet, "MutedSm"));
                 var row = StaffUi.Row(col);
-                row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(() => { _search.Text = ""; _allTabs = false; _tab = tab; Render(); })) }); //JJQR - AI (Nov 24, 2026) - Windows: the tapped row is removed by the redraw, so redraw on the next UI turn //JJQR - END
+                row.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(() => UiTurn.Next(() => { _allTabs = false; _tab = tab; if (string.IsNullOrEmpty(_search.Text)) Render(); else _search.Text = ""; })) }); //JJQR - AI (Nov 25, 2026) - code review: clearing the box already redraws (TextChanged), so redraw only once //JJQR - END //JJQR - AI (Nov 24, 2026) - Windows: the tapped row is removed by the redraw, so redraw on the next UI turn //JJQR - END
                 _list.Children.Add(row);
             }
         }

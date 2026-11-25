@@ -55,12 +55,14 @@ public class TemplatesLiveServerQaTests
     {
         if (string.IsNullOrWhiteSpace(Server)) return; // opt-in: set CLINIC_QA_SERVER to a local dev server
         var (sp, svc, doc, dir) = await StartAsync();
+        var undo = new List<Func<Task>>(); // JJQR - AI (Nov 25, 2026) - code review: clean up what this test created even when an assertion fails
         try
         {
             var name = Tag() + " SOAP";
             var r = await svc.SaveSoapAsync(doc, null, new TplSoap(Guid.Empty, name, false, "Cough", "3 days", "Clear lungs", "URTI", "Rest", "Adult"));
             Assert.True(r.Succeeded, "create: " + r.Error);
             var row = (await svc.GetWorkspaceAsync(doc)).Soap.Single(t => t.Title == name);
+            undo.Add(() => svc.DeleteSoapAsync(row.Id));
             Assert.Equal("URTI", row.Assessment);
 
             r = await svc.SaveSoapAsync(doc, row.Id, row with { Title = name + " edited", Plan = "Fluids", Category = "Pedia" });
@@ -74,7 +76,7 @@ public class TemplatesLiveServerQaTests
             Assert.True(r.Succeeded, "delete: " + r.Error);
             Assert.DoesNotContain((await svc.GetWorkspaceAsync(doc)).Soap, t => t.Id == row.Id);
         }
-        finally { await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
+        finally { foreach (var u in undo) { try { await u(); } catch { } } await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -82,12 +84,14 @@ public class TemplatesLiveServerQaTests
     {
         if (string.IsNullOrWhiteSpace(Server)) return; // opt-in: set CLINIC_QA_SERVER to a local dev server
         var (sp, svc, doc, dir) = await StartAsync();
+        var undo = new List<Func<Task>>(); // JJQR - AI (Nov 25, 2026) - code review: clean up what this test created even when an assertion fails
         try
         {
             var label = Tag() + " phrase";
             var r = await svc.SavePhraseAsync(doc, null, "Plan", label, "Increase fluids.");
             Assert.True(r.Succeeded, "create: " + r.Error);
             var row = (await svc.GetWorkspaceAsync(doc)).Phrases.Single(p => p.Label == label);
+            undo.Add(() => svc.DeletePhraseAsync(row.Id));
 
             r = await svc.SavePhraseAsync(doc, row.Id, "Assessment", label + " edited", "Viral illness.");
             Assert.True(r.Succeeded, "update + move: " + r.Error);
@@ -109,7 +113,7 @@ public class TemplatesLiveServerQaTests
             Assert.True(r.Succeeded, "delete: " + r.Error);
             Assert.DoesNotContain((await svc.GetWorkspaceAsync(doc)).Phrases, p => p.Id == row.Id);
         }
-        finally { await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
+        finally { foreach (var u in undo) { try { await u(); } catch { } } await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -117,6 +121,7 @@ public class TemplatesLiveServerQaTests
     {
         if (string.IsNullOrWhiteSpace(Server)) return; // opt-in: set CLINIC_QA_SERVER to a local dev server
         var (sp, svc, doc, dir) = await StartAsync();
+        var undo = new List<Func<Task>>(); // JJQR - AI (Nov 25, 2026) - code review: clean up what this test created even when an assertion fails
         try
         {
             var meds = await svc.ListMedicinesAsync();
@@ -127,6 +132,7 @@ public class TemplatesLiveServerQaTests
             var r = await svc.SaveRxSetAsync(doc, null, name, [Line(m1, "1 tab every 8 hours"), Line(m2, "1 tab at night")]);
             Assert.True(r.Succeeded, "create: " + r.Error);
             var row = (await svc.GetWorkspaceAsync(doc)).Rx.Single(t => t.Title == name);
+            undo.Add(() => svc.DeleteRxSetAsync(row.Id));
             Assert.Equal(2, row.Lines.Count);
 
             r = await svc.SaveRxSetAsync(doc, row.Id, name + " edited", [row.Lines[1] with { Instruction = "1 tab twice a day" }]); // the owner's case: Remove a medicine, then Save
@@ -140,7 +146,7 @@ public class TemplatesLiveServerQaTests
             Assert.True(r.Succeeded, "delete: " + r.Error);
             Assert.DoesNotContain((await svc.GetWorkspaceAsync(doc)).Rx, t => t.Id == row.Id);
         }
-        finally { await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
+        finally { foreach (var u in undo) { try { await u(); } catch { } } await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -148,15 +154,20 @@ public class TemplatesLiveServerQaTests
     {
         if (string.IsNullOrWhiteSpace(Server)) return; // opt-in: set CLINIC_QA_SERVER to a local dev server
         var (sp, svc, doc, dir) = await StartAsync();
+        var undo = new List<Func<Task>>(); // JJQR - AI (Nov 25, 2026) - code review: clean up what this test created even when an assertion fails
         try
         {
             var meds = await svc.ListMedicinesAsync();
-            var name = meds.Count > 0 ? meds[^1].GenericName : "QA TEST MEDICINE";
-            var medId = meds.Count > 0 ? meds[^1].MedicineId : Guid.Empty;
+            // JJQR - AI (Nov 25, 2026) - code review: pick a medicine that is not a favorite yet (a duplicate could be refused)
+            var already = (await svc.GetWorkspaceAsync(doc)).Favorites.Select(f => f.GenericName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var pick = meds.LastOrDefault(m => !already.Contains(m.GenericName));
+            var name = pick?.GenericName ?? "QA TEST MEDICINE " + Tag();
+            var medId = pick?.MedicineId ?? Guid.Empty;
             var before = (await svc.GetWorkspaceAsync(doc)).Favorites.Select(f => f.Id).ToHashSet();
             var r = await svc.SaveFavoriteAsync(doc, null, new TplFavorite(Guid.Empty, medId, name, "500 mg", "21 tabs", "1 tab every 8 hours", 0));
             Assert.True(r.Succeeded, "create: " + r.Error);
             var row = (await svc.GetWorkspaceAsync(doc)).Favorites.Single(f => !before.Contains(f.Id));
+            undo.Add(() => svc.DeleteFavoriteAsync(row.Id));
 
             r = await svc.SaveFavoriteAsync(doc, row.Id, row with { Dosage = "250 mg", Instruction = "1 tab twice a day" });
             Assert.True(r.Succeeded, "update: " + r.Error);
@@ -175,7 +186,7 @@ public class TemplatesLiveServerQaTests
             Assert.True(r.Succeeded, "delete: " + r.Error);
             Assert.DoesNotContain((await svc.GetWorkspaceAsync(doc)).Favorites, f => f.Id == row.Id);
         }
-        finally { await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
+        finally { foreach (var u in undo) { try { await u(); } catch { } } await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -183,12 +194,14 @@ public class TemplatesLiveServerQaTests
     {
         if (string.IsNullOrWhiteSpace(Server)) return; // opt-in: set CLINIC_QA_SERVER to a local dev server
         var (sp, svc, doc, dir) = await StartAsync();
+        var undo = new List<Func<Task>>(); // JJQR - AI (Nov 25, 2026) - code review: clean up what this test created even when an assertion fails
         try
         {
             var name = Tag() + " cert";
             var r = await svc.SaveCertAsync(doc, null, new TplCert(Guid.Empty, name, false, "Acute gastroenteritis", "Rest for 2 days", null));
             Assert.True(r.Succeeded, "create: " + r.Error);
             var row = (await svc.GetWorkspaceAsync(doc)).Certificates.Single(t => t.Title == name);
+            undo.Add(() => svc.DeleteCertAsync(row.Id));
 
             r = await svc.SaveCertAsync(doc, row.Id, row with { Title = name + " edited", Recommendations = "Rest for 3 days", PurposeException = "School" });
             Assert.True(r.Succeeded, "update: " + r.Error);
@@ -200,7 +213,7 @@ public class TemplatesLiveServerQaTests
             Assert.True(r.Succeeded, "delete: " + r.Error);
             Assert.DoesNotContain((await svc.GetWorkspaceAsync(doc)).Certificates, t => t.Id == row.Id);
         }
-        finally { await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
+        finally { foreach (var u in undo) { try { await u(); } catch { } } await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -208,6 +221,7 @@ public class TemplatesLiveServerQaTests
     {
         if (string.IsNullOrWhiteSpace(Server)) return; // opt-in: set CLINIC_QA_SERVER to a local dev server
         var (sp, svc, doc, dir) = await StartAsync();
+        var undo = new List<Func<Task>>(); // JJQR - AI (Nov 25, 2026) - code review: clean up what this test created even when an assertion fails
         try
         {
             foreach (var kind in new[] { "soap", "rx", "cert", "phrase" })
@@ -216,7 +230,7 @@ public class TemplatesLiveServerQaTests
                 Assert.True(r.Succeeded, $"restore {kind}: " + r.Error);
             }
         }
-        finally { await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
+        finally { foreach (var u in undo) { try { await u(); } catch { } } await sp.DisposeAsync(); try { Directory.Delete(dir, true); } catch { } }
     }
 }
 //JJQR - END

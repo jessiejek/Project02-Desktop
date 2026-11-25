@@ -78,19 +78,19 @@ public sealed class DoctorTemplateEditorPage : ContentPage
         {
             if (Navigation.ModalStack.Contains(this)) { await Navigation.PopModalAsync(); return; }
             if (Navigation.NavigationStack.Count > 1 && Navigation.NavigationStack[^1] == this) { await Navigation.PopAsync(); return; }
-            await Shell.Current.GoToAsync("..");
+            //JJQR - AI (Nov 25, 2026) - code review: neither a modal nor the top of the stack (the overlay case). Shell's ".." would do nothing here without an error,
+            // leaving the editor stuck, so log it and use the explicit way back.
+            ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave", new InvalidOperationException("Editor was neither a modal nor the top page; going back to Templates."));
+            //JJQR - END
         }
-        catch (Exception ex)
+        catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave", ex); }
+        try
         {
-            ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave", ex);
-            try
-            {
-                var nav = Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
-                while (nav is not null && nav.ModalStack.Count > 0) await nav.PopModalAsync();
-                await Shell.Current.GoToAsync("//templates");
-            }
-            catch (Exception ex2) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave (fallback)", ex2); }
+            var nav = Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
+            while (nav is not null && nav.ModalStack.Count > 0) await nav.PopModalAsync(false);
+            await Shell.Current.GoToAsync("//templates");
         }
+        catch (Exception ex2) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("TemplateEditor.Leave (fallback)", ex2); }
     }
     //JJQR - END
 
