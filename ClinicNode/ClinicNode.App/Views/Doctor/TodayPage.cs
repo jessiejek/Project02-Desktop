@@ -279,6 +279,9 @@ public sealed class TodayPage : ContentPage
         var left = new VerticalStackLayout { Spacing = 20 };
         var right = new VerticalStackLayout { Spacing = 20 };
         left.Children.Add(QueueCard());
+        //JJQR - AI (2026-11-27) - why: owner (t146u): "Follow-ups due today" card right under the patient queue (hidden when empty). Fresh each Render.
+        if (FollowUpsCard() is { } followUpsView) left.Children.Add(followUpsView);
+        //JJQR - END
         //JJQR - AI (2026-11-26) - why: owner (t78u/t79u): earlier days in their OWN card right under today's (that day's Queue + Needs attention). Fresh each Render.
         if (!_loadError && _data is not null && Leftovers.Build(AttentionGroupsNow(), AttentionRows) is { } earlierView) left.Children.Add(earlierView);
         //JJQR - END
@@ -563,6 +566,12 @@ public sealed class TodayPage : ContentPage
         //JJQR - AI (2026-11-26) - why: owner (t78u/t79u) "yesterday's queue should not cross over TODAY's": this card shows TODAY's Needs attention only
         // (a flat list). Each earlier date's Needs attention moved under that date in the "Earlier days" card (with that day's queue).
         var todayAttention = AttentionGroupsNow().FirstOrDefault(g => g.IsToday);
+        //JJQR - AI (2026-11-27) - why: owner (t146u) "WE COULD ONLY REMIND THE DOCTOR BUT NOT QUEUE": follow-ups due today leave this card's
+        // "Needs attention · Today"; they are drawn in their own "Follow-ups due today" card below (FollowUpsCard). Reminder only: no queue number,
+        // never in the waiting / in progress / completed chips.
+        if (todayAttention is not null)
+            todayAttention = todayAttention with { Items = todayAttention.Items.Where(a => a.Kind != AttentionKind.FollowUpDue).ToList() };
+        //JJQR - END
         var attentionCount = todayAttention?.Items.Count ?? 0;
         if (todayAttention is not null && attentionCount > 0)
         {
@@ -594,6 +603,29 @@ public sealed class TodayPage : ContentPage
         //JJQR - END
         return Border(col);
     }
+
+    //JJQR - AI (2026-11-27) - why: owner (t146u): follow-ups are reminders only, in their own card directly below the patient queue (same rows:
+    // name, "Follow-up due today", View chart). Fresh controls on every Render (never reuses a control with an old parent); null = hidden when empty.
+    View? FollowUpsCard()
+    {
+        var today = AttentionGroupsNow().FirstOrDefault(g => g.IsToday);
+        var items = today?.Items.Where(a => a.Kind == AttentionKind.FollowUpDue).ToList() ?? [];
+        if (today is null || items.Count == 0) return null;
+        var col = new VerticalStackLayout { Spacing = 12 };
+        var top = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        top.Add(new Label { Text = "Follow-ups due today", FontFamily = ClinicTheme.FontSemiBold, FontSize = 18, VerticalOptions = LayoutOptions.Center }, 0, 0);
+        var count = ClinicTheme.Text($"{AttentionGroups.ItemsLabel(items.Count)} · reminder only", "MutedSm");
+        count.VerticalOptions = LayoutOptions.Center;
+        top.Add(count, 1, 0);
+        col.Children.Add(top);
+        col.Children.Add(new Border
+        {
+            StrokeThickness = 1, Stroke = ClinicTheme.Color("OutlineVariant"), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Padding = 0, Content = AttentionRows(today with { Items = items, CountLabel = AttentionGroups.ItemsLabel(items.Count) }),
+        });
+        return Border(col);
+    }
+    //JJQR - END
 
     //JJQR - AI (Nov 25, 2026) - GAV-2: web: PRN follow-ups are saved with today's date but are not "due today" (was filtered in the old AttentionList)
     static bool IsPrnAttention(AttentionItem a) =>
