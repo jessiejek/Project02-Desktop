@@ -331,13 +331,129 @@ public static class ClinicFormsHtml
             "</tr>";
     }
 
-    /// <summary>More than five lines switches the A5 pad to the flowing "form-tall" layout (same as the web).</summary>
-    public static bool IsTallPrescription(int itemCount) => itemCount > 5;
+    //JJQR - AI (2026-11-26) - GAV-14 doctor: "make our prescription BIG / more readable". Line-for-line port of rxLayout / rxRowHeight in Project02-fe print-forms-html.ts:
+    // a height guess (hundredths of an inch) per printed row from Arial's letter widths and the printer's word wrapping, so the bigger print never runs into the signature / Next appointment.
+    const int RxRowsSpace = 464; // 2.86in (under the table header) down to 7.50in (just above the signature block at 7.54in)
+    const int RxOnePageMax = 6;
+    const int RxRoomyMax = 3;
+    const int RxAiryMax = 4;
+    const int RxAiryExtra = 25; // .rx-airy adds 0.25in of padding to each row
+    const int RxSpare = 8; // spare, in case a printer wraps a line more than the guess
+
+    // Arial / Helvetica widths (1/1000 em) for the characters space (32) to ~ (126)
+    static readonly int[] RxAfmRegular =
+    [
+        278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556,
+        556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667,
+        611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667,
+        667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500,
+        222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+    ];
+    static readonly int[] RxAfmBold =
+    [
+        278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556,
+        556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667,
+        611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667,
+        667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556,
+        278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
+    ];
+
+    // widths are 1/1000 em x font size in tenths of a pt = 1/10000 pt
+    static long RxTextW(string text, bool bold, int size10)
+    {
+        long w = 0;
+        foreach (var ch in text)
+        {
+            int c = ch;
+            w += c >= 32 && c <= 126 ? (bold ? RxAfmBold : RxAfmRegular)[c - 32] : 1000;
+        }
+        return w * size10;
+    }
+
+    static int RxWrapLines(string text, bool bold, int size10, long avail)
+    {
+        var words = text.Split(' ');
+        var space = RxTextW(" ", bold, size10);
+        var lines = 1;
+        long cur = 0;
+        var any = false;
+        foreach (var word in words)
+        {
+            if (word.Length == 0) continue;
+            var w = RxTextW(word, bold, size10);
+            if (!any)
+            {
+                cur = w;
+                any = true;
+            }
+            else if (cur + space + w <= avail)
+            {
+                cur += space + w;
+            }
+            else
+            {
+                lines++;
+                cur = w;
+            }
+            while (cur > avail)
+            {
+                lines++;
+                cur -= avail;
+            }
+        }
+        return lines;
+    }
+
+    static int RxRowHeight(RxLine item, bool roomy)
+    {
+        var name = RxSig.DisplayName(item.GenericName, item.Dosage);
+        var qty = item.Quantity ?? "";
+        var sig = SigFreeText(item);
+        var isLong = sig.Length > 70;
+        var nameSize = roomy ? 130 : 105;
+        var sigSize = roomy ? (isLong ? 95 : 105) : (isLong ? 80 : 85);
+        var labelSize = roomy ? 105 : 85;
+        var mealSize = roomy ? 95 : 80;
+        var indSize = roomy ? 95 : 85;
+        long inner = roomy ? 1976000 : 1992000; // the medicine cell inside its padding (2.745in / 2.766in)
+        var qtyU = RxTextW(qty, true, nameSize) + 15000;
+        var nameAvail = inner - 45000 - RxTextW("# ", true, nameSize) - (qtyU > 288000 ? qtyU : 288000);
+        var mealW = RxTextW("before/", true, mealSize) + RxTextW(" ", false, mealSize) + RxTextW("after", true, mealSize) + 52500;
+        var sigAvail = inner - RxTextW("Sig.", true, labelSize) - 90000 - mealW;
+        long indAvail = roomy ? 572000 : 587000;
+        var nameLines = RxWrapLines(name, true, nameSize, nameAvail);
+        var sigLines = RxWrapLines(sig, false, sigSize, sigAvail);
+        var indLines = RxWrapLines(item.Indication ?? "", false, indSize, indAvail);
+        // line heights from the CSS; the fixed parts were fitted on 800 rendered rows per size
+        var med = roomy ? 58 + nameLines * 21 + sigLines * 17 : 30 + nameLines * 17 + sigLines * 14;
+        var ind = roomy ? 20 + indLines * 16 : 10 + indLines * 15;
+        return med > ind ? med : ind;
+    }
+
+    /// <summary>Biggest size that still fits one A5 page: roomy (1-3 medicines) &gt; airy (up to 4) &gt; normal (up to 6); otherwise normal size in the flowing "form-tall" layout (same as the web).</summary>
+    public static (bool Roomy, bool Airy, bool Tall) RxLayout(IReadOnlyList<RxLine> items)
+    {
+        bool Fits(bool roomy, int extra)
+        {
+            var total = RxSpare;
+            foreach (var it in items) total += RxRowHeight(it, roomy) + extra;
+            return total <= RxRowsSpace;
+        }
+        if (items.Count <= RxRoomyMax && Fits(true, 0)) return (true, false, false);
+        if (items.Count <= RxAiryMax && Fits(false, RxAiryExtra)) return (false, true, false);
+        if (items.Count <= RxOnePageMax && Fits(false, 0)) return (false, false, false);
+        return (false, false, true);
+    }
+
+    /// <summary>True when the prescription needs the flowing "form-tall" layout (more than six lines, or rows too tall for one page).</summary>
+    public static bool IsTallPrescription(IReadOnlyList<RxLine> items) => RxLayout(items).Tall;
+    //JJQR - END
 
     public static string BuildPrescriptionHtml(RxHtmlOptions opts)
     {
         var rows = string.Concat(opts.Items.Select(RxRow));
-        var tall = IsTallPrescription(opts.Items.Count);
+        var layout = RxLayout(opts.Items); //JJQR - AI (2026-11-26) - GAV-14 bigger print: size + one page or flowing, same as the web //JJQR - END
+        var tall = layout.Tall;
         var css = FormsCss.ShellCss(opts.PageSize, "148mm", "210mm") + FormsCss.A5LetterheadCss("1.58in") + FormsCss.PrescriptionCss();
 
         var next = opts.NextAppointment ?? "";
@@ -359,7 +475,7 @@ public static class ClinicFormsHtml
             "<div class=\"rx-sig-block\">" + SignatureBlock(opts.Doctor) + "</div>";
 
         return "<style>" + css + "</style>" +
-               "<div class=\"form form-rx" + (tall ? " form-tall" : "") + "\">" + inner + "</div>";
+               "<div class=\"form form-rx" + (tall ? " form-tall" : "") + (layout.Roomy ? " rx-roomy" : layout.Airy ? " rx-airy" : "") + "\">" + inner + "</div>"; //JJQR - AI (2026-11-26) - GAV-14 roomy/airy size class //JJQR - END
     }
 
     static string NormLab(string s) => Regex.Replace(s.ToLowerInvariant(), "[^a-z0-9]+", " ", Js).Trim();

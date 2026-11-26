@@ -39,12 +39,23 @@ public class ClinicPrintFormsTests
         Assert.Contains("Paracetamol 500 mg", html);
     }
 
+    //JJQR - AI (2026-11-26) - GAV-14 bigger print: up to six ordinary lines stay on one A5 page (roomy size for 1-3), more flow onto a 2nd page at the same size
     [Fact]
-    public void More_than_five_medicines_switches_to_the_tall_layout()
+    public void More_than_six_medicines_switches_to_the_tall_layout()
     {
-        var html = ClinicPrintForms.Prescription(Clinic, Doctor, Patient, Enumerable.Repeat(Paracetamol, 6).ToList(), clock: Nov21).Html;
+        var html = ClinicPrintForms.Prescription(Clinic, Doctor, Patient, Enumerable.Repeat(Paracetamol, 7).ToList(), clock: Nov21).Html;
         Assert.Contains("form form-rx form-tall", html);
     }
+
+    [Fact]
+    public void Six_short_medicines_stay_on_one_page_and_three_get_the_roomy_size()
+    {
+        var six = ClinicPrintForms.Prescription(Clinic, Doctor, Patient, Enumerable.Repeat(Paracetamol, 6).ToList(), clock: Nov21).Html;
+        Assert.Contains("<div class=\"form form-rx\">", six);
+        var three = ClinicPrintForms.Prescription(Clinic, Doctor, Patient, Enumerable.Repeat(Paracetamol, 3).ToList(), clock: Nov21).Html;
+        Assert.Contains("<div class=\"form form-rx rx-roomy\">", three);
+    }
+    //JJQR - END
 
     //JJQR - AI (Nov 24, 2026) - owner: the lab request is the SAME A5 sheet as the prescription and the medical certificate, lists only the clinic's tests (TSH, FT3, FT4, HbA1c added), and the license number is left blank
     [Fact]

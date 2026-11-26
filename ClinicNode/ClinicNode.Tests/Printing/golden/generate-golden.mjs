@@ -32,6 +32,21 @@ const lab = (o) => add("lab", o, buildLabRequestHtml(o));
 rx({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 21, 2026", items: meds.slice(0, 1), nextAppointment: "" });
 rx({ origin: "", pageSize: "148mm 210mm", doctor: doctorNoS2, patient: patientF, age: "", date: "January 2, 2026", items: meds.slice(0, 5), nextAppointment: "December 1, 2026" });
 rx({ origin: "", pageSize: "148mm 210mm", doctor: doctorNone, patient, age: "7", date: "March 3, 2026", items: meds });
+// JJQR - AI (2026-11-26) - GAV-14 bigger print: roomy (3 lines), airy (4 short lines), normal size on one page (6 short lines), a 4-line pad that falls back from airy, and 8 lines that flow onto a 2nd page; plus a non-ASCII name for the letter-width guess
+const shortMeds = [
+  { generic_name: "MEXIME", dosage: "100MG/5ML", quantity: "3", instruction: "10ML, 2X A DAY FOR 7 DAYS", route: "PO", timing: "Breakfast,Dinner", meal_relation: "After", duration_kind: "Days", duration_value: 7, indication: "UTI" },
+  { generic_name: "PARACETAMOL", dosage: "250MG/5ML", quantity: "1", instruction: "5ML EVERY 4 HOURS FOR FEVER", route: "PO", as_needed: true, duration_kind: "Days", duration_value: 3, indication: "FEVER" },
+  { generic_name: "CETIRIZINE", dosage: "5MG/5ML", quantity: "1", instruction: "5ML ONCE A DAY", route: "PO", timing: "Bedtime", duration_kind: "Weeks", duration_value: 2, indication: "ALLERGIC RHINITIS" },
+  { generic_name: "Losartan", dosage: "50mg", quantity: "30", instruction: "1 tab once a day", route: "PO", timing: "Breakfast", meal_relation: "Before", duration_kind: "Maintain", indication: "HPN" },
+  { generic_name: "Ñiño Señor élixir", dosage: "5ml", quantity: "1 bottle", instruction: "½ tsp — twice a day", indication: "ubo" },
+  { generic_name: "ORS", dosage: "1 SACHET", quantity: "10", instruction: "DISSOLVE IN 200ML WATER AFTER EACH LOOSE STOOL", route: "PO", as_needed: true, duration_kind: "Days", duration_value: 3, indication: "AGE" },
+];
+rx({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 26, 2026", items: shortMeds.slice(0, 3), nextAppointment: "December 3, 2026" });
+rx({ origin: "", pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 26, 2026", items: shortMeds.slice(0, 4) });
+rx({ origin: "", pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 26, 2026", items: shortMeds });
+rx({ origin: "", pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 26, 2026", items: [meds[4], meds[4], meds[1], meds[4]] });
+rx({ origin: "", pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 26, 2026", items: [...shortMeds, meds[0], meds[1]] });
+// JJQR - END
 mc({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, issueDate: "November 21, 2026", address: "Buaya, Lapu Lapu City", examinedAt: "Grace Medical Clinic", examFrom: "November 20, 2026", examTo: "November 21, 2026", diagnosis: "Acute   upper respiratory\ninfection", recommendations: "Rest for 3 days", purposeException: "", comeBackOn: "November 28, 2026" });
 mc({ origin: "", pageSize: "148mm 210mm", doctor: doctorNoS2, patient: patientF, issueDate: "June 1, 2026", address: "Pusok, Lapu-Lapu", examinedAt: "", examFrom: "", examTo: "", diagnosis: "", recommendations: "", purposeException: "  legal proceedings  ", comeBackOn: "" });
 lab({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 21, 2026", tests: ["CBC", "Urine test", "Lipid panel", "Serum creatinine", "Dengue NS1", "ECG", "HbA1c", "Chest X-ray PA"], diagnoses: ["J06.9 — Acute URTI", "E11"], clinicalNotes: "  r/o dengue  " });
