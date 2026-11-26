@@ -79,6 +79,10 @@ public interface IAdminPatientService
     Task<IReadOnlyList<AccessLogEntry>> GetAccessLogAsync(Guid patientId, int take = 200, CancellationToken ct = default);
     Task<IReadOnlyList<DataRequestItem>> ListDataRequestsAsync(string? status, CancellationToken ct = default);
     Task<AdminResult<DataRequestItem>> ResolveDataRequestAsync(Guid id, string status, string? note, CancellationToken ct = default);
+    //JJQR - AI (2026-11-26) - GAV-10: the doctor's "Edit details" dialog (all fields PUT /api/patients/{id} saves). Get… = read, Update… = write (online-first routing by name).
+    Task<AdminResult<PatientDetails>> GetDetailsAsync(Guid patientId, CancellationToken ct = default);
+    Task<AdminResult<PatientDetails>> UpdateDetailsAsync(Guid patientId, PatientDetails details, CancellationToken ct = default);
+    //JJQR - END
 }
 
 public sealed class AdminPatientService : IAdminPatientService
@@ -271,6 +275,46 @@ public sealed class AdminPatientService : IAdminPatientService
         _events.Publish(new ClinicEvent(ClinicEventKind.PatientsChanged, PatientId: row.PatientId));
         return AdminResult<AdminPatientListItem>.Ok(Map(row));
     }
+
+    //JJQR - AI (2026-11-26) - GAV-10: this computer's copy (offline mode / no server). Same path as UpdateAsync: audit "Updated" (field names only),
+    // one patient update op with changed_fields (the full row is sent at push time; the cloud merges field by field), sync requested, screens told.
+    public async Task<AdminResult<PatientDetails>> GetDetailsAsync(Guid patientId, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var p = await db.Patients.AsNoTracking().SingleOrDefaultAsync(x => x.PatientId == patientId, ct);
+        return p is null ? AdminResult<PatientDetails>.Fail("Patient not found.") : AdminResult<PatientDetails>.Ok(PatientDetailsRules.From(p));
+    }
+
+    public async Task<AdminResult<PatientDetails>> UpdateDetailsAsync(Guid patientId, PatientDetails details, CancellationToken ct = default)
+    {
+        if (_auth.Current is null) return AdminResult<PatientDetails>.Fail("Not signed in.");
+        if (PatientDetailsRules.Problem(details, ClinicApp.Domain.ClinicClock.Today) is { } bad) return AdminResult<PatientDetails>.Fail(bad);
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var row = await db.Patients.SingleOrDefaultAsync(p => p.PatientId == patientId, ct);
+        if (row is null) return AdminResult<PatientDetails>.Fail("Patient not found.");
+        var changed = PatientDetailsRules.ApplyTo(row, details);
+        if (changed.Count == 0) return AdminResult<PatientDetails>.Ok(PatientDetailsRules.From(row));
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var now = DateTimeOffset.UtcNow;
+        row.UpdatedAt = now;
+        AdminAudit.Add(db, AuditEntityType.Patient, row.PatientId, "Updated", _auth.Current.UserId, "Changed: " + string.Join(", ", changed.Select(c => c.Label)));
+        await _outbox.EnqueueAsync(db, new SyncOutboxEntry
+        {
+            OperationId = Guid.NewGuid(),
+            Aggregate = "patient",
+            EntityId = row.PatientId,
+            OperationType = "update",
+            PayloadJson = System.Text.Json.JsonSerializer.Serialize(new { patientId = row.PatientId, changed_fields = changed.Select(c => c.Field).ToList() }),
+            CreatedAt = now,
+        }, ct);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        _sync?.RequestSync();
+        _events.Publish(new ClinicEvent(ClinicEventKind.PatientsChanged, PatientId: row.PatientId));
+        return AdminResult<PatientDetails>.Ok(PatientDetailsRules.From(row));
+    }
+    //JJQR - END
 
     public async Task<IReadOnlyList<AccessLogEntry>> GetAccessLogAsync(Guid patientId, int take = 200, CancellationToken ct = default)
     {

@@ -73,6 +73,10 @@ public sealed class OfflineGuardedAdminPatientService(AdminPatientService local)
     public Task<IReadOnlyList<AccessLogEntry>> GetAccessLogAsync(Guid patientId, int take = 200, CancellationToken ct = default) => local.GetAccessLogAsync(patientId, take, ct);
     public Task<IReadOnlyList<DataRequestItem>> ListDataRequestsAsync(string? status, CancellationToken ct = default) => local.ListDataRequestsAsync(status, ct);
     public Task<AdminResult<DataRequestItem>> ResolveDataRequestAsync(Guid id, string status, string? note, CancellationToken ct = default) => AdminOnlineOnly.Fail<DataRequestItem>();
+    //JJQR - AI (2026-11-26) - GAV-10: the doctor's patient details edit stays local offline (pushable), like UpdateAsync
+    public Task<AdminResult<PatientDetails>> GetDetailsAsync(Guid patientId, CancellationToken ct = default) => local.GetDetailsAsync(patientId, ct);
+    public Task<AdminResult<PatientDetails>> UpdateDetailsAsync(Guid patientId, PatientDetails details, CancellationToken ct = default) => local.UpdateDetailsAsync(patientId, details, ct);
+    //JJQR - END
 }
 
 /// <summary>Offline staff: reads only, plus the intentionally local invite-password path (untouched).</summary>

@@ -131,6 +131,34 @@ public sealed class ApiAdminPatientService(IApiClient api) : IAdminPatientServic
         catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult<AdminPatientListItem>.Fail(ex.Message); }
     }
 
+    //JJQR - AI (2026-11-26) - GAV-10: the doctor's "Edit details" dialog, online. Fetch-merge-put like UpdateAsync / the web's updatePatient: the full
+    // row is read, only the dialog's fields change, and the PUT sends it back (fields the dialog does not show keep their values).
+    public async Task<AdminResult<PatientDetails>> GetDetailsAsync(Guid patientId, CancellationToken ct = default)
+    {
+        try
+        {
+            var row = await api.GetAsync<Patient>($"/api/patients/{patientId:D}", null, ct);
+            return row is null ? AdminResult<PatientDetails>.Fail("Patient not found.") : AdminResult<PatientDetails>.Ok(PatientDetailsRules.From(row));
+        }
+        catch (ApiNotFoundException) { return AdminResult<PatientDetails>.Fail("Patient not found."); }
+    }
+
+    public async Task<AdminResult<PatientDetails>> UpdateDetailsAsync(Guid patientId, PatientDetails details, CancellationToken ct = default)
+    {
+        if (PatientDetailsRules.Problem(details, ClinicApp.Domain.ClinicClock.Today) is { } bad) return AdminResult<PatientDetails>.Fail(bad);
+        try
+        {
+            var row = await api.GetAsync<Patient>($"/api/patients/{patientId:D}", null, ct);
+            if (row is null) return AdminResult<PatientDetails>.Fail("Patient not found.");
+            if (PatientDetailsRules.ApplyTo(row, details).Count == 0) return AdminResult<PatientDetails>.Ok(PatientDetailsRules.From(row));
+            var saved = await api.SendAsync<Patient>(HttpMethod.Put, $"/api/patients/{patientId:D}", row, null, ct);
+            return AdminResult<PatientDetails>.Ok(PatientDetailsRules.From(saved ?? row));
+        }
+        catch (ApiNotFoundException) { return AdminResult<PatientDetails>.Fail("Patient not found."); }
+        catch (ApiException ex) when (ApiAdmin.IsAnswer(ex)) { return AdminResult<PatientDetails>.Fail(ex.Message); }
+    }
+    //JJQR - END
+
     private sealed class AccessRow
     {
         public DateTimeOffset At { get; set; }

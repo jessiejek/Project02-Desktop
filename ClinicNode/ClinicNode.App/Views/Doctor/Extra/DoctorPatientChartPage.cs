@@ -129,6 +129,19 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         if (!string.IsNullOrWhiteSpace(p.ContactNumber)) identity.Children.Add(Line("Phone", p.ContactNumber!));
         if (c.Bookings.Count > 0) identity.Children.Add(Line("Last visit", Iso(c.Bookings.Max(b => b.AppointmentDate))));
         identity.Children.Add(Line("Visits with you", c.Bookings.Count.ToString()));
+        //JJQR - AI (2026-11-26) - GAV-10: owner: the doctor edits ALL patient details; "Edit details" (pencil) on the left card, above "Print patient card".
+        // Opens the patient details pop-up (online or offline); after it has closed, the chart reloads on the next UI turn (fresh controls) and a toast says saved.
+        var editDetails = DoctorPatientDetailsDialog.EditButton(async () =>
+        {
+            var saved = await DoctorPatientDetailsDialog.ShowAsync(this, Sp, _patientId);
+            if (saved is null) return;
+            ClinicNode.App.Controls.UiTurn.Next(() => _ = ReloadAsync());
+            ClinicToast.Show(DoctorPatientDetailsDialog.SavedToast(), ToastKind.Success);
+        });
+        editDetails.HorizontalOptions = LayoutOptions.Fill;
+        identity.Children.Add(new BoxView { HeightRequest = 1, Color = Colors.Transparent });
+        identity.Children.Add(editDetails);
+        //JJQR - END
         var print = StaffUi.Btn("Print patient card", () => PrintActions.RunAsync(this, async () =>
         {
             var card = await Svc<IDoctorPrintDataService>().GetPatientCardAsync(_patientId)

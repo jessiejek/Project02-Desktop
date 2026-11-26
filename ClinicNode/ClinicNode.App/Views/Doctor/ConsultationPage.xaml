@@ -14,7 +14,12 @@
         <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" ColumnSpacing="16">
             <VerticalStackLayout Spacing="2">
                 <Label x:Name="PageTitle" Text="Document consultation" Style="{StaticResource PageKicker}" />
-                <Label x:Name="BannerName" Style="{StaticResource HeadlineMd}" />
+                <!-- JJQR - AI (2026-11-26) - GAV-10: owner: "there must be an EDIT while consulting": "Edit details" (pencil) right beside the patient's name; opens the patient details pop-up, the consultation stays as typed -->
+                <HorizontalStackLayout Spacing="10">
+                    <Label x:Name="BannerName" Style="{StaticResource HeadlineMd}" VerticalOptions="Center" />
+                    <Button x:Name="EditPatientButton" Text="Edit details" Style="{StaticResource SecondaryButton}" Clicked="OnEditPatientDetails" VerticalOptions="Center" Padding="10,4" MinimumHeightRequest="32" AutomationProperties.Name="Edit details" ToolTipProperties.Text="Edit the patient's details (name, birthday, contact, address, IDs…)" />
+                </HorizontalStackLayout>
+                <!-- JJQR - END -->
                 <Label x:Name="BannerMeta" Style="{StaticResource MutedSm}" />
             </VerticalStackLayout>
             <HorizontalStackLayout Grid.Column="1" Spacing="0" HorizontalOptions="End" VerticalOptions="Center">
