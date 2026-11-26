@@ -30,6 +30,7 @@ public sealed class GlobalSearchService : IGlobalSearchService
         await using var db = await _factory.CreateDbContextAsync(ct);
 
         var patients = await db.Patients.AsNoTracking()
+            .Where(p => p.MergedIntoPatientId == null) //JJQR - AI (2026-11-26) - GAV-12 merged-away patients are not found //JJQR - END
             .Where(p => EF.Functions.Like(p.FirstName + " " + p.LastName, like, "\\") || EF.Functions.Like(p.PatientCode, like, "\\"))
             .OrderBy(p => p.LastName).ThenBy(p => p.FirstName).Take(PerKind).ToListAsync(ct);
 

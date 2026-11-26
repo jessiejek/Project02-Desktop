@@ -37,6 +37,12 @@ public static class DoctorModule
         services.TryAddSingleton<IVisitSyncGate>(sp => new ClinicNode.Sync.Local.VisitSyncGate(
             sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>(), sp.GetService<ClinicNode.Sync.ISyncService>()));
         //JJQR - END
+        //JJQR - AI (2026-11-26) - GAV-12: "Merge to existing patient" is online only (offline side = "needs an internet connection") and syncs this patient first
+        services.TryAddSingleton<OfflinePatientMergeService>();
+        services.AddOnlineFirst<IPatientMergeService, ApiPatientMergeService, OfflinePatientMergeService>();
+        services.TryAddSingleton<IPatientSyncGate>(sp => new ClinicNode.Sync.Local.PatientSyncGate(
+            sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>(), sp.GetService<ClinicNode.Sync.ISyncService>()));
+        //JJQR - END
 
         // pages (already registered in MauiProgram today; TryAdd keeps this harmless and lets MauiProgram drop them later)
         services.TryAddTransient<ConsultationPage>();

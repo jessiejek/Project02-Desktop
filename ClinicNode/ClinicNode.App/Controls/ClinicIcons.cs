@@ -91,6 +91,7 @@ public static class ClinicIcons
         ["copy"] = new("FASolid", "\uF0C5"),
         ["edit"] = new("FASolid", "\uF303"),
         ["person_off"] = new("FASolid", "\uF235"), //JJQR - AI (2026-11-26) - GAV-11: "Wrong patient?" (web faUserXmark) //JJQR - END
+        ["merge"] = new("FASolid", "\uF387"), //JJQR - AI (2026-11-26) - GAV-12: "Merge to existing patient" (web faCodeMerge) //JJQR - END
         ["upload_file"] = new("FASolid", "\uF093"),
         ["devices"] = new("FASolid", "\uF109"),
         ["cloud_upload"] = new("FASolid", "\uF0EE"),

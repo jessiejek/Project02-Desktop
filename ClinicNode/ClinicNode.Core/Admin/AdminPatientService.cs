@@ -116,7 +116,7 @@ public sealed class AdminPatientService : IAdminPatientService
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 200);
         await using var db = await _factory.CreateDbContextAsync(ct);
-        var query = db.Patients.AsNoTracking().AsQueryable();
+        var query = db.Patients.AsNoTracking().Where(p => p.MergedIntoPatientId == null).AsQueryable() /*JJQR - AI (2026-11-26) - GAV-12 a merged-away patient kept here is never listed //JJQR - END*/;
         if (!string.IsNullOrWhiteSpace(q))
         {
             var s = q.Trim();

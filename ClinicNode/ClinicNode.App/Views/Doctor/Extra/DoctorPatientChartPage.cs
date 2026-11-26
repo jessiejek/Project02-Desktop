@@ -142,6 +142,23 @@ public sealed class DoctorPatientChartPage : StaffLivePage
         identity.Children.Add(new BoxView { HeightRequest = 1, Color = Colors.Transparent });
         identity.Children.Add(editDetails);
         //JJQR - END
+        //JJQR - AI (2026-11-26) - GAV-12: "Merge…" right below Edit details (web chart-merge): this chart is the duplicate; pick the existing record,
+        // which is kept. After the pop-up has closed, the KEPT chart opens in place of this one (this record is retired) and a toast says merged.
+        var mergeButton = MergePatientDialog.ChartButton(async () =>
+        {
+            var merged = await MergePatientDialog.ShowAsync(this, Sp, _patientId, $"{p.FullName} ({p.PatientCode})");
+            if (merged is null) return;
+            (Sp.GetService(typeof(ClinicNode.Core.Sync.ISyncBridge)) as ClinicNode.Core.Sync.ISyncBridge)?.RequestSync();
+            ClinicToast.Show(MergePatientDialog.MergedToast(merged), ToastKind.Success);
+            ClinicNode.App.Controls.UiTurn.Next(async () =>
+            {
+                try { await OpenAsync(this, merged.KeptPatientId); Navigation.RemovePage(this); }
+                catch (Exception ex) { ClinicNode.Core.Diagnostics.ClinicErrorLog.Write("DoctorPatientChart.Merge.Open", ex); }
+            });
+        });
+        mergeButton.HorizontalOptions = LayoutOptions.Fill;
+        identity.Children.Add(mergeButton);
+        //JJQR - END
         var print = StaffUi.Btn("Print patient card", () => PrintActions.RunAsync(this, async () =>
         {
             var card = await Svc<IDoctorPrintDataService>().GetPatientCardAsync(_patientId)

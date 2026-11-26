@@ -602,6 +602,10 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
         try { var cleared = await SyncLocalStore.AutoResolveHarmlessConflictsAsync(db, ct); if (cleared > 0) _logger.LogInformation("Cleared {Cleared} review item(s) whose copies were identical.", cleared); }
         catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Could not clear identical review items ({Type}).", ex.GetType().Name); }
         //JJQR - END
+        //JJQR - AI (2026-11-26) - GAV-12: a merged-away patient kept earlier (an unsent change was waiting) leaves now, and its review item clears by itself
+        try { var gone = await AggregateDocuments.RetryMergedKeptAsync(db, ct); if (gone > 0) _logger.LogInformation("Removed {Count} merged-away patient copy(ies).", gone); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning("Could not retry merged-away patients ({Type}).", ex.GetType().Name); }
+        //JJQR - END
         await UploadReviewItemsAsync(db, ct); //JJQR - AI (Nov 22, 2026) - step 4.1 (desktop side) //JJQR - END
         //JJQR - AI (Nov 22, 2026) - step 3.3: "synced today" is recorded only when this run left nothing waiting
         if (await _outbox.CountPendingAsync(db, ct) == 0)
@@ -693,6 +697,13 @@ public sealed class SyncService : ISyncService, ISyncStatus, ClinicNode.Core.Syn
                 {
                     await AggregateDocuments.ApplyAsync(db, new PulledChange(e.Aggregate, e.EntityId.ToString(), false, o.Current), ApplyMode.ServerResult, ct);
                 }
+                //JJQR - AI (2026-11-26) - GAV-12 why: the server sent this patient's offline change to the KEPT record (merged meanwhile); this computer's copy now moves its rows there and leaves
+                if (o.Status == PushOperationStatus.Merged && string.Equals(o.ReasonCode, "patient_merged", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(e.Aggregate, Aggregates.Patient, StringComparison.OrdinalIgnoreCase))
+                {
+                    await AggregateDocuments.RetireMergedPatientAsync(db, e.EntityId, AggregateDocuments.KeptIdFrom(o.ConflictFields), addConflict: true, ct);
+                }
+                //JJQR - END
                 //JJQR - AI (Nov 21, 2026)
                 if (autoRetry)
                 {

@@ -108,6 +108,7 @@ public partial class ConsultationPage : ContentPage
         }
         InitEditPatientButton(); //JJQR - AI (2026-11-26) - GAV-10: pencil on "Edit details" beside the name (ConsultationPage.EditPatient.cs) //JJQR - END
         InitWrongPatientButton(); //JJQR - AI (2026-11-26) - GAV-11: "Wrong patient?" after Edit details (ConsultationPage.WrongPatient.cs) //JJQR - END
+        InitMergeExistingButton(); //JJQR - AI (2026-11-26) - GAV-12: "Merge to existing patient" after "Wrong patient?" (ConsultationPage.MergePatient.cs) //JJQR - END
     }
 
     protected override async void OnAppearing()

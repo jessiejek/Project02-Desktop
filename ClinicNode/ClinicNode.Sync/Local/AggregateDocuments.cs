@@ -350,28 +350,102 @@ public static class AggregateDocuments
     {
         var et = EntityType(db, typeof(Patient));
         if (KeyFromId(et, ch.EntityId) is not { } key) return false;
-        var gone = (Patient?)await FindAsync(db, typeof(Patient), key, ct);
-        if (gone is null) return true;
-        var id = (Guid)key[0];
+        //JJQR - AI (2026-11-26) - GAV-12: same rules as the merged upsert (RetireMergedPatientAsync); a delete carries no kept id, so nothing is moved here
+        await RetireMergedPatientAsync(db, (Guid)key[0], MergedIntoOf(ch.Data as JsonObject), addConflict: true, ct);
+        return true;
+        //JJQR - END
+    }
+    //JJQR - END
+
+    //JJQR - AI (2026-11-26) - GAV-12: "Merge to existing patient" (desktop side)
+    public const string MergedKeptKind = "patient_merged_kept";
+
+    static Guid? MergedIntoOf(JsonObject? data) =>
+        data?["merged_into_patient_id"] is JsonValue v && v.TryGetValue<string>(out var s) && Guid.TryParse(s, out var g) && g != Guid.Empty ? g : null;
+
+    /// <summary>The kept patient's id inside "merged_into_patient_id:{id}" (push result conflict_fields) or {"merged_into_patient_id": id} (a kept review item).</summary>
+    public static Guid? KeptIdFrom(IEnumerable<string>? conflictFields, string? cloudJson = null)
+    {
+        foreach (var f in conflictFields ?? [])
+            if (f.StartsWith("merged_into_patient_id:", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(f["merged_into_patient_id:".Length..], out var g)) return g;
+        if (!string.IsNullOrWhiteSpace(cloudJson))
+            try { return MergedIntoOf(JsonNode.Parse(cloudJson) as JsonObject); } catch (JsonException) { }
+        return null;
+    }
+
+    /// <summary>Moves this computer's rows of a merged-away patient to the kept patient (when the kept one is here), then removes the copy.
+    /// Kept (and listed once as patient_merged_kept, unless <paramref name="addConflict"/> is false) while an unsent change of that patient is waiting.
+    /// The moves are local only (never pushed): the server already moved the same rows. Returns true when the copy is gone.</summary>
+    public static async Task<bool> RetireMergedPatientAsync(ClinicAppDbContext db, Guid goneId, Guid? keptId, bool addConflict, CancellationToken ct)
+    {
+        if (!await db.Patients.AnyAsync(p => p.PatientId == goneId, ct)) return true;
+        if (keptId is Guid k && k != goneId && await db.Patients.AnyAsync(p => p.PatientId == k, ct))
+        {
+            await db.Bookings.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.Consultations.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.MedicalCertificates.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PatientVitalReadings.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.FollowUps.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.LabOrders.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PatientLabValues.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PatientLabResults.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PatientDocuments.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PatientVaccinations.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PrescriptionGroups.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.PatientConsents.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.DataRequests.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            await db.Reviews.Where(x => x.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(x => x.PatientId, k), ct);
+            // allergies: an allergen the kept patient already has here is not kept twice (the kept patient's own document replaces the list on its next pull)
+            var have = (await db.PatientAllergies.AsNoTracking().Where(a => a.PatientId == k).Select(a => new { a.Allergen, a.IsNkda }).ToListAsync(ct))
+                .Select(a => a.IsNkda ? "\u0000nkda" : (a.Allergen ?? "").Trim().ToLowerInvariant()).ToHashSet();
+            foreach (var a in await db.PatientAllergies.Where(a => a.PatientId == goneId).ToListAsync(ct))
+            {
+                if (have.Contains(a.IsNkda ? "\u0000nkda" : (a.Allergen ?? "").Trim().ToLowerInvariant())) db.PatientAllergies.Remove(a);
+                else a.PatientId = k;
+            }
+            await db.SaveChangesAsync(ct);
+            db.ChangeTracker.Clear();
+        }
         string? why = null;
-        if (await SyncLocalStore.HasPendingAsync(db, Aggregates.Patient, id.ToString(), ct)) why = "a change to this patient has not been sent yet";
-        else if (await db.Bookings.AnyAsync(b => b.PatientId == id, ct)) why = "this computer still has visits recorded under this patient";
+        if (await SyncLocalStore.HasPendingAsync(db, Aggregates.Patient, goneId.ToString(), ct)) why = "a change to this patient has not been sent yet";
+        else if (await db.Bookings.AnyAsync(b => b.PatientId == goneId, ct)) why = "this computer still has visits recorded under this patient";
         if (why is null)
         {
             try
             {
-                db.Patients.Remove(gone);
-                await db.SaveChangesAsync(ct);
+                var gone = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == goneId, ct);
+                if (gone is not null)
+                {
+                    db.PatientAllergies.RemoveRange(await db.PatientAllergies.Where(a => a.PatientId == goneId).ToListAsync(ct));
+                    db.Patients.Remove(gone);
+                    await db.SaveChangesAsync(ct);
+                }
                 return true;
             }
             catch (DbUpdateException) { db.ChangeTracker.Clear(); why = "other records on this computer still point to this patient"; }
         }
-        await SyncLocalStore.AddConflictAsync(db, new SyncConflict
+        // kept for now: hidden from the lists (merged_into set) and listed once
+        await db.Patients.Where(p => p.PatientId == goneId).ExecuteUpdateAsync(s => s.SetProperty(p => p.MergedIntoPatientId, keptId), ct);
+        if (addConflict)
+            await SyncLocalStore.AddConflictAsync(db, new SyncConflict
+            {
+                Aggregate = Aggregates.Patient, EntityId = goneId.ToString(), Kind = MergedKeptKind,
+                Message = $"This patient was merged into another record on the clinic server, but it was kept on this computer because {why}. It clears by itself after the next sync.",
+                CloudJson = keptId is Guid kk ? new JsonObject { ["merged_into_patient_id"] = kk.ToString() }.ToJsonString() : null,
+            }, ct);
+        return false;
+    }
+
+    /// <summary>After every good sync: a merged-away patient kept earlier is retried; its review item clears by itself once the copy is gone.</summary>
+    public static async Task<int> RetryMergedKeptAsync(ClinicAppDbContext db, CancellationToken ct)
+    {
+        var cleared = 0;
+        foreach (var c in await SyncLocalStore.ListOpenConflictsAsync(db, 500, ct))
         {
-            Aggregate = Aggregates.Patient, EntityId = id.ToString(), Kind = "patient_merged_kept",
-            Message = $"An admin merged this patient into another record on the clinic server, but it was kept on this computer because {why}. Ask the admin to check this patient.",
-        }, ct);
-        return true;
+            if (!string.Equals(c.Kind, MergedKeptKind, StringComparison.OrdinalIgnoreCase) || !Guid.TryParse(c.EntityId, out var goneId)) continue;
+            if (await RetireMergedPatientAsync(db, goneId, KeptIdFrom(null, c.CloudJson), addConflict: false, ct)) { await SyncLocalStore.ResolveConflictAsync(db, c.Id, ct); cleared++; }
+        }
+        return cleared;
     }
     //JJQR - END
 
@@ -382,6 +456,14 @@ public static class AggregateDocuments
         if (ch.IsDelete) return await ApplyMergedAwayPatientAsync(db, ch, ct);
         //JJQR - END
         if (data is null) return false; // delete_not_allowed
+        //JJQR - AI (2026-11-26) - GAV-12 why: the server sends a merged-away patient as an upsert carrying merged_into_patient_id (not a delete). This computer
+        // moves its own rows of that patient to the kept record and then drops the copy (or keeps and lists it while a change here is still unsent).
+        if (MergedIntoOf(data) is Guid keptId && KeyFromId(EntityType(db, typeof(Patient)), ch.EntityId) is { } goneKey)
+        {
+            await RetireMergedPatientAsync(db, (Guid)goneKey[0], keptId, addConflict: true, ct);
+            return true;
+        }
+        //JJQR - END
         var et = EntityType(db, typeof(Patient));
         var key = KeyFromJson(et, data) ?? KeyFromId(et, ch.EntityId) ?? throw new InvalidDataException("patient without patient_id");
         var local = (Patient?)await FindAsync(db, typeof(Patient), key, ct);

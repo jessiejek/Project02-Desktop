@@ -53,7 +53,7 @@ public sealed class StaffPatientsService : IStaffPatientsService
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 500);
         await using var db = await _factory.CreateDbContextAsync(ct);
-        var rows = db.Patients.AsNoTracking().AsQueryable();
+        var rows = db.Patients.AsNoTracking().Where(p => p.MergedIntoPatientId == null).AsQueryable() /*JJQR - AI (2026-11-26) - GAV-12 a merged-away patient kept here is never listed //JJQR - END*/;
         var q = (query ?? "").Trim().ToLower();
         if (q.Length > 0)
         {
