@@ -17,7 +17,7 @@ public partial class ConsultationPage
 
     async void OnWrongPatient(object? sender, EventArgs e)
     {
-        if (_workspace is null || _movingVisit || _busy) return;
+        if (_workspace is null || _movingVisit || _mergingPatient || _busy) return; //JJQR - AI (2026-11-26) - GAV-11/12 review 1.6: a fast click on both header buttons never opens both flows //JJQR - END
         _movingVisit = true;
         var label = WrongPatientButton.Text;
         WrongPatientButton.IsEnabled = false;

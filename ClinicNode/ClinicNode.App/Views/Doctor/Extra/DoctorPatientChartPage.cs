@@ -139,6 +139,14 @@ public sealed class DoctorPatientChartPage : StaffLivePage
             ClinicToast.Show(DoctorPatientDetailsDialog.SavedToast(), ToastKind.Success);
         });
         editDetails.HorizontalOptions = LayoutOptions.Fill;
+        //JJQR - AI (2026-11-26) - GAV-12 review 4.6: a merged-away (retired) record is read-only: Edit details is disabled and says where to go (its save would answer 409)
+        if (p.MergedIntoPatientId is not null)
+        {
+            editDetails.IsEnabled = false;
+            ToolTipProperties.SetText(editDetails, "This record was merged into another patient. Edit that patient's chart instead.");
+            identity.Children.Add(new Label { Text = "This record was merged into another patient. Its visits are on that patient's chart.", Style = ClinicTheme.Style("MutedSm"), LineBreakMode = LineBreakMode.WordWrap });
+        }
+        //JJQR - END
         identity.Children.Add(new BoxView { HeightRequest = 1, Color = Colors.Transparent });
         identity.Children.Add(editDetails);
         //JJQR - END
@@ -157,7 +165,7 @@ public sealed class DoctorPatientChartPage : StaffLivePage
             });
         });
         mergeButton.HorizontalOptions = LayoutOptions.Fill;
-        identity.Children.Add(mergeButton);
+        if (p.MergedIntoPatientId is null) identity.Children.Add(mergeButton); //JJQR - AI (2026-11-26) - GAV-12 review 4.6: no Merge… on a retired record //JJQR - END
         //JJQR - END
         var print = StaffUi.Btn("Print patient card", () => PrintActions.RunAsync(this, async () =>
         {

@@ -70,7 +70,7 @@ public sealed class ApiDoctorAppointmentsService(IApiClient api) : IDoctorAppoin
 
 public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsService
 {
-    sealed record PatientDto(Guid PatientId, string? FirstName, string? LastName, string? PatientCode, SexType Sex, DateOnly DateOfBirth, string? ContactNumber);
+    sealed record PatientDto(Guid PatientId, string? FirstName, string? LastName, string? PatientCode, SexType Sex, DateOnly DateOfBirth, string? ContactNumber, Guid? MergedIntoPatientId = null); //JJQR - AI (2026-11-26) - GAV-12 review 4.6: + merged_into_patient_id (GET /api/patients/{id} returns it) //JJQR - END
     sealed record VitalTemplateDto(Guid TemplateId, string? Description, string? Unit, bool IsDefault, DateTimeOffset? CreatedAt);
     sealed record VitalReadingDto(Guid BookingId, Guid TemplateId, string? Value, DateOnly RecordedAt, DateTimeOffset? UpdatedAt);
     sealed record LabResultDto(Guid Id, string? ResultTitle, DateTimeOffset UploadedAt, Guid? BookingId = null); //JJQR - AI (Nov 25, 2026) - + visit //JJQR - END
@@ -207,7 +207,7 @@ public sealed class ApiDoctorPatientsService(IApiClient api) : IDoctorPatientsSe
         }).ToList();
         //JJQR - END
         return new PatientChart(
-            new ChartPatient(p.PatientId, $"{p.FirstName} {p.LastName}".Trim(), p.PatientCode ?? "", p.Sex, p.DateOfBirth, DoctorExtraRules.AgeOn(p.DateOfBirth, ClinicClock.Today), p.ContactNumber),
+            new ChartPatient(p.PatientId, $"{p.FirstName} {p.LastName}".Trim(), p.PatientCode ?? "", p.Sex, p.DateOfBirth, DoctorExtraRules.AgeOn(p.DateOfBirth, ClinicClock.Today), p.ContactNumber) { MergedIntoPatientId = p.MergedIntoPatientId }, //JJQR - AI (2026-11-26) - GAV-12 review 4.6 //JJQR - END
             chartBookings, chartConsults,
             templates.Select(t => new ChartVitalTemplate(t.TemplateId, t.Description ?? "", t.Unit ?? "", t.IsDefault)).ToList(),
             visits, rx,

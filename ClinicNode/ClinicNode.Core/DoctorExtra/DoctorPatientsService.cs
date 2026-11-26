@@ -9,7 +9,12 @@ namespace ClinicNode.Core.DoctorExtra;
 public sealed record DoctorPatientRow(Guid PatientId, string FullName, string PatientCode, DateOnly LatestVisitDate, Guid LatestBookingId,
     string? Sex = null, int? Age = null, string? Phone = null, int VisitCount = 0);
 
-public sealed record ChartPatient(Guid PatientId, string FullName, string PatientCode, SexType Sex, DateOnly DateOfBirth, int Age, string? ContactNumber);
+public sealed record ChartPatient(Guid PatientId, string FullName, string PatientCode, SexType Sex, DateOnly DateOfBirth, int Age, string? ContactNumber)
+{
+    //JJQR - AI (2026-11-26) - GAV-12 review 4.6: set when this record was merged into another patient (retired): the chart disables Edit details and Merge…
+    public Guid? MergedIntoPatientId { get; init; }
+    //JJQR - END
+}
 public sealed record ChartBooking(Guid BookingId, DateOnly AppointmentDate, IReadOnlyList<string> ServiceNames, BookingStatus Status, string? QueueNumber);
 public sealed record ChartConsultation(
     Guid ConsultationId, Guid BookingId, DateOnly AppointmentDate, ConsultationStatus Status, string? ChiefComplaint,
@@ -149,7 +154,7 @@ public sealed class DoctorPatientsService : IDoctorPatientsService
         }).ToList();
         //JJQR - END
         return new PatientChart(
-            new ChartPatient(p.PatientId, $"{p.FirstName} {p.LastName}".Trim(), p.PatientCode, p.Sex, p.DateOfBirth, DoctorExtraRules.AgeOn(p.DateOfBirth, today), p.ContactNumber),
+            new ChartPatient(p.PatientId, $"{p.FirstName} {p.LastName}".Trim(), p.PatientCode, p.Sex, p.DateOfBirth, DoctorExtraRules.AgeOn(p.DateOfBirth, today), p.ContactNumber) { MergedIntoPatientId = p.MergedIntoPatientId }, //JJQR - AI (2026-11-26) - GAV-12 review 4.6 //JJQR - END
             chartBookings, chartConsults,
             templates.Select(t => new ChartVitalTemplate(t.TemplateId, t.Description, t.Unit, t.IsDefault)).ToList(),
             visits, rx,
