@@ -107,6 +107,7 @@ public partial class ConsultationPage : ContentPage
             btn.ContentLayout = new Button.ButtonContentLayout(Button.ButtonContentLayout.ImagePosition.Left, 8);
         }
         InitEditPatientButton(); //JJQR - AI (2026-11-26) - GAV-10: pencil on "Edit details" beside the name (ConsultationPage.EditPatient.cs) //JJQR - END
+        InitWrongPatientButton(); //JJQR - AI (2026-11-26) - GAV-11: "Wrong patient?" after Edit details (ConsultationPage.WrongPatient.cs) //JJQR - END
     }
 
     protected override async void OnAppearing()

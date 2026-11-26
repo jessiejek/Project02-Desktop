@@ -18,6 +18,9 @@
                 <HorizontalStackLayout Spacing="10">
                     <Label x:Name="BannerName" Style="{StaticResource HeadlineMd}" VerticalOptions="Center" />
                     <Button x:Name="EditPatientButton" Text="Edit details" Style="{StaticResource SecondaryButton}" Clicked="OnEditPatientDetails" VerticalOptions="Center" Padding="10,4" MinimumHeightRequest="32" AutomationProperties.Name="Edit details" ToolTipProperties.Text="Edit the patient's details (name, birthday, contact, address, IDs…)" />
+                    <!-- JJQR - AI (2026-11-26) - GAV-11: "Wrong patient?" right after Edit details: move THIS visit to a new or an existing patient (online only, syncs first) -->
+                    <Button x:Name="WrongPatientButton" Text="Wrong patient?" Style="{StaticResource SecondaryButton}" Clicked="OnWrongPatient" VerticalOptions="Center" Padding="10,4" MinimumHeightRequest="32" ToolTipProperties.Text="This visit belongs to a different person: move it to a new or an existing patient" />
+                    <!-- JJQR - END -->
                 </HorizontalStackLayout>
                 <!-- JJQR - END -->
                 <Label x:Name="BannerMeta" Style="{StaticResource MutedSm}" />

@@ -5,6 +5,7 @@
 using ClinicNode.Api.OnlineFirst;
 using ClinicNode.Api.Services;
 using ClinicNode.App.Views.Doctor;
+using ClinicNode.Core.Admin; //JJQR - AI (2026-11-26) - GAV-11 //JJQR - END
 using ClinicNode.Core.Clinical;
 using ClinicNode.Core.Doctor;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,12 @@ public static class DoctorModule
         services.AddOnlineFirst<IConsultationLibraryService, ApiConsultationLibraryService, ConsultationLibraryService>();
         //JJQR - AI (21 Nov 2026) - inventory G9: Call next / Start consultation online-first (PUT /api/queue/{id}/call)
         services.AddOnlineFirst<IConsultationQueueService, ApiConsultationQueueService, LocalConsultationQueueService>();
+        //JJQR - END
+        //JJQR - AI (2026-11-26) - GAV-11: "Wrong patient?" is online only (offline side = "needs an internet connection") and syncs this visit first
+        services.TryAddSingleton<OfflineVisitReassignService>();
+        services.AddOnlineFirst<IVisitReassignService, ApiVisitReassignService, OfflineVisitReassignService>();
+        services.TryAddSingleton<IVisitSyncGate>(sp => new ClinicNode.Sync.Local.VisitSyncGate(
+            sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<ClinicApp.Infrastructure.ClinicAppDbContext>>(), sp.GetService<ClinicNode.Sync.ISyncService>()));
         //JJQR - END
 
         // pages (already registered in MauiProgram today; TryAdd keeps this harmless and lets MauiProgram drop them later)
