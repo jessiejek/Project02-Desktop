@@ -416,109 +416,129 @@ img { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exa
   width: 0.6in;
   height: auto;
 }
+/* JJQR - AI (2026-11-26) - GAV-14 doctor: "make our prescription BIG / more readable" + "SPACE" between medicines + "BIGGER" Duration number. Same A5 pad: header, patient lines, Rx, signature and Next appointment stay put; the table starts beside the Rx (its header row has no medicine text) and uses the empty half of the page. Base sizes are for 5-6 medicines; .rx-airy (4 medicines) adds space between rows; .rx-roomy (1-3 medicines) is bigger still. Old sizes: name 8.5pt, # 8pt, Sig 7pt, slots 7pt, Days number 6pt. Also fixes 6+ medicines printing on top of the letterhead (flow-root at the end). */
 .rx-tbl {
   position: absolute;
   left: 0.43in;
-  top: 2.87in;
+  top: 2.58in;
   border-collapse: collapse;
-  width: 4.67in;
+  width: 4.75in;
   table-layout: fixed;
-  font-size: 8pt;
+  font-size: 9pt;
 }
-.rx-tbl col.col-med { width: 2.73in; }
-.rx-tbl col.col-dur { width: 1.0in; }
-.rx-tbl col.col-ind { width: 0.94in; }
+.rx-tbl col.col-med { width: 2.88in; }
+.rx-tbl col.col-dur { width: 0.95in; }
+.rx-tbl col.col-ind { width: 0.92in; }
 .rx-tbl th, .rx-tbl td {
   border: 1px solid #000;
   vertical-align: top;
   box-sizing: border-box;
 }
 .rx-tbl th {
-  font-size: 8.75pt;
+  font-size: 10pt;
   font-weight: 700;
   text-align: center;
-  height: 0.33in;
+  height: 0.28in;
   padding: 1px 2px;
   vertical-align: middle;
 }
 .rx-tbl td.h-empty {
-  height: 0.33in;
+  height: 0.28in;
   padding: 0;
   border: none;
 }
-.rx-row td { min-height: 0.575in; padding: 2px 4px 1px; }
-.rx-med { position: relative; min-height: 0.535in; }
-.rx-med-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; min-height: 0.18in; }
-.rx-med-name { font-size: 8.5pt; flex: 1; min-width: 0; }
-.rx-qty { font-size: 8pt; white-space: nowrap; }
-.rx-qty .u { min-width: 0.45in; }
+.rx-row td { min-height: 0.6in; padding: 3px 5px 3px; }
+.rx-med { position: relative; min-height: 0.6in; }
+.rx-med-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; min-height: 0.19in; }
+.rx-med-name { font-size: 10.5pt; font-weight: 700; line-height: 1.15; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.rx-qty { font-size: 10.5pt; font-weight: 700; white-space: nowrap; line-height: 1.15; }
+.rx-qty .u { min-width: 0.4in; text-align: center; }
 .rx-sig {
   display: flex;
   align-items: flex-start;
   gap: 4px;
-  font-size: 7pt;
+  font-size: 8.5pt;
   margin-top: 0.02in;
+  line-height: 1.15;
 }
 .sig-k {
   flex: none;
   white-space: nowrap;
+  font-weight: 700;
 }
 .sig-free {
   flex: 1 1 auto;
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
-  line-height: 1.2;
-  font-size: 7pt;
+  line-height: 1.15;
+  font-size: 8.5pt;
 }
-.sig-long { font-size: 6.2pt; }
+.sig-long { font-size: 8pt; }
 .meal {
   flex: none;
-  font-size: 6.5pt;
+  font-size: 8pt;
   white-space: nowrap;
   margin-left: 4px;
 }
 .rx-slots {
   text-align: center;
-  margin-top: 0.04in;
-  font-size: 7pt;
+  margin-top: 0.03in;
+  font-size: 8pt;
   white-space: nowrap;
+  line-height: 1.2;
 }
 .slot { display: inline; }
 .slot.pill {
   display: inline-block;
-  border: 1px solid #111;
+  border: 1.5px solid #111;
   border-radius: 999px;
-  padding: 0 3px;
+  padding: 0 4px;
   margin: 0 -2px;
   box-sizing: border-box;
   line-height: 1.15;
-  /* JJQR - AI (Nov 20, 2026) */
   font-weight: 700;
 }
-.faint { color: #aaa; }
+.faint { color: #999; }
 .slot-note {
-  font-size: 6pt;
-  color: #555;
+  font-size: 8pt;
+  color: #444;
   font-style: italic;
 }
-/* JJQR - END */
-.rx-dur { font-size: 6pt; line-height: 1.35; }
-.dur-m { margin-bottom: 1px; }
+.rx-dur { font-size: 8pt; line-height: 1.3; }
+.rx-dur > div { white-space: nowrap; }
+.dur-m { margin-bottom: 3px; }
 .cb {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border: 1px solid #000;
   text-align: center;
-  font-size: 7px;
-  line-height: 7px;
+  font-size: 9px;
+  line-height: 9px;
   font-weight: 700;
   vertical-align: middle;
   margin-right: 2px;
 }
-.dur-u { min-width: 0.28in; width: 0.32in; }
-.rx-ind { font-size: 7pt; word-break: break-word; }
+.dur-u { min-width: 0.34in; width: 0.36in; font-size: 12pt; font-weight: 700; text-align: center; line-height: 1.1; }
+.rx-ind { font-size: 8.5pt; overflow-wrap: anywhere; line-height: 1.2; }
+.rx-roomy .rx-row td { padding: 8px 6px 10px; }
+.rx-roomy .rx-med { min-height: 0.92in; }
+.rx-roomy .rx-med-top { min-height: 0.24in; }
+.rx-roomy .rx-med-name, .rx-roomy .rx-qty { font-size: 13pt; }
+.rx-roomy .rx-sig, .rx-roomy .sig-free { font-size: 10.5pt; }
+.rx-roomy .rx-sig { margin-top: 0.08in; }
+.rx-roomy .sig-long { font-size: 9.5pt; }
+.rx-roomy .meal { font-size: 9.5pt; }
+.rx-roomy .rx-slots { font-size: 8.5pt; margin-top: 0.1in; }
+.rx-roomy .slot-note { font-size: 9pt; }
+.rx-roomy .rx-dur { font-size: 9pt; }
+.rx-roomy .dur-u { font-size: 15pt; width: 0.4in; }
+.rx-roomy .cb { width: 11px; height: 11px; font-size: 10px; line-height: 10px; }
+.rx-roomy .rx-ind { font-size: 9.5pt; }
+.rx-airy .rx-row td { padding: 15px 5px 15px; }
+.form-tall.form-rx { display: flow-root; }
+/* JJQR - END */
 .rx-next {
   position: absolute;
   left: 0.41in;
@@ -540,7 +560,7 @@ img { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exa
 .form-tall .rx-tbl {
   position: relative;
   top: auto;
-  margin: 2.87in 0 0 0.43in;
+  margin: 2.58in 0 0 0.43in; /* JJQR - AI (2026-11-26) - GAV-14: same start as the one-page table (was 2.87in) JJQR - END */
 }
 .form-tall .rx-next {
   position: relative;
