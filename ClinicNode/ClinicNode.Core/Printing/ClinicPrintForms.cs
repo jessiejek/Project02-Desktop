@@ -116,7 +116,8 @@ public static class ClinicPrintForms
             Diagnosis: cert.DiagnosisText ?? "",
             Recommendations: cert.Recommendations ?? "",
             PurposeException: cert.PurposeException ?? "",
-            ComeBackOn: FormatDate(cert.ComeBackOn)));
+            ComeBackOn: FormatDate(cert.ComeBackOn),
+            DiagnosisOneLine: cert.DiagnosisOneLine)); //JJQR - AI (2026-11-27) - why: "Print as" choice //JJQR - END
         return Form("Medical Certificate", PrintPaper.A5, body);
     }
 

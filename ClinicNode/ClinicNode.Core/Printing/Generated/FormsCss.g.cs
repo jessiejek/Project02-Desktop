@@ -364,6 +364,11 @@ img { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exa
 .form-mc .sig-row { font-size: 7.5pt; height: 0.20in; margin: 0; line-height: 0.20in; }
 
 .form-mc .ln { width: auto; }
+/* JJQR - AI (2026-11-27) - why: the diagnosis block can get extra ruled lines (tighter spacing, still one page); defaults = the 3 printed lines */
+.mc-diag .wl { height: var(--dx-lh, 0.23in); }
+.mc-diag .write-text { line-height: var(--dx-lh, 0.23in); height: var(--dx-h, 0.69in); font-size: var(--dx-fs, 9pt); }
+.mc-diag .write-lbl { height: var(--dx-lh, 0.23in); line-height: var(--dx-lh, 0.23in); font-size: var(--dx-fs, 9pt); }
+/* JJQR - END */
 """;
 
     public static string PrescriptionCss() => "\n" + """

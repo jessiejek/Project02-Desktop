@@ -49,6 +49,18 @@ rx({ origin: "", pageSize: "148mm 210mm", doctor, patient, age: "34", date: "Nov
 // JJQR - END
 mc({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, issueDate: "November 21, 2026", address: "Buaya, Lapu Lapu City", examinedAt: "Grace Medical Clinic", examFrom: "November 20, 2026", examTo: "November 21, 2026", diagnosis: "Acute   upper respiratory\ninfection", recommendations: "Rest for 3 days", purposeException: "", comeBackOn: "November 28, 2026" });
 mc({ origin: "", pageSize: "148mm 210mm", doctor: doctorNoS2, patient: patientF, issueDate: "June 1, 2026", address: "Pusok, Lapu-Lapu", examinedAt: "", examFrom: "", examTo: "", diagnosis: "", recommendations: "", purposeException: "  legal proceedings  ", comeBackOn: "" });
+// JJQR - AI (2026-11-27) - one diagnosis per ruled line: "1) ...;2) ..." with 3 items, "1." markers, 5 lines (extra ruled lines), a long item that wraps, doses/words that must not split, escaping
+const mcBase = { origin: "", pageSize: "148mm 210mm", doctor, patient, issueDate: "November 27, 2026", address: "Buaya, Lapu Lapu City", examinedAt: "Grace Medical Clinic", examFrom: "", examTo: "", recommendations: "Rest", purposeException: "", comeBackOn: "" };
+mc({ ...mcBase, diagnosis: "1) UPPER RESPIRATORY TRACT INFECTION;2) DENGUE FEVER 3) ACUTE GASTROENTERITIS" });
+mc({ ...mcBase, diagnosis: "1. URTI 2. Dengue fever" });
+mc({ ...mcBase, diagnosis: "1) A\r\n2) B\n\n3) C; 4) D, 5) E" });
+mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2) Dengue fever\n3) Pneumonia, community acquired, moderate risk with pleural effusion on the right" });
+mc({ ...mcBase, diagnosis: "Paracetamol 500mg 2.5 ml, Type 2 diabetes, COVID-19 <r/o> & \"x\"" });
+mc({ ...mcBase, diagnosis: Array.from({ length: 12 }, (_, i) => (i + 1) + ") Item").join(" ") });
+mc({ ...mcBase, diagnosis: "1) UPPER RESPIRATORY TRACT INFECTION\n2) DENGUE FEVER\n3) ACUTE GASTROENTERITIS", diagnosisLayout: "oneLine" });
+mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2) Dengue fever", diagnosisLayout: "oneLine" });
+mc({ ...mcBase, diagnosis: "Acute URTI", diagnosisLayout: "lines" });
+// JJQR - END
 lab({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 21, 2026", tests: ["CBC", "Urine test", "Lipid panel", "Serum creatinine", "Dengue NS1", "ECG", "HbA1c", "Chest X-ray PA"], diagnoses: ["J06.9 — Acute URTI", "E11"], clinicalNotes: "  r/o dengue  " });
 lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorLong, patient: patientF, age: "", date: "", tests: ["FBS", "sgpt", "BUA"] });
 lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorNone, patient, age: "1", date: "May 5, 2026", tests: ["Thyroid <panel>"], diagnoses: [], clinicalNotes: "" });

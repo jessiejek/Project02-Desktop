@@ -49,7 +49,8 @@ public sealed record MedCertHtmlOptions(
     string Diagnosis,
     string Recommendations,
     string PurposeException,
-    string ComeBackOn);
+    string ComeBackOn,
+    bool DiagnosisOneLine = false); //JJQR - AI (2026-11-27) - why: "Print as: One line" (web diagnosisLayout "oneLine"); default = each diagnosis on its own line //JJQR - END
 
 /// <summary>Inputs of <c>buildLabRequestHtml</c> (LabHtmlOpts).</summary>
 public sealed record LabHtmlOptions(
@@ -77,6 +78,7 @@ public sealed record MedCertData
     public string? Recommendations { get; init; }
     public string? PurposeException { get; init; }
     public string? ComeBackOn { get; init; }
+    public bool DiagnosisOneLine { get; init; } //JJQR - AI (2026-11-27) - why: the "Print as" choice for this print (not stored in the database) //JJQR - END
 }
 
 /// <summary>Walk-in queue ticket (web WalkInWizard <c>ticket</c>, from QueueController).</summary>

@@ -1559,10 +1559,12 @@ public partial class ConsultationPage : ContentPage
         var dxField = AddEditor("Diagnosis / Impressions", _mcDxDirty || !string.IsNullOrWhiteSpace(D.McDiagnosis) ? D.McDiagnosis : McDiagnosisDefault());
         dxField.Placeholder = string.IsNullOrWhiteSpace(D.Assessment) ? "Diagnosis / Impressions" : $"Diagnosis / Impressions (default: “{D.Assessment}”)";
         dxField.TextChanged += (_, e) => { _mcDxDirty = true; D.McDiagnosis = e.NewTextValue; Changed(); };
+        SectionHost.Children.Add(McDxPrintAsRow()); //JJQR - AI (2026-11-27) - why: "Print as" directly under the Diagnosis / Impressions box //JJQR - END
         var recs = AddEditor("Recommendations", D.McRecommendations);
         recs.Placeholder = string.IsNullOrWhiteSpace(D.Plan) ? "Recommendations" : $"Recommendations (default: “{D.Plan}”)";
         Bind(recs, v => D.McRecommendations = v);
-        GroupColumns(gDx, 2, 2); //JJQR - AI (Nov 21, 2026) //JJQR - END
+        SectionHost.Children.Add(new BoxView { HeightRequest = 0, Color = Colors.Transparent }); //JJQR - AI (2026-11-27) - why: keeps 3 children per cell so Recommendations stays beside Diagnosis //JJQR - END
+        GroupColumns(gDx, 3, 2); //JJQR - AI (2026-11-27) - why: was (gDx, 2, 2); each cell is now label, box, and the "Print as" row (or a spacer) //JJQR - END
         Bind(AddEntry("Purpose exception (the “except ___” blank)", D.McPurposeException), v => D.McPurposeException = v);
 
         SectionHost.Children.Add(ClinicTheme.Text("Please come back on", "FieldLabel"));
@@ -1585,6 +1587,43 @@ public partial class ConsultationPage : ContentPage
                 SectionHost.Children.Add(Btn($"Keep {keep.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}", () => { _mcComeBackStale = false; RenderSection(); }, "GhostButton"));
         }
     }
+
+    //JJQR - AI (2026-11-27) - why: owner: "Print as" under Diagnosis / Impressions: "One line" (joined with "; ") or "Each on its own line" (default; one ruled line per diagnosis).
+    // Print-time state only (no database column): kept in memory for this visit. Fresh controls on every render; a click redraws on the next UI turn.
+    View McDxPrintAsRow()
+    {
+        var bookingId = D.BookingId;
+        var oneLine = ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(bookingId);
+        Button Seg(string text, bool value)
+        {
+            var on = oneLine == value;
+            var b = new Button
+            {
+                Text = text, FontSize = 13, Padding = new Thickness(12, 4), MinimumHeightRequest = 30, CornerRadius = 6, BorderWidth = 0,
+                BackgroundColor = on ? ClinicTheme.Color("SurfaceContainerLowest") : Colors.Transparent,
+                TextColor = on ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OnSurfaceVariant"),
+                FontAttributes = on ? FontAttributes.Bold : FontAttributes.None,
+            };
+            SemanticProperties.SetDescription(b, "Print diagnosis as " + text + (on ? " (selected)" : ""));
+            b.Clicked += (_, _) =>
+            {
+                if (ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(bookingId) == value) return;
+                ClinicNode.Core.Printing.MedCertPrintLayout.Set(bookingId, value);
+                ClinicNode.App.Controls.UiTurn.Next(RenderSection);
+            };
+            return b;
+        }
+        var seg = new Border
+        {
+            Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, BackgroundColor = ClinicTheme.Color("SurfaceContainer"), Padding = new Thickness(3),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            HorizontalOptions = LayoutOptions.Start,
+            Content = new HorizontalStackLayout { Spacing = 2, Children = { Seg("One line", true), Seg("Each on its own line", false) } },
+        };
+        var label = new Label { Text = "Print as", FontSize = 13, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
+        return new HorizontalStackLayout { Spacing = 8, Children = { label, seg } };
+    }
+    //JJQR - END
 
     async Task ApplyCertTemplateAsync(CertTemplateItem t)
     {

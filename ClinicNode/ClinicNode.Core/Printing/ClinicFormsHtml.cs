@@ -183,10 +183,7 @@ public static class ClinicFormsHtml
             "<div class=\"mc-exam ln\"><span>has been examined in</span><span class=\"u grow\">" + E(opts.ExaminedAt) + "</span></div>" +
             "<div class=\"mc-on ln\"><span>on</span><span class=\"u on-u\">" + E(opts.ExamFrom) +
             "</span><span>until</span><span class=\"u grow\">" + E(opts.ExamTo) + "</span><span>.</span></div>" +
-            "<div class=\"write mc-diag\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
-            "<div class=\"write-text\">" +
-            "<span class=\"write-lbl\">Diagnosis/ Impressions:</span>" + Flat(opts.Diagnosis) +
-            "</div></div>" +
+            DiagnosisBlock(opts.Diagnosis, opts.DiagnosisOneLine) + //JJQR - AI (2026-11-27) - why: one diagnosis per ruled line (was Flat(opts.Diagnosis), which ran "1) ...;2) ..." together) //JJQR - END
             "<div class=\"write mc-rec\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
             "<div class=\"write-text\">" +
             "<span class=\"write-lbl\">Recommendations:</span>" + Flat(opts.Recommendations) +
@@ -403,6 +400,103 @@ public static class ClinicFormsHtml
         }
         return lines;
     }
+
+    //JJQR - AI (2026-11-27) - why: Dr. Allyn wants each diagnosis on its own ruled line of the medical certificate ("mu newline igka 2"). Split at print time on new lines, ";" and before every number marker after the first ("2)" / "2."), then give each item its own line; more lines than the 3 printed ones get extra ruled lines with tighter spacing so the certificate stays one page. Exact port of print-forms-html.ts splitDiagnosisLines / diagnosisBlock (golden tests compare the HTML).
+    static readonly Regex DxMarker = new(@"(^|[ \t,])([0-9]{1,2})[.)](?=[ \t]*[A-Za-z])", Js);
+    const int DxLines = 3; // ruled lines printed on the pad
+    const int DxLh = 230; // their spacing, thousandths of an inch (0.23in)
+    const int DxSpace = 910; // 4.17in (top of the block) down to 5.08in (just above Recommendations at 5.10in)
+    const long DxW = 3352320; // 4.80in writing width (A5 less the 0.50in / 0.53in margins) in 1/10000 pt, less 3% spare
+    const int DxSize = 90; // 9pt
+    const long DxLbl = 57600; // the label's 0.08in right padding, 1/10000 pt
+
+    public static IReadOnlyList<string> SplitDiagnosisLines(string? text)
+    {
+        var outList = new List<string>();
+        void Push(string s)
+        {
+            var t = Regex.Replace(Regex.Replace(s, @"\s+", " ").Trim(), "[ ,]+$", "", Js);
+            if (t.Length > 0) outList.Add(t);
+        }
+        foreach (var part in Regex.Split(text ?? "", @"\r\n|\r|\n|;", Js))
+        {
+            var from = 0;
+            foreach (Match m in DxMarker.Matches(part))
+            {
+                var at = m.Index + m.Groups[1].Length;
+                if (part[..at].Trim().Length == 0) continue; // never before the first item
+                Push(part[from..at]);
+                from = at;
+            }
+            Push(part[from..]);
+        }
+        return outList;
+    }
+
+    static int DxWrapLines(string text, long firstAvail, long avail)
+    {
+        var words = text.Split(' ');
+        var space = RxTextW(" ", false, DxSize);
+        var lines = 1;
+        var room = firstAvail;
+        long cur = 0;
+        var any = false;
+        foreach (var word in words)
+        {
+            if (word.Length == 0) continue;
+            var w = RxTextW(word, false, DxSize);
+            if (!any)
+            {
+                cur = w;
+                any = true;
+            }
+            else if (cur + space + w <= room)
+            {
+                cur += space + w;
+            }
+            else
+            {
+                lines++;
+                room = avail;
+                cur = w;
+            }
+            while (cur > room)
+            {
+                lines++;
+                cur -= room;
+                room = avail;
+            }
+        }
+        return lines;
+    }
+
+    static string DxInches(int mils) => (mils / 1000) + "." + (mils % 1000).ToString("000", CultureInfo.InvariantCulture) + "in";
+
+    static string DiagnosisBlock(string? text, bool oneLine)
+    {
+        var split = SplitDiagnosisLines(text);
+        IReadOnlyList<string> items = oneLine && split.Count > 0 ? [string.Join("; ", split)] : split; // "One line": joined with "; " and wrapped like a sentence
+        var lines = 0;
+        var first = DxW - RxTextW("Diagnosis/ Impressions:", false, DxSize) - DxLbl;
+        for (var i = 0; i < items.Count; i++) lines += DxWrapLines(items[i], i == 0 ? first : DxW, DxW);
+        var n = lines > DxLines ? lines : DxLines;
+        var style = "";
+        if (n > DxLines)
+        {
+            var fit = DxSpace / n;
+            var lh = fit < DxLh ? fit : DxLh;
+            var fs = lh >= 170 ? "9pt" : lh >= 140 ? "8pt" : lh >= 115 ? "7pt" : "6pt";
+            style = " style=\"--dx-lh:" + DxInches(lh) + ";--dx-h:" + DxInches(lh * n) + ";--dx-fs:" + fs + "\"";
+        }
+        var rules = new StringBuilder();
+        for (var i = 0; i < n; i++) rules.Append("<div class=\"wl\"></div>");
+        return "<div class=\"write mc-diag\"" + style + "><div class=\"write-lines\">" + rules + "</div>" +
+            "<div class=\"write-text\">" +
+            "<span class=\"write-lbl\">Diagnosis/ Impressions:</span>" +
+            string.Join("<br>", items.Select(E)) +
+            "</div></div>";
+    }
+    //JJQR - END
 
     static int RxRowHeight(RxLine item, bool roomy)
     {

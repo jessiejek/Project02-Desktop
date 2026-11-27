@@ -142,7 +142,7 @@ public class ClinicPrintFormsTests
         Assert.Contains("<span class=\"t-opt t-hit\">Ms.</span>", doc.Html);
         Assert.Contains("<span class=\"u grow\">Pusok, Lapu-Lapu</span>", doc.Html);
         Assert.Contains("<span class=\"u grow\">Grace Medical Clinic</span>", doc.Html); // examined at defaults to clinic
-        Assert.Contains("Acute URTI", doc.Html);
+        Assert.Contains("Acute<br>URTI", doc.Html); //JJQR - AI (2026-11-27) - why: each line of the Diagnosis box now prints on its own ruled line (was "Acute URTI") //JJQR - END
         Assert.Contains("mc-purpose", doc.Html);
         Assert.DoesNotContain("S2 No:", doc.Html);
     }
@@ -162,5 +162,19 @@ public class ClinicPrintFormsTests
     [InlineData("", "")]
     public void AgeFromDob_counts_birthdays_in_Manila(string dob, string expected) =>
         Assert.Equal(expected, ClinicPrintForms.AgeFromDob(dob, new DateOnly(2026, 11, 21)));
+
+    //JJQR - AI (2026-11-27) - why: Dr. Allyn wants each diagnosis on its own ruled line of the medical certificate
+    [Fact]
+    public void Diagnosis_splits_on_new_lines_semicolons_and_number_markers_but_not_doses_or_words()
+    {
+        Assert.Equal(["1) UPPER RESPIRATORY TRACT INFECTION", "2) DENGUE FEVER"], ClinicFormsHtml.SplitDiagnosisLines("1) UPPER RESPIRATORY TRACT INFECTION;2) DENGUE FEVER"));
+        Assert.Equal(["1. URTI", "2. Dengue fever", "3. AGE"], ClinicFormsHtml.SplitDiagnosisLines("1. URTI 2. Dengue fever 3. AGE"));
+        Assert.Equal(["1) URTI", "2) AGE"], ClinicFormsHtml.SplitDiagnosisLines("1) URTI\r\n\n2) AGE"));
+        Assert.Equal(["1) a", "2) b", "3) c"], ClinicFormsHtml.SplitDiagnosisLines("1) a, 2) b, 3) c"));
+        Assert.Equal(["Paracetamol 500mg 2.5 ml, Type 2 diabetes, COVID-19"], ClinicFormsHtml.SplitDiagnosisLines("Paracetamol 500mg 2.5 ml, Type 2 diabetes, COVID-19"));
+        Assert.Empty(ClinicFormsHtml.SplitDiagnosisLines("  ; \n ;"));
+        Assert.Empty(ClinicFormsHtml.SplitDiagnosisLines(null));
+    }
+    //JJQR - END
 }
 //JJQR - END
