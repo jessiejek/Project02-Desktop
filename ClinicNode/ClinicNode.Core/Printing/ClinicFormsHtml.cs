@@ -183,7 +183,8 @@ public static class ClinicFormsHtml
             "<div class=\"mc-exam ln\"><span>has been examined in</span><span class=\"u grow\">" + E(opts.ExaminedAt) + "</span></div>" +
             "<div class=\"mc-on ln\"><span>on</span><span class=\"u on-u\">" + E(opts.ExamFrom) +
             "</span><span>until</span><span class=\"u grow\">" + E(opts.ExamTo) + "</span><span>.</span></div>" +
-            DiagnosisBlock(opts.Diagnosis, opts.DiagnosisOneLine) + //JJQR - AI (2026-11-27) - why: one diagnosis per ruled line (was Flat(opts.Diagnosis), which ran "1) ...;2) ..." together) //JJQR - END
+            DiagnosisBlock(opts.Diagnosis, opts.DiagnosisParagraph ? DiagnosisLayout.Paragraph : opts.DiagnosisOneLine ? DiagnosisLayout.OneLine : DiagnosisLayout.Lines) + //JJQR - AI (2026-11-27) - why: + "Paragraph" //JJQR - END
+            //JJQR - AI (2026-11-27) - why: one diagnosis per ruled line (was Flat(opts.Diagnosis), which ran "1) ...;2) ..." together) //JJQR - END
             "<div class=\"write mc-rec\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
             "<div class=\"write-text\">" +
             "<span class=\"write-lbl\">Recommendations:</span>" + Flat(opts.Recommendations) +
@@ -472,6 +473,36 @@ public static class ClinicFormsHtml
         return string.Join("\n", outList);
     }
 
+    //JJQR - AI (2026-11-27) - why: owner: "give me paragraph style diagnosis". "Paragraph" prints her text as typed: her own new lines kept (runs of spaces / blank lines squeezed to one), wrapped over the ruled lines, no "; " joining, numbering or bullets. Exact port of print-forms-html.ts diagnosisParagraphLines / diagnosisLayoutFromText.
+    public static IReadOnlyList<string> DiagnosisParagraphLines(string? text)
+    {
+        var outList = new List<string>();
+        foreach (var line in Regex.Split(text ?? "", @"\r\n|\r|\n", Js))
+        {
+            var t = Regex.Replace(line, @"\s+", " ").Trim();
+            if (t.Length > 0) outList.Add(t);
+            else if (outList.Count > 0 && outList[^1].Length > 0) outList.Add(""); // one blank line between paragraphs
+        }
+        while (outList.Count > 0 && outList[^1].Length == 0) outList.RemoveAt(outList.Count - 1);
+        return outList;
+    }
+
+    /// <summary>Which "Print as" a saved diagnosis was written in (nothing is stored, so it is read back from the text):
+    /// empty = Lines (the default); any line starting with "1)" / "1." / "•" = Lines; otherwise a ";" = OneLine; otherwise (plain text) = Paragraph.</summary>
+    public static DiagnosisLayout DiagnosisLayoutFromText(string? text)
+    {
+        var any = false;
+        foreach (var line in Regex.Split(text ?? "", @"\r\n|\r|\n", Js))
+        {
+            if (line.Trim().Length == 0) continue;
+            any = true;
+            if (DxLead.IsMatch(line)) return DiagnosisLayout.Lines;
+        }
+        if (!any) return DiagnosisLayout.Lines;
+        return (text ?? "").Contains(';') ? DiagnosisLayout.OneLine : DiagnosisLayout.Paragraph;
+    }
+    //JJQR - END
+
     /// <summary>The rows to show: the text's items, padded with empty rows to at least <see cref="DxMinRows"/>.</summary>
     public static IReadOnlyList<string> DiagnosisRowsForEdit(string? text)
     {
@@ -520,9 +551,10 @@ public static class ClinicFormsHtml
 
     static string DxInches(int mils) => (mils / 1000) + "." + (mils % 1000).ToString("000", CultureInfo.InvariantCulture) + "in";
 
-    static string DiagnosisBlock(string? text, bool oneLine)
+    static string DiagnosisBlock(string? text, DiagnosisLayout layout)
     {
-        var split = SplitDiagnosisLines(text);
+        var oneLine = layout == DiagnosisLayout.OneLine;
+        var split = layout == DiagnosisLayout.Paragraph ? DiagnosisParagraphLines(text) : SplitDiagnosisLines(text); //JJQR - AI (2026-11-27) - why: "Paragraph": her own lines, wrapped like sentences //JJQR - END
         IReadOnlyList<string> items = oneLine && split.Count > 0 ? [string.Join("; ", split.Select(t => Regex.Replace(t, "^•[ \t]*", "", Js)))] : split; //JJQR - AI (2026-11-27) - why: no "•" inside a one-line sentence //JJQR - END
         // "One line": joined with "; " and wrapped like a sentence
         var lines = 0;

@@ -118,7 +118,10 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
             Recommendations = c.Recommendations,
             PurposeException = c.PurposeException,
             ComeBackOn = ClinicPrintForms.Iso(c.ComeBackOn),
-            DiagnosisOneLine = MedCertPrintLayout.IsOneLine(bookingId), //JJQR - AI (2026-11-27) - why: the doctor's "Print as" choice for this visit (default: each diagnosis on its own line) //JJQR - END
+            //JJQR - AI (2026-11-27) - why: the doctor's "Print as" choice for this visit; not chosen = read from the text (numbered/bulleted = each on its own line, ";" = one line, plain = paragraph)
+            DiagnosisOneLine = MedCertPrintLayout.For(bookingId, c.DiagnosisText) == DiagnosisLayout.OneLine,
+            DiagnosisParagraph = MedCertPrintLayout.For(bookingId, c.DiagnosisText) == DiagnosisLayout.Paragraph,
+            //JJQR - END
         };
         // The consultation page prints the certificate without the S2 line (doctor: name, license, PTR only).
         var doc = ClinicPrintForms.MedicalCertificate(await ClinicAsync(db, ct), PtrFor(bookingId, ClinicPrintKind.MedicalCertificate, Doctor(b, includeS2: false)), Patient(b), cert, _clock);

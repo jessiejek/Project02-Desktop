@@ -1559,15 +1559,25 @@ public partial class ConsultationPage : ContentPage
         //JJQR - AI (2026-11-27) - why: owner: "ill choose Each own line, ill have bullets, for example ill see 5 lines and i can add more. if One line its textarea". Cell = label, "Print as" right under it, then the bulleted rows ("Each on its own line", default) or the plain box ("One line")
         var dxText = _mcDxDirty || !string.IsNullOrWhiteSpace(D.McDiagnosis) ? D.McDiagnosis : McDiagnosisDefault();
         SectionHost.Children.Add(ClinicTheme.Text("Diagnosis / Impressions", "FieldLabel"));
-        SectionHost.Children.Add(McDxPrintAsRow());
-        if (ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(D.BookingId))
+        //JJQR - AI (2026-11-27) - why: owner: "give me paragraph style diagnosis": + "Paragraph" (a plain multi-line box, printed exactly as typed, no List style). Not picked yet = read from the text; pinned on her first edit so typing "1)" or ";" never switches the box
+        var dxLayout = ClinicNode.Core.Printing.MedCertPrintLayout.For(D.BookingId, dxText);
+        SectionHost.Children.Add(McDxPrintAsRow(dxLayout));
+        if (dxLayout != ClinicNode.Core.Printing.DiagnosisLayout.Lines)
         {
-            var dxField = new Editor { Text = dxText, AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 72 };
+            var dxBookingId = D.BookingId;
+            var paragraph = dxLayout == ClinicNode.Core.Printing.DiagnosisLayout.Paragraph;
+            var dxField = new Editor { Text = dxText, AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = paragraph ? 132 : 72 };
             dxField.Placeholder = string.IsNullOrWhiteSpace(D.Assessment) ? "Diagnosis / Impressions" : $"Diagnosis / Impressions (default: “{D.Assessment}”)";
-            dxField.TextChanged += (_, e) => { _mcDxDirty = true; D.McDiagnosis = e.NewTextValue; Changed(); };
+            SemanticProperties.SetDescription(dxField, paragraph ? "Diagnosis / Impressions, paragraph (printed as typed)" : "Diagnosis / Impressions, one line");
+            dxField.TextChanged += (_, e) =>
+            {
+                if (ClinicNode.Core.Printing.MedCertPrintLayout.Get(dxBookingId) is null) ClinicNode.Core.Printing.MedCertPrintLayout.Set(dxBookingId, dxLayout);
+                _mcDxDirty = true; D.McDiagnosis = e.NewTextValue; Changed();
+            };
             SectionHost.Children.Add(dxField);
         }
         else SectionHost.Children.Add(McDxRows(dxText));
+        //JJQR - END
         //JJQR - END
         var recs = AddEditor("Recommendations", D.McRecommendations);
         recs.Placeholder = string.IsNullOrWhiteSpace(D.Plan) ? "Recommendations" : $"Recommendations (default: “{D.Plan}”)";
@@ -1599,13 +1609,12 @@ public partial class ConsultationPage : ContentPage
 
     //JJQR - AI (2026-11-27) - why: owner: "Print as" under Diagnosis / Impressions: "One line" (joined with "; ") or "Each on its own line" (default; one ruled line per diagnosis).
     // Print-time state only (no database column): kept in memory for this visit. Fresh controls on every render; a click redraws on the next UI turn.
-    View McDxPrintAsRow()
+    View McDxPrintAsRow(ClinicNode.Core.Printing.DiagnosisLayout current) //JJQR - AI (2026-11-27) - why: three choices (+ "Paragraph"); the shown one = her pick or what the text reads as //JJQR - END
     {
         var bookingId = D.BookingId;
-        var oneLine = ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(bookingId);
-        Button Seg(string text, bool value)
+        Button Seg(string text, ClinicNode.Core.Printing.DiagnosisLayout value)
         {
-            var on = oneLine == value;
+            var on = current == value;
             var b = new Button
             {
                 Text = text, FontSize = 13, Padding = new Thickness(12, 4), MinimumHeightRequest = 30, CornerRadius = 6, BorderWidth = 0,
@@ -1616,7 +1625,7 @@ public partial class ConsultationPage : ContentPage
             SemanticProperties.SetDescription(b, "Print diagnosis as " + text + (on ? " (selected)" : ""));
             b.Clicked += (_, _) =>
             {
-                if (ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(bookingId) == value) return;
+                if (current == value) { ClinicNode.Core.Printing.MedCertPrintLayout.Set(bookingId, value); return; } //JJQR - AI (2026-11-27) - why: clicking the shown choice just pins it //JJQR - END
                 ClinicNode.Core.Printing.MedCertPrintLayout.Set(bookingId, value);
                 _mcDxRows = null; _mcDxBullets = null; //JJQR - AI (2026-11-27) - why: the rows (and their list style) are rebuilt from the text (split, "N)" / "•" removed) //JJQR - END
                 ClinicNode.App.Controls.UiTurn.Next(RenderSection);
@@ -1628,7 +1637,7 @@ public partial class ConsultationPage : ContentPage
             Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, BackgroundColor = ClinicTheme.Color("SurfaceContainer"), Padding = new Thickness(3),
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
             HorizontalOptions = LayoutOptions.Start,
-            Content = new HorizontalStackLayout { Spacing = 2, Children = { Seg("One line", true), Seg("Each on its own line", false) } },
+            Content = new HorizontalStackLayout { Spacing = 2, Children = { Seg("One line", ClinicNode.Core.Printing.DiagnosisLayout.OneLine), Seg("Each on its own line", ClinicNode.Core.Printing.DiagnosisLayout.Lines), Seg("Paragraph", ClinicNode.Core.Printing.DiagnosisLayout.Paragraph) } }, //JJQR - AI (2026-11-27) - why: + "Paragraph" //JJQR - END
         };
         var label = new Label { Text = "Print as", FontSize = 13, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
         return new HorizontalStackLayout { Spacing = 8, Children = { label, seg } };

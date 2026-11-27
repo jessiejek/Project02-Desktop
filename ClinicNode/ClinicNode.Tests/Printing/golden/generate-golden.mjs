@@ -62,6 +62,14 @@ mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2)
 mc({ ...mcBase, diagnosis: "Acute URTI", diagnosisLayout: "lines" });
 mc({ ...mcBase, diagnosis: "• UPPER RESPIRATORY TRACT INFECTION\n• DENGUE FEVER • ACUTE GASTROENTERITIS" }); // JJQR - AI (2026-11-27) - "Bullets •" list style
 mc({ ...mcBase, diagnosis: "• URTI\n• DENGUE FEVER", diagnosisLayout: "oneLine" }); // JJQR - AI (2026-11-27) - One line drops the bullets
+// JJQR - AI (2026-11-27) - "Print as: Paragraph": her text as typed (own lines, blank line squeezed, escaping, no split on ";" / "2)"), a long one with extra ruled lines, a very long one with the smallest font
+const DX_PARA = "Patient presented with 3 days of fever, cough and body malaise; no difficulty of breathing. Clinical impression is acute upper respiratory tract infection, r/o dengue fever. Advised rest & hydration <2 days>.";
+mc({ ...mcBase, diagnosis: DX_PARA, diagnosisLayout: "paragraph" });
+mc({ ...mcBase, diagnosis: "  1) URTI   2) AGE\r\n\n\n\nRule out   dengue.  \n", diagnosisLayout: "paragraph" });
+mc({ ...mcBase, diagnosis: DX_PARA + " " + DX_PARA, diagnosisLayout: "paragraph" });
+mc({ ...mcBase, diagnosis: DX_PARA.repeat(5), diagnosisLayout: "paragraph" });
+mc({ ...mcBase, diagnosis: "", diagnosisLayout: "paragraph" });
+// JJQR - END
 // JJQR - END
 lab({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 21, 2026", tests: ["CBC", "Urine test", "Lipid panel", "Serum creatinine", "Dengue NS1", "ECG", "HbA1c", "Chest X-ray PA"], diagnoses: ["J06.9 — Acute URTI", "E11"], clinicalNotes: "  r/o dengue  " });
 lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorLong, patient: patientF, age: "", date: "", tests: ["FBS", "sgpt", "BUA"] });
