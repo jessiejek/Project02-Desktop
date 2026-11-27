@@ -176,5 +176,27 @@ public class ClinicPrintFormsTests
         Assert.Empty(ClinicFormsHtml.SplitDiagnosisLines(null));
     }
     //JJQR - END
+
+    //JJQR - AI (2026-11-27) - why: "Each on its own line" rows <-> saved diagnosis text (same cases as the web print-forms.test.mjs)
+    [Fact]
+    public void Diagnosis_rows_join_numbered_drop_blanks_and_never_double_a_typed_number()
+    {
+        Assert.Equal("1) UPPER RESPIRATORY TRACT INFECTION\n2) DENGUE FEVER", ClinicFormsHtml.DiagnosisTextFromRows(["UPPER RESPIRATORY TRACT INFECTION", "", "  DENGUE   FEVER ", "", ""]));
+        Assert.Equal("1) URTI\n2) AGE\n3) HPN", ClinicFormsHtml.DiagnosisTextFromRows(["1) URTI", "2. AGE", "5) HPN"]));
+        Assert.Equal("1) 2.5 ml syrup reaction\n2) Type 2 diabetes", ClinicFormsHtml.DiagnosisTextFromRows(["2.5 ml syrup reaction", "Type 2 diabetes"]));
+        Assert.Equal("", ClinicFormsHtml.DiagnosisTextFromRows(["", " ", null]));
+    }
+
+    [Fact]
+    public void Diagnosis_text_splits_into_rows_without_markers_padded_to_five()
+    {
+        Assert.Equal(["UPPER RESPIRATORY TRACT INFECTION", "DENGUE FEVER"], ClinicFormsHtml.DiagnosisRowsFromText("1) UPPER RESPIRATORY TRACT INFECTION;2) DENGUE FEVER"));
+        Assert.Equal(["URTI", "AGE", "HPN"], ClinicFormsHtml.DiagnosisRowsFromText("1. URTI 2. AGE\n3) HPN"));
+        Assert.Equal(["Acute URTI", "Hypertension"], ClinicFormsHtml.DiagnosisRowsFromText("Acute URTI; Hypertension"));
+        Assert.Equal(["URTI", "AGE", "", "", ""], ClinicFormsHtml.DiagnosisRowsForEdit("1) URTI\n2) AGE"));
+        Assert.Equal(7, ClinicFormsHtml.DiagnosisRowsForEdit(string.Join("\n", Enumerable.Range(1, 7).Select(i => i + ") X"))).Count);
+        Assert.Equal(["1) URTI", "2) AGE"], ClinicFormsHtml.SplitDiagnosisLines(ClinicFormsHtml.DiagnosisTextFromRows(["URTI", "", "1) AGE"])));
+    }
+    //JJQR - END
 }
 //JJQR - END

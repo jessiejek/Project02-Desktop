@@ -433,6 +433,42 @@ public static class ClinicFormsHtml
         return outList;
     }
 
+    //JJQR - AI (2026-11-27) - why: owner: "Each on its own line" = a bulleted list of single-line fields (5 at least, "+ Add line" for more). Rows <-> the saved diagnosis text:
+    // rows join as "1) ...\n2) ..." (her numbering style, blanks dropped, a number she typed herself is not doubled); text splits back into rows without the "N)" markers. Exact port of print-forms-html.ts.
+    public const int DxMinRows = 5;
+    static readonly Regex DxLead = new(@"^[ \t]*[0-9]{1,2}[.)](?![0-9])[ \t]*", Js);
+
+    public static IReadOnlyList<string> DiagnosisRowsFromText(string? text)
+    {
+        var outList = new List<string>();
+        foreach (var item in SplitDiagnosisLines(text))
+        {
+            var t = DxLead.Replace(item, "", 1).Trim();
+            if (t.Length > 0) outList.Add(t);
+        }
+        return outList;
+    }
+
+    public static string DiagnosisTextFromRows(IEnumerable<string?> rows)
+    {
+        var outList = new List<string>();
+        foreach (var r in rows)
+        {
+            var t = DxLead.Replace(Regex.Replace(r ?? "", @"\s+", " ").Trim(), "", 1).Trim();
+            if (t.Length > 0) outList.Add((outList.Count + 1) + ") " + t);
+        }
+        return string.Join("\n", outList);
+    }
+
+    /// <summary>The rows to show: the text's items, padded with empty rows to at least <see cref="DxMinRows"/>.</summary>
+    public static IReadOnlyList<string> DiagnosisRowsForEdit(string? text)
+    {
+        var rows = DiagnosisRowsFromText(text).ToList();
+        while (rows.Count < DxMinRows) rows.Add("");
+        return rows;
+    }
+    //JJQR - END
+
     static int DxWrapLines(string text, long firstAvail, long avail)
     {
         var words = text.Split(' ');
