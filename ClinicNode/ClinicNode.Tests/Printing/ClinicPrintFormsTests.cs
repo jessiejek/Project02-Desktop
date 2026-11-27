@@ -198,5 +198,26 @@ public class ClinicPrintFormsTests
         Assert.Equal(["1) URTI", "2) AGE"], ClinicFormsHtml.SplitDiagnosisLines(ClinicFormsHtml.DiagnosisTextFromRows(["URTI", "", "1) AGE"])));
     }
     //JJQR - END
+
+    //JJQR - AI (2026-11-27) - why: "List style": bullets or numbers (same cases as the web print-forms.test.mjs)
+    [Fact]
+    public void Diagnosis_rows_bullets_style_saves_bullet_lines_numbers_is_default()
+    {
+        Assert.Equal("• URTI\n• DENGUE FEVER\n• AGE", ClinicFormsHtml.DiagnosisTextFromRows(["URTI", "", "2) DENGUE FEVER", "• AGE"], bullets: true));
+        Assert.Equal("1) URTI\n2) AGE", ClinicFormsHtml.DiagnosisTextFromRows(["• URTI", "• AGE"]));
+    }
+
+    [Fact]
+    public void Bullet_and_number_markers_both_split_and_strip_and_the_style_is_read_back()
+    {
+        Assert.Equal(["URTI", "DENGUE FEVER"], ClinicFormsHtml.DiagnosisRowsFromText("• URTI\n• DENGUE FEVER"));
+        Assert.Equal(["URTI", "AGE", "HPN"], ClinicFormsHtml.DiagnosisRowsFromText("• URTI • AGE; • HPN"));
+        Assert.Equal(["• URTI", "• AGE"], ClinicFormsHtml.SplitDiagnosisLines("• URTI • AGE"));
+        Assert.True(ClinicFormsHtml.DiagnosisIsBullets("\n  • URTI\n• AGE"));
+        Assert.False(ClinicFormsHtml.DiagnosisIsBullets("1) URTI\n2) AGE"));
+        Assert.False(ClinicFormsHtml.DiagnosisIsBullets("URTI"));
+        Assert.False(ClinicFormsHtml.DiagnosisIsBullets(""));
+    }
+    //JJQR - END
 }
 //JJQR - END

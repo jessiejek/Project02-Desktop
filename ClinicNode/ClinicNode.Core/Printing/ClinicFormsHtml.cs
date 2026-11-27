@@ -402,7 +402,7 @@ public static class ClinicFormsHtml
     }
 
     //JJQR - AI (2026-11-27) - why: Dr. Allyn wants each diagnosis on its own ruled line of the medical certificate ("mu newline igka 2"). Split at print time on new lines, ";" and before every number marker after the first ("2)" / "2."), then give each item its own line; more lines than the 3 printed ones get extra ruled lines with tighter spacing so the certificate stays one page. Exact port of print-forms-html.ts splitDiagnosisLines / diagnosisBlock (golden tests compare the HTML).
-    static readonly Regex DxMarker = new(@"(^|[ \t,])([0-9]{1,2})[.)](?=[ \t]*[A-Za-z])", Js);
+    static readonly Regex DxMarker = new(@"(^|[ \t,])(?:([0-9]{1,2})[.)](?=[ \t]*[A-Za-z])|•(?=[ \t]*\S))", Js); //JJQR - AI (2026-11-27) - why: "Bullets •" list style: a "•" starts a new line too //JJQR - END
     const int DxLines = 3; // ruled lines printed on the pad
     const int DxLh = 230; // their spacing, thousandths of an inch (0.23in)
     const int DxSpace = 910; // 4.17in (top of the block) down to 5.08in (just above Recommendations at 5.10in)
@@ -436,7 +436,19 @@ public static class ClinicFormsHtml
     //JJQR - AI (2026-11-27) - why: owner: "Each on its own line" = a bulleted list of single-line fields (5 at least, "+ Add line" for more). Rows <-> the saved diagnosis text:
     // rows join as "1) ...\n2) ..." (her numbering style, blanks dropped, a number she typed herself is not doubled); text splits back into rows without the "N)" markers. Exact port of print-forms-html.ts.
     public const int DxMinRows = 5;
-    static readonly Regex DxLead = new(@"^[ \t]*[0-9]{1,2}[.)](?![0-9])[ \t]*", Js);
+    static readonly Regex DxLead = new(@"^[ \t]*(?:[0-9]{1,2}[.)](?![0-9])|•)[ \t]*", Js); //JJQR - AI (2026-11-27) - why: strip a "•" as well as "N)" //JJQR - END
+
+    //JJQR - AI (2026-11-27) - why: owner: "make me choose bullets or numbers": rows are saved as "1) ..." (numbers, default) or "• ..." (bullets); the style is read back from the text (a leading "•" = bullets)
+    public static bool DiagnosisIsBullets(string? text)
+    {
+        foreach (var line in (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+        {
+            var t = line.Trim();
+            if (t.Length > 0) return t[0] == '•';
+        }
+        return false;
+    }
+    //JJQR - END
 
     public static IReadOnlyList<string> DiagnosisRowsFromText(string? text)
     {
@@ -449,13 +461,13 @@ public static class ClinicFormsHtml
         return outList;
     }
 
-    public static string DiagnosisTextFromRows(IEnumerable<string?> rows)
+    public static string DiagnosisTextFromRows(IEnumerable<string?> rows, bool bullets = false)
     {
         var outList = new List<string>();
         foreach (var r in rows)
         {
             var t = DxLead.Replace(Regex.Replace(r ?? "", @"\s+", " ").Trim(), "", 1).Trim();
-            if (t.Length > 0) outList.Add((outList.Count + 1) + ") " + t);
+            if (t.Length > 0) outList.Add((bullets ? "•" : (outList.Count + 1) + ")") + " " + t); //JJQR - AI (2026-11-27) - why: bullets or numbers //JJQR - END
         }
         return string.Join("\n", outList);
     }
@@ -511,7 +523,8 @@ public static class ClinicFormsHtml
     static string DiagnosisBlock(string? text, bool oneLine)
     {
         var split = SplitDiagnosisLines(text);
-        IReadOnlyList<string> items = oneLine && split.Count > 0 ? [string.Join("; ", split)] : split; // "One line": joined with "; " and wrapped like a sentence
+        IReadOnlyList<string> items = oneLine && split.Count > 0 ? [string.Join("; ", split.Select(t => Regex.Replace(t, "^•[ \t]*", "", Js)))] : split; //JJQR - AI (2026-11-27) - why: no "•" inside a one-line sentence //JJQR - END
+        // "One line": joined with "; " and wrapped like a sentence
         var lines = 0;
         var first = DxW - RxTextW("Diagnosis/ Impressions:", false, DxSize) - DxLbl;
         for (var i = 0; i < items.Count; i++) lines += DxWrapLines(items[i], i == 0 ? first : DxW, DxW);

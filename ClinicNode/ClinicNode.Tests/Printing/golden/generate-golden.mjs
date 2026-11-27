@@ -60,6 +60,8 @@ mc({ ...mcBase, diagnosis: Array.from({ length: 12 }, (_, i) => (i + 1) + ") Ite
 mc({ ...mcBase, diagnosis: "1) UPPER RESPIRATORY TRACT INFECTION\n2) DENGUE FEVER\n3) ACUTE GASTROENTERITIS", diagnosisLayout: "oneLine" });
 mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2) Dengue fever", diagnosisLayout: "oneLine" });
 mc({ ...mcBase, diagnosis: "Acute URTI", diagnosisLayout: "lines" });
+mc({ ...mcBase, diagnosis: "• UPPER RESPIRATORY TRACT INFECTION\n• DENGUE FEVER • ACUTE GASTROENTERITIS" }); // JJQR - AI (2026-11-27) - "Bullets •" list style
+mc({ ...mcBase, diagnosis: "• URTI\n• DENGUE FEVER", diagnosisLayout: "oneLine" }); // JJQR - AI (2026-11-27) - One line drops the bullets
 // JJQR - END
 lab({ origin: ORIGIN, pageSize: "148mm 210mm", doctor, patient, age: "34", date: "November 21, 2026", tests: ["CBC", "Urine test", "Lipid panel", "Serum creatinine", "Dengue NS1", "ECG", "HbA1c", "Chest X-ray PA"], diagnoses: ["J06.9 — Acute URTI", "E11"], clinicalNotes: "  r/o dengue  " });
 lab({ origin: "", pageSize: "148mm 210mm", doctor: doctorLong, patient: patientF, age: "", date: "", tests: ["FBS", "sgpt", "BUA"] });

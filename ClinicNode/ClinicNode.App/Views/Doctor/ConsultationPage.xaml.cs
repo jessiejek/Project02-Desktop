@@ -1618,7 +1618,7 @@ public partial class ConsultationPage : ContentPage
             {
                 if (ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(bookingId) == value) return;
                 ClinicNode.Core.Printing.MedCertPrintLayout.Set(bookingId, value);
-                _mcDxRows = null; //JJQR - AI (2026-11-27) - why: the rows are rebuilt from the text (split, "N)" removed) //JJQR - END
+                _mcDxRows = null; _mcDxBullets = null; //JJQR - AI (2026-11-27) - why: the rows (and their list style) are rebuilt from the text (split, "N)" / "•" removed) //JJQR - END
                 ClinicNode.App.Controls.UiTurn.Next(RenderSection);
             };
             return b;
@@ -1640,14 +1640,17 @@ public partial class ConsultationPage : ContentPage
     // Fresh controls on every render; "+ Add line" / Enter on the last row redraw on the next UI turn; no pop-ups.
     List<string>? _mcDxRows;
     int _mcDxFocusRow = -1;
+    bool? _mcDxBullets; //JJQR - AI (2026-11-27) - why: owner: "make me choose bullets or numbers": List style for this visit only (not stored); null = read it from the text (a leading "•" = bullets) //JJQR - END
 
     View McDxRows(string? text)
     {
-        if (_mcDxRows is null || ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisTextFromRows(_mcDxRows) != (text ?? "")) _mcDxRows = ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisRowsForEdit(text).ToList();
+        var bullets = _mcDxBullets ?? ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisIsBullets(text); //JJQR - AI (2026-11-27) - why: List style //JJQR - END
+        if (_mcDxRows is null || ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisTextFromRows(_mcDxRows, bullets) != (text ?? "")) _mcDxRows = ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisRowsForEdit(text).ToList();
         var rows = _mcDxRows;
-        void Save() { _mcDxDirty = true; D.McDiagnosis = ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisTextFromRows(rows); Changed(); }
+        void Save() { _mcDxDirty = true; D.McDiagnosis = ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisTextFromRows(rows, bullets); Changed(); }
         void AddRow() { rows.Add(""); Save(); _mcDxFocusRow = rows.Count - 1; ClinicNode.App.Controls.UiTurn.Next(RenderSection); }
         var list = new VerticalStackLayout { Spacing = 6 };
+        list.Children.Add(McDxListStyleRow(bullets, rows)); //JJQR - AI (2026-11-27) - why: "List style" directly under "Print as" (only in this mode) //JJQR - END
         var entries = new List<Entry>();
         for (var k = 0; k < rows.Count; k++)
         {
@@ -1665,7 +1668,8 @@ public partial class ConsultationPage : ContentPage
                 else entries[row + 1].Focus();
             };
             entries.Add(entry);
-            var bullet = new Label { Text = "•", FontSize = 18, WidthRequest = 16, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
+            var bullet = new Label { Text = bullets ? "•" : $"{row + 1}.", FontSize = bullets ? 18 : 14, //JJQR - AI (2026-11-27) - why: the row marker follows List style //JJQR - END
+                 WidthRequest = 24, HorizontalTextAlignment = TextAlignment.Center, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
             var line = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
             line.Add(bullet, 0, 0);
             line.Add(entry, 1, 0);
@@ -1681,6 +1685,40 @@ public partial class ConsultationPage : ContentPage
             Dispatcher.Dispatch(() => f.Focus()); // once the new row is on screen
         }
         return list;
+    }
+
+    //JJQR - AI (2026-11-27) - why: "List style": "Numbers 1) 2) 3)" (default) or "Bullets •"; a click re-saves the text in that style and redraws on the next UI turn (fresh controls)
+    View McDxListStyleRow(bool bullets, List<string> rows)
+    {
+        Button Seg(string text, bool value)
+        {
+            var on = bullets == value;
+            var b = new Button
+            {
+                Text = text, FontSize = 13, Padding = new Thickness(12, 4), MinimumHeightRequest = 30, CornerRadius = 6, BorderWidth = 0,
+                BackgroundColor = on ? ClinicTheme.Color("SurfaceContainerLowest") : Colors.Transparent,
+                TextColor = on ? ClinicTheme.Color("Primary") : ClinicTheme.Color("OnSurfaceVariant"),
+                FontAttributes = on ? FontAttributes.Bold : FontAttributes.None,
+            };
+            SemanticProperties.SetDescription(b, "Diagnosis list style " + text + (on ? " (selected)" : ""));
+            b.Clicked += (_, _) =>
+            {
+                if (bullets == value) return;
+                _mcDxBullets = value;
+                _mcDxDirty = true; D.McDiagnosis = ClinicNode.Core.Printing.ClinicFormsHtml.DiagnosisTextFromRows(rows, value); Changed();
+                ClinicNode.App.Controls.UiTurn.Next(RenderSection);
+            };
+            return b;
+        }
+        var seg = new Border
+        {
+            Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, BackgroundColor = ClinicTheme.Color("SurfaceContainer"), Padding = new Thickness(3),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            HorizontalOptions = LayoutOptions.Start,
+            Content = new HorizontalStackLayout { Spacing = 2, Children = { Seg("Numbers 1) 2) 3)", false), Seg("Bullets •", true) } },
+        };
+        var label = new Label { Text = "List style", FontSize = 13, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
+        return new HorizontalStackLayout { Spacing = 8, Children = { label, seg } };
     }
     //JJQR - END
 
