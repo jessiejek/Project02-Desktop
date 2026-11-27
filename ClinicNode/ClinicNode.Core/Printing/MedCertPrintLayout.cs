@@ -1,12 +1,12 @@
-//JJQR - AI (2026-11-27) - why: owner: a "Print as" choice under Diagnosis / Impressions on the medical certificate ("One line" / "Each on its own line" / "Paragraph").
+//JJQR - AI (2026-11-27) - why: owner: a "Print as" choice under Diagnosis / Impressions on the medical certificate ("Paragraph" / "List"; owner: "SO paragraph | List").
 // There is no database column for it, so it is print-time state only: kept in memory per visit for this run of the app, never saved or synced.
 // Not chosen yet = read from the diagnosis text (ClinicFormsHtml.DiagnosisLayoutFromText), the same rule as the web.
 using System.Collections.Concurrent;
 
 namespace ClinicNode.Core.Printing;
 
-/// <summary>"Print as" for the certificate's diagnosis (web DiagnosisLayout "lines" | "oneLine" | "paragraph").</summary>
-public enum DiagnosisLayout { Lines, OneLine, Paragraph }
+/// <summary>"Print as" for the certificate's diagnosis (web DiagnosisLayout "lines" = List | "paragraph").</summary>
+public enum DiagnosisLayout { Lines, Paragraph }
 
 public static class MedCertPrintLayout
 {

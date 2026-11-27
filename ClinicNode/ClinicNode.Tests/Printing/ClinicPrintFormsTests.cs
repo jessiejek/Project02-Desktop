@@ -239,7 +239,8 @@ public class ClinicPrintFormsTests
         Assert.Equal(DiagnosisLayout.Lines, ClinicFormsHtml.DiagnosisLayoutFromText("1) URTI\n2) AGE"));
         Assert.Equal(DiagnosisLayout.Lines, ClinicFormsHtml.DiagnosisLayoutFromText("1) URTI;2) AGE"));
         Assert.Equal(DiagnosisLayout.Lines, ClinicFormsHtml.DiagnosisLayoutFromText("\n• URTI"));
-        Assert.Equal(DiagnosisLayout.OneLine, ClinicFormsHtml.DiagnosisLayoutFromText("URTI; AGE"));
+        Assert.Equal(DiagnosisLayout.Paragraph, ClinicFormsHtml.DiagnosisLayoutFromText("URTI; AGE"));
+        Assert.Equal(DiagnosisLayout.Lines, ClinicFormsHtml.DiagnosisLayoutFromText(" \n "));
         Assert.Equal(DiagnosisLayout.Paragraph, ClinicFormsHtml.DiagnosisLayoutFromText("Patient seen for fever. Impression is URTI."));
         Assert.Equal(DiagnosisLayout.Paragraph, ClinicFormsHtml.DiagnosisLayoutFromText("2.5 days of fever.\nImpression: URTI"));
     }
@@ -251,8 +252,8 @@ public class ClinicPrintFormsTests
         var b = Guid.NewGuid();
         Assert.Null(MedCertPrintLayout.Get(a));
         Assert.Equal(DiagnosisLayout.Paragraph, MedCertPrintLayout.For(a, "Plain text."));
-        MedCertPrintLayout.Set(a, DiagnosisLayout.OneLine);
-        Assert.Equal(DiagnosisLayout.OneLine, MedCertPrintLayout.For(a, "Plain text."));
+        MedCertPrintLayout.Set(a, DiagnosisLayout.Lines);
+        Assert.Equal(DiagnosisLayout.Lines, MedCertPrintLayout.For(a, "Plain text."));
         Assert.Equal(DiagnosisLayout.Lines, MedCertPrintLayout.For(b, "1) URTI"));
     }
 
@@ -260,8 +261,8 @@ public class ClinicPrintFormsTests
     public void Paragraph_prints_the_text_as_typed_over_enough_ruled_lines()
     {
         const string para = "Patient presented with 3 days of fever, cough and body malaise; no difficulty of breathing. Clinical impression is acute upper respiratory tract infection, r/o dengue fever. Advised rest & hydration <2 days>.";
-        string Html(string dx, bool paragraph = true, bool oneLine = false) => ClinicFormsHtml.BuildMedicalCertificateHtml(new MedCertHtmlOptions("", "148mm 210mm",
-            new PrintDoctor("Jane Doe", null, null), new PrintPatient("Juan"), "", "", "", "", "", dx, "", "", "", oneLine, paragraph));
+        string Html(string dx, bool paragraph = true) => ClinicFormsHtml.BuildMedicalCertificateHtml(new MedCertHtmlOptions("", "148mm 210mm",
+            new PrintDoctor("Jane Doe", null, null), new PrintPatient("Juan"), "", "", "", "", "", dx, "", "", "", paragraph));
         int Rules(string h) => System.Text.RegularExpressions.Regex.Matches(h, "<div class=\"wl\"></div>").Count - 3;
         var p = Html(para);
         Assert.Contains("Diagnosis/ Impressions:</span>Patient presented with 3 days of fever, cough and body malaise; no difficulty of breathing. Clinical impression is acute upper respiratory tract infection, r/o dengue fever. Advised rest &amp; hydration &lt;2 days&gt;.</div>", p);
@@ -269,7 +270,7 @@ public class ClinicPrintFormsTests
         Assert.True(Rules(Html(para + " " + para)) > 3);
         Assert.Contains("--dx-fs:6pt", Html(string.Concat(Enumerable.Repeat(para, 5))));
         Assert.Contains("</span>1) URTI<br><br>Rule out dengue.</div>", Html("1) URTI\n\nRule out dengue."));
-        Assert.Contains("</span>1) URTI; 2) AGE</div>", Html("1) URTI\n2) AGE", paragraph: false, oneLine: true));
+        Assert.Contains("</span>1) URTI<br>2) AGE</div>", Html("1) URTI\n2) AGE")); // Paragraph never joins with "; "
         Assert.Contains("</span>1) URTI<br>2) AGE</div>", Html("1) URTI\n2) AGE", paragraph: false));
     }
     //JJQR - END

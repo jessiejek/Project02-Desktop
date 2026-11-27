@@ -183,7 +183,7 @@ public static class ClinicFormsHtml
             "<div class=\"mc-exam ln\"><span>has been examined in</span><span class=\"u grow\">" + E(opts.ExaminedAt) + "</span></div>" +
             "<div class=\"mc-on ln\"><span>on</span><span class=\"u on-u\">" + E(opts.ExamFrom) +
             "</span><span>until</span><span class=\"u grow\">" + E(opts.ExamTo) + "</span><span>.</span></div>" +
-            DiagnosisBlock(opts.Diagnosis, opts.DiagnosisParagraph ? DiagnosisLayout.Paragraph : opts.DiagnosisOneLine ? DiagnosisLayout.OneLine : DiagnosisLayout.Lines) + //JJQR - AI (2026-11-27) - why: + "Paragraph" //JJQR - END
+            DiagnosisBlock(opts.Diagnosis, opts.DiagnosisParagraph ? DiagnosisLayout.Paragraph : DiagnosisLayout.Lines) + //JJQR - AI (2026-11-27) - why: owner: "SO paragraph | List" ("One line" removed) //JJQR - END
             //JJQR - AI (2026-11-27) - why: one diagnosis per ruled line (was Flat(opts.Diagnosis), which ran "1) ...;2) ..." together) //JJQR - END
             "<div class=\"write mc-rec\"><div class=\"write-lines\"><div class=\"wl\"></div><div class=\"wl\"></div><div class=\"wl\"></div></div>" +
             "<div class=\"write-text\">" +
@@ -488,7 +488,7 @@ public static class ClinicFormsHtml
     }
 
     /// <summary>Which "Print as" a saved diagnosis was written in (nothing is stored, so it is read back from the text):
-    /// empty = Lines (the default); any line starting with "1)" / "1." / "•" = Lines; otherwise a ";" = OneLine; otherwise (plain text) = Paragraph.</summary>
+    /// empty = Lines (List, the default); any line starting with "1)" / "1." / "•" = Lines; anything else (plain text, ";" too) = Paragraph.</summary>
     public static DiagnosisLayout DiagnosisLayoutFromText(string? text)
     {
         var any = false;
@@ -498,8 +498,7 @@ public static class ClinicFormsHtml
             any = true;
             if (DxLead.IsMatch(line)) return DiagnosisLayout.Lines;
         }
-        if (!any) return DiagnosisLayout.Lines;
-        return (text ?? "").Contains(';') ? DiagnosisLayout.OneLine : DiagnosisLayout.Paragraph;
+        return any ? DiagnosisLayout.Paragraph : DiagnosisLayout.Lines; //JJQR - AI (2026-11-27) - why: no "One line" any more; ";" stays in her paragraph //JJQR - END
     }
     //JJQR - END
 
@@ -553,10 +552,8 @@ public static class ClinicFormsHtml
 
     static string DiagnosisBlock(string? text, DiagnosisLayout layout)
     {
-        var oneLine = layout == DiagnosisLayout.OneLine;
         var split = layout == DiagnosisLayout.Paragraph ? DiagnosisParagraphLines(text) : SplitDiagnosisLines(text); //JJQR - AI (2026-11-27) - why: "Paragraph": her own lines, wrapped like sentences //JJQR - END
-        IReadOnlyList<string> items = oneLine && split.Count > 0 ? [string.Join("; ", split.Select(t => Regex.Replace(t, "^•[ \t]*", "", Js)))] : split; //JJQR - AI (2026-11-27) - why: no "•" inside a one-line sentence //JJQR - END
-        // "One line": joined with "; " and wrapped like a sentence
+        var items = split; //JJQR - AI (2026-11-27) - why: "One line" (joined with "; ") removed //JJQR - END
         var lines = 0;
         var first = DxW - RxTextW("Diagnosis/ Impressions:", false, DxSize) - DxLbl;
         for (var i = 0; i < items.Count; i++) lines += DxWrapLines(items[i], i == 0 ? first : DxW, DxW);

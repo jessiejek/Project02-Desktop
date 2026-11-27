@@ -64,7 +64,6 @@ public class GoldenParityTests
             "mc" => ClinicFormsHtml.BuildMedicalCertificateHtml(new MedCertHtmlOptions(Str(i, "origin"), Str(i, "pageSize"), Doctor(i.GetProperty("doctor")),
                 Patient(i.GetProperty("patient")), Str(i, "issueDate"), Str(i, "address"), Str(i, "examinedAt"), Str(i, "examFrom"), Str(i, "examTo"),
                 Str(i, "diagnosis"), Str(i, "recommendations"), Str(i, "purposeException"), Str(i, "comeBackOn"),
-                S(i, "diagnosisLayout") == "oneLine", //JJQR - AI (2026-11-27) - why: "Print as: One line" cases //JJQR - END
                 S(i, "diagnosisLayout") == "paragraph")), //JJQR - AI (2026-11-27) - why: "Print as: Paragraph" cases //JJQR - END
             "lab" => ClinicFormsHtml.BuildLabRequestHtml(new LabHtmlOptions(Str(i, "origin"), Str(i, "pageSize"), Doctor(i.GetProperty("doctor")),
                 Patient(i.GetProperty("patient")), Str(i, "age"), Str(i, "date"), Strings(i, "tests"),

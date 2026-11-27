@@ -57,11 +57,11 @@ mc({ ...mcBase, diagnosis: "1) A\r\n2) B\n\n3) C; 4) D, 5) E" });
 mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2) Dengue fever\n3) Pneumonia, community acquired, moderate risk with pleural effusion on the right" });
 mc({ ...mcBase, diagnosis: "Paracetamol 500mg 2.5 ml, Type 2 diabetes, COVID-19 <r/o> & \"x\"" });
 mc({ ...mcBase, diagnosis: Array.from({ length: 12 }, (_, i) => (i + 1) + ") Item").join(" ") });
-mc({ ...mcBase, diagnosis: "1) UPPER RESPIRATORY TRACT INFECTION\n2) DENGUE FEVER\n3) ACUTE GASTROENTERITIS", diagnosisLayout: "oneLine" });
-mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2) Dengue fever", diagnosisLayout: "oneLine" });
+mc({ ...mcBase, diagnosis: "1) UPPER RESPIRATORY TRACT INFECTION\n2) DENGUE FEVER\n3) ACUTE GASTROENTERITIS", diagnosisLayout: "paragraph" });
+mc({ ...mcBase, diagnosis: "1) " + "very long diagnosis text ".repeat(9) + "\n2) Dengue fever", diagnosisLayout: "paragraph" });
 mc({ ...mcBase, diagnosis: "Acute URTI", diagnosisLayout: "lines" });
 mc({ ...mcBase, diagnosis: "• UPPER RESPIRATORY TRACT INFECTION\n• DENGUE FEVER • ACUTE GASTROENTERITIS" }); // JJQR - AI (2026-11-27) - "Bullets •" list style
-mc({ ...mcBase, diagnosis: "• URTI\n• DENGUE FEVER", diagnosisLayout: "oneLine" }); // JJQR - AI (2026-11-27) - One line drops the bullets
+mc({ ...mcBase, diagnosis: "• URTI\n• DENGUE FEVER", diagnosisLayout: "paragraph" }); // JJQR - AI (2026-11-27) - "One line" removed: these cases now print as Paragraph
 // JJQR - AI (2026-11-27) - "Print as: Paragraph": her text as typed (own lines, blank line squeezed, escaping, no split on ";" / "2)"), a long one with extra ruled lines, a very long one with the smallest font
 const DX_PARA = "Patient presented with 3 days of fever, cough and body malaise; no difficulty of breathing. Clinical impression is acute upper respiratory tract infection, r/o dengue fever. Advised rest & hydration <2 days>.";
 mc({ ...mcBase, diagnosis: DX_PARA, diagnosisLayout: "paragraph" });

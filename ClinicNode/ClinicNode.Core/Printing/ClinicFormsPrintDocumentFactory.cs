@@ -118,8 +118,7 @@ public sealed class ClinicFormsPrintDocumentFactory : IPrintDocumentFactory
             Recommendations = c.Recommendations,
             PurposeException = c.PurposeException,
             ComeBackOn = ClinicPrintForms.Iso(c.ComeBackOn),
-            //JJQR - AI (2026-11-27) - why: the doctor's "Print as" choice for this visit; not chosen = read from the text (numbered/bulleted = each on its own line, ";" = one line, plain = paragraph)
-            DiagnosisOneLine = MedCertPrintLayout.For(bookingId, c.DiagnosisText) == DiagnosisLayout.OneLine,
+            //JJQR - AI (2026-11-27) - why: the doctor's "Print as" choice for this visit; not chosen = read from the text (numbered/bulleted = List, anything else = Paragraph)
             DiagnosisParagraph = MedCertPrintLayout.For(bookingId, c.DiagnosisText) == DiagnosisLayout.Paragraph,
             //JJQR - END
         };
