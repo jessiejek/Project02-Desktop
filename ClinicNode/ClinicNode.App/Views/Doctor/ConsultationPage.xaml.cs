@@ -1556,9 +1556,21 @@ public partial class ConsultationPage : ContentPage
         GroupColumns(gDates, 2, 2); //JJQR - AI (Nov 21, 2026) //JJQR - END
         var gDx = SectionHost.Children.Count; //JJQR - AI (Nov 21, 2026) //JJQR - END
 
+        //JJQR - AI (2026-11-27) - why: owner: "if each as own line give me lines when i type": "Each on its own line" = one ruled row per diagnosis with Enter auto-numbering; "One line" keeps the plain box
+        if (ClinicNode.Core.Printing.MedCertPrintLayout.IsOneLine(D.BookingId))
+        {
+        //JJQR - END
         var dxField = AddEditor("Diagnosis / Impressions", _mcDxDirty || !string.IsNullOrWhiteSpace(D.McDiagnosis) ? D.McDiagnosis : McDiagnosisDefault());
         dxField.Placeholder = string.IsNullOrWhiteSpace(D.Assessment) ? "Diagnosis / Impressions" : $"Diagnosis / Impressions (default: “{D.Assessment}”)";
         dxField.TextChanged += (_, e) => { _mcDxDirty = true; D.McDiagnosis = e.NewTextValue; Changed(); };
+        //JJQR - AI (2026-11-27) - why: the ruled rows (label + rows = the same 2 children as the box, so the grid cell stays label, input, "Print as")
+        }
+        else
+        {
+            SectionHost.Children.Add(ClinicTheme.Text("Diagnosis / Impressions", "FieldLabel"));
+            SectionHost.Children.Add(McDxRuledRows(_mcDxDirty || !string.IsNullOrWhiteSpace(D.McDiagnosis) ? D.McDiagnosis : McDiagnosisDefault()));
+        }
+        //JJQR - END
         SectionHost.Children.Add(McDxPrintAsRow()); //JJQR - AI (2026-11-27) - why: "Print as" directly under the Diagnosis / Impressions box //JJQR - END
         var recs = AddEditor("Recommendations", D.McRecommendations);
         recs.Placeholder = string.IsNullOrWhiteSpace(D.Plan) ? "Recommendations" : $"Recommendations (default: “{D.Plan}”)";
@@ -1622,6 +1634,69 @@ public partial class ConsultationPage : ContentPage
         };
         var label = new Label { Text = "Print as", FontSize = 13, VerticalOptions = LayoutOptions.Center, TextColor = ClinicTheme.Color("OnSurfaceVariant") };
         return new HorizontalStackLayout { Spacing = 8, Children = { label, seg } };
+    }
+    //JJQR - END
+
+    //JJQR - AI (2026-11-27) - why: owner: "if each as own line give me lines when i type". One ruled row per line (like the paper form) plus one spare row; Enter adds "2) ", "3) "
+    // (DxAutoNumber, same rules as the web box), Enter on a blank numbered row removes the marker, a number typed after the automatic one is not doubled.
+    // Fresh controls on every render; Enter redraws on the next UI turn and the caret goes to the new row after that redraw.
+    int _mcDxFocusRow = -1;
+
+    View McDxRuledRows(string? text)
+    {
+        var rows = (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').ToList();
+        var want = Math.Max(3, rows.Count + 1);
+        while (rows.Count < want) rows.Add("");
+        string Joined() => string.Join("\n", rows).TrimEnd('\n');
+        var stack = new VerticalStackLayout { Spacing = 0 };
+        Entry? focus = null;
+        var guard = false;
+        for (var k = 0; k < rows.Count; k++)
+        {
+            var row = k;
+            var entry = new Entry
+            {
+                Text = rows[row], FontSize = 14, BackgroundColor = Colors.Transparent, ClearButtonVisibility = ClearButtonVisibility.Never,
+                Placeholder = row == 0 ? (string.IsNullOrWhiteSpace(D.Assessment) ? "1) Diagnosis" : $"Diagnosis / Impressions (default: “{D.Assessment}”)") : "",
+            };
+            SemanticProperties.SetDescription(entry, $"Diagnosis line {row + 1}");
+            entry.TextChanged += (_, e) =>
+            {
+                if (guard) return;
+                var auto = DxAutoNumber.Edit(e.OldTextValue, e.NewTextValue);
+                rows[row] = auto?.Text ?? e.NewTextValue ?? "";
+                _mcDxDirty = true; D.McDiagnosis = Joined(); Changed();
+                if (auto is not null)
+                    Dispatcher.Dispatch(() => { guard = true; entry.Text = auto.Text; entry.CursorPosition = auto.Caret; guard = false; }); // after this TextChanged, on Windows and the Mac
+            };
+            entry.Completed += (_, _) =>
+            {
+                var full = string.Join("\n", rows);
+                var at = rows.Take(row).Sum(r => r.Length + 1) + Math.Clamp(entry.CursorPosition, 0, rows[row].Length);
+                var withNl = full.Insert(at, "\n");
+                var auto = DxAutoNumber.Edit(full, withNl);
+                var result = auto?.Text ?? withNl;
+                var caret = auto?.Caret ?? at + 1;
+                _mcDxFocusRow = result[..caret].Count(ch => ch == '\n');
+                _mcDxDirty = true; D.McDiagnosis = result.TrimEnd('\n'); Changed();
+                ClinicNode.App.Controls.UiTurn.Next(RenderSection);
+            };
+            stack.Children.Add(entry);
+            stack.Children.Add(new BoxView { HeightRequest = 1, Color = ClinicTheme.Color("OutlineVariant") });
+            if (row == _mcDxFocusRow) focus = entry;
+        }
+        if (focus is not null)
+        {
+            _mcDxFocusRow = -1;
+            var f = focus;
+            Dispatcher.Dispatch(() => { f.Focus(); f.CursorPosition = (f.Text ?? "").Length; }); // once the new row is on screen
+        }
+        return new Border
+        {
+            Stroke = ClinicTheme.Color("OutlineVariant"), StrokeThickness = 1, Padding = new Thickness(10, 2, 10, 6),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+            Content = stack,
+        };
     }
     //JJQR - END
 
